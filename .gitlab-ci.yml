@@ -1,5 +1,5 @@
 stages:
-  - linit
+  - lint
   - unit_test
   - integration_test
   - build
