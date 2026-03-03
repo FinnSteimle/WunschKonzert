@@ -14,16 +14,16 @@ workflow:
     - if: $CI_COMMIT_BRANCH
 
 variables:
-  PIP_CACHE_DIR: "$CI_PROJECT_DIR/.cache/pip"
+  UV_CACHE_DIR: "$CI_PROJECT_DIR/.cache/uv"
   NPM_CONFIG_CACHE: "$CI_PROJECT_DIR/.cache/npm"
   DOCKER_TLS_CERTDIR: "/certs"
   DOCKER_DRIVER: overlay2
 
-.cache_pip: &cache_pip
+.cache_uv: &cache_uv
   cache:
-    key: "pip-$CI_COMMIT_REF_SLUG"
+    key: "uv-$CI_COMMIT_REF_SLUG"
     paths:
-      - .cache/pip
+      - .cache/uv
 
 .cache_npm: &cache_npm
   cache:
@@ -62,81 +62,50 @@ variables:
 backend:lint:
   stage: lint
   image: python:3.14
-  <<: *cache_pip
+  <<: *cache_uv
   <<: *rules_backend_changes
   before_script:
     - python --version
-    - pip install --upgrade pip
-    - |
-      if [ -f backend/requirements.txt ]; then
-        pip install -r backend/requirements.txt
-      elif [ -f backend/pyproject.toml ]; then
-        pip install -e backend
-      else
-        echo "No backend/requirements.txt or backend/pyproject.toml found, please add one."
-        exit 1
-      fi
-    - pip install flake8
+    - pip install uv
+    - cd backend/python
+    - uv sync --frozen
   script:
-    - flake8 backend
+    - uv run --with ruff ruff check .
+    - uv run --with flake8 flake8 .
 
 backend:unit:
   stage: unit_test
   image: python:3.14
-  <<: *cache_pip
+  <<: *cache_uv
   <<: *rules_backend_changes
   before_script:
-    - pip install --upgrade pip
-    - |
-      if [ -f backend/requirements.txt ]; then
-        pip install -r backend/requirements.txt
-      elif [ -f backend/pyproject.toml ]; then
-        pip install -e backend
-      else
-        echo "No backend/requirements.txt or backend/pyproject.toml found, please add one."
-        exit 1
-      fi
-    - pip install pytest
+    - pip install uv
+    - cd backend/python
+    - uv sync --frozen
   script:
     # Convention: integration tests are marked with "integration"
-    - cd backend
-    - pytest -m "not integration" -q
+    - uv run --with pytest pytest -m "not integration" -q --junit-xml=junit-unit.xml
   artifacts:
     when: always
     expire_in: 7 days
     reports:
-      junit: backend/junit-unit.xml
-  after_script:
-    - |
-      # Best-effort JUnit if you do not generate it yet
-      if [ -d backend ]; then
-        true
-      fi
+      junit: backend/python/junit-unit.xml
 
 backend:integration:
   stage: integration_test
   image: python:3.14
-  <<: *cache_pip
+  <<: *cache_uv
   <<: *rules_backend_changes
   # Add services here if you need them, example:
   # services:
   #   - name: postgres:16
   #     alias: postgres
   before_script:
-    - pip install --upgrade pip
-    - |
-      if [ -f backend/requirements.txt ]; then
-        pip install -r backend/requirements.txt
-      elif [ -f backend/pyproject.toml ]; then
-        pip install -e backend
-      else
-        echo "No backend/requirements.txt or backend/pyproject.toml found, please add one."
-        exit 1
-      fi
-    - pip install pytest
+    - pip install uv
+    - cd backend/python
+    - uv sync --frozen
   script:
-    - cd backend
-    - pytest -m "integration" -q
+    - uv run --with pytest pytest -m "integration" -q
 
 # -----------------------
 # Frontend, SvelteKit (Vite)
@@ -236,13 +205,12 @@ docker:build_only:
   rules:
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
   script:
-    - docker build -t backend-local -f backend/Dockerfile backend
+    - docker build -t backend-local -f backend/python/Dockerfile backend/python
     - docker build -t frontend-local -f frontend/Dockerfile frontend
 
 # Build and push backend image on dev/main if backend changed
 docker:push_backend:
   extends: .docker_template
-  <<: *rules_dev_main_only
   rules:
     - if: '$CI_COMMIT_BRANCH == "dev" || $CI_COMMIT_BRANCH == "main"'
       changes:
@@ -255,14 +223,13 @@ docker:push_backend:
         BRANCH_TAG="main"
       fi
     - IMAGE_NAME="$CI_REGISTRY_IMAGE/backend"
-    - docker build -t "$IMAGE_NAME:$BRANCH_TAG" -t "$IMAGE_NAME:$CI_COMMIT_SHORT_SHA" -f backend/Dockerfile backend
+    - docker build -t "$IMAGE_NAME:$BRANCH_TAG" -t "$IMAGE_NAME:$CI_COMMIT_SHORT_SHA" -f backend/python/Dockerfile backend/python
     - docker push "$IMAGE_NAME:$BRANCH_TAG"
     - docker push "$IMAGE_NAME:$CI_COMMIT_SHORT_SHA"
 
 # Build and push frontend image on dev/main if frontend changed
 docker:push_frontend:
   extends: .docker_template
-  <<: *rules_dev_main_only
   rules:
     - if: '$CI_COMMIT_BRANCH == "dev" || $CI_COMMIT_BRANCH == "main"'
       changes:
