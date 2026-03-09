@@ -1,12 +1,44 @@
-FROM node:25.7.0-alpine3.23@sha256:18e02657e2a2cc3a87210ee421e9769ff28a1ac824865d64f74d6d2d59f74b6b
+# 1) Build stage
+FROM node:21-alpine AS build
+
+WORKDIR /app
+# Install full dependencies for build
+COPY package.json package-lock.json ./
+RUN npm ci
+
+# Copy source
+COPY . .
+
+# Build the app
+RUN npm run build
+
+
+# 2) Production dependencies stage
+FROM node:21-alpine AS deps
 
 WORKDIR /app
 
-COPY package*.json ./
-RUN npm ci
+COPY package.json package-lock.json ./
+RUN npm ci --omit=dev
 
-COPY . .
 
-EXPOSE 5173
+# 3) Runtime stage
+FROM node:21-alpine AS runner
 
-CMD ["npm", "run", "dev", "--", "--host", "0.0.0.0", "--port", "5173"]
+WORKDIR /app
+
+ENV NODE_ENV=production
+
+# Copy production dependencies
+COPY --from=deps /app/node_modules ./node_modules
+
+# Copy build output and package metadata
+COPY --from=build /app/build ./build
+COPY --from=build /app/package.json ./package.json
+
+# Use non root user
+USER node
+
+EXPOSE 3000
+
+CMD ["node", "build/index.js"]

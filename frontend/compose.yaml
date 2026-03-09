@@ -1,18 +1,14 @@
 services:
-
-  web:
+  frontend:
     build:
       context: .
       dockerfile: Dockerfile
     ports:
-      - "5173:5173"
+      - "3000:3000"
     environment:
       PUBLIC_API_URL: ${PUBLIC_API_URL:-http://localhost:8000}
       PUBLIC_WS_URL: ${PUBLIC_WS_URL:-ws://localhost:8000}
-    volumes:
-      - .:/app                          # hot reload in dev
-      - /app/node_modules               # keep container node_modules isolated from host
-    command: npm run dev -- --host 0.0.0.0 --port 5173
+      NODE_ENV: ${NODE_ENV:-development}
     networks:
       - app-network
     restart: unless-stopped
