@@ -9,4 +9,5 @@ dependencies = [
     "uvicorn[standard]>=0.34",
     "websockets>=14",
     "asyncpg>=0.30",
+    "websocket>=0.2.1",
 ]

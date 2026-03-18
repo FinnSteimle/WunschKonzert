@@ -34,3 +34,10 @@ async def db_health():
     if resp == 1:
         return {"db-status": "ok"}
     return {"db-status": "error"}
+
+@app.websocket("/ws/{room_id}")
+async def websocket_endpoint(websocket, room_id:str):
+    await websocket.accept()
+    while True:
+        data = await websocket.receive_text()
+        await websocket.send_text(f"Message text was: {data} for room {room_id}")
