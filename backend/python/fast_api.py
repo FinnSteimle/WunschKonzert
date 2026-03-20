@@ -58,7 +58,7 @@ async def websocket_endpoint_room(websocket: WebSocket, room_id: str):
         active_room_connections[room_id].remove(websocket)
 
 
-# Dummy auth endpoints
+# Dummy authenticaiton endpoints
 @app.post("/auth/account", response_model=AuthResponse)
 async def auth_account(auth_data: AuthRequest):
     """Dummy endpoint for account authentication"""
