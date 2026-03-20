@@ -1,4 +1,3 @@
-import pytest
 from httpx import ASGITransport, AsyncClient
 from fast_api import app
 
