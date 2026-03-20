@@ -10,7 +10,5 @@ async def test_delete_request_rejected():
     ) as client:
         response = await client.delete("/hello")
 
-        print(response)
-
         assert response.status_code == 405
         assert response.json() == {"detail": "Method Not Allowed"}
