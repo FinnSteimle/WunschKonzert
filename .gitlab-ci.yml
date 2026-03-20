@@ -119,7 +119,7 @@ frontend:lint:
     - node --version
     - cd frontend
     - npm ci
-    - npm run lint
+    - npm run check
 
 frontend:check:
   stage: lint
