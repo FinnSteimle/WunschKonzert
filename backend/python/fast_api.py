@@ -111,7 +111,7 @@ async def websocket_endpoint(websocket: WebSocket):
 
     try:
         while True:
-            data = await websocket.receive_text()
+            await websocket.receive_text()
             await websocket.send_text("No detail provided")
     finally:
         generic_connections.remove(websocket)
