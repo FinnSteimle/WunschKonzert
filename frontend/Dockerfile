@@ -2,6 +2,7 @@
 FROM node:21-alpine AS build
 
 WORKDIR /app
+ENV DOCKER_BUILD=true
 # Install full dependencies for build
 COPY package.json package-lock.json ./
 RUN npm ci
