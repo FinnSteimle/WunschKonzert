@@ -17,6 +17,9 @@ dependencies = [
 [tool.pytest.ini_options]
 pythonpath = ["."]
 asyncio_mode = "auto"
+markers = [
+    "integration: mark a test as an integration test"
+]
 
 [dependency-groups]
 dev = [
