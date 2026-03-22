@@ -3,7 +3,7 @@ from datetime import datetime
 
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
-from database import MembershipStatus, Room, RoomMembership, User
+from database import MembershipStatus, Room, RoomMembership, RoomStatus, User
 
 # Create async engine and session factory
 # Ensure we use asyncpg driver for async operations
@@ -95,3 +95,28 @@ async def leave_room(user_id: str, room_id: str) -> RoomMembership:
         await session.commit()
         await session.refresh(membership)
         return membership
+
+
+async def create_room(
+    room_id: str, name: str, user_id: str, supported_provider_id: str
+) -> Room:
+    """Create a new room"""
+    # Check if room already exists
+    existing = await get_room(room_id)
+    if existing:
+        raise ValueError("Room already exists")
+
+    async with AsyncSessionLocal() as session:
+        # Use room_id as joinCode
+        room = Room(
+            roomId=room_id,
+            joinCode=room_id,
+            name=name,
+            hostedBy=user_id,
+            supportedProviderId=supported_provider_id,
+            status=RoomStatus.ACTIVE,
+        )
+        session.add(room)
+        await session.commit()
+        await session.refresh(room)
+        return room

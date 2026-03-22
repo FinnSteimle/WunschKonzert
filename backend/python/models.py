@@ -15,6 +15,15 @@ class RoomRequest(BaseModel):
     user_id: str
 
 
+class CreateRoomRequest(BaseModel):
+    """Request model for creating a room"""
+
+    room_id: str
+    name: str
+    user_id: str
+    supported_provider_id: str
+
+
 class AuthResponse(BaseModel):
     """Response model for authentication endpoints"""
 

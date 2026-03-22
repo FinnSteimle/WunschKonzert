@@ -7,9 +7,21 @@ import httpx
 from fastapi import FastAPI, HTTPException, WebSocket
 from fastapi.middleware.cors import CORSMiddleware
 
-from db_utils import create_room_membership, create_user, get_room, get_user
+from db_utils import (
+    create_room,
+    create_room_membership,
+    create_user,
+    get_room,
+    get_user,
+)
 from db_utils import leave_room as db_leave_room
-from models import AuthRequest, AuthResponse, RoomRequest, RoomResponse
+from models import (
+    AuthRequest,
+    AuthResponse,
+    CreateRoomRequest,
+    RoomRequest,
+    RoomResponse,
+)
 
 app = FastAPI()
 
@@ -91,6 +103,68 @@ async def auth_account(auth_data: AuthRequest):
 
 
 # Room management endpoints
+@app.post("/create_room", response_model=RoomResponse)
+async def create_room_endpoint(room_data: CreateRoomRequest):
+    """Endpoint for creating a new room"""
+    # Check if user exists, create if not
+    user = await get_user(room_data.user_id)
+    if not user:
+        try:
+            await create_user(room_data.user_id, room_data.user_id)
+            user = await get_user(room_data.user_id)
+        except ValueError:
+            # User might have been created by another request, try to get it
+            user = await get_user(room_data.user_id)
+        except Exception as e:
+            raise HTTPException(
+                status_code=500, detail=f"Failed to create user: {str(e)}"
+            )
+
+    # Ensure user exists
+    if not user:
+        raise HTTPException(status_code=500, detail="Failed to create or retrieve user")
+
+    # Create the room
+    try:
+        room = await create_room(
+            room_data.room_id,
+            room_data.name,
+            room_data.user_id,
+            room_data.supported_provider_id,
+        )
+
+        # Initialize room state cache
+        if room_data.room_id not in room_state_cache:
+            room_state_cache[room_data.room_id] = {
+                "room": {
+                    "roomId": room.roomId,
+                    "joinCode": room.joinCode,
+                    "name": room.name,
+                    "status": room.status.value,
+                    "createdAt": str(room.createdAt),
+                },
+                "host": {
+                    "userId": user.userId,
+                    "displayName": user.displayName,
+                    "createdAt": str(user.createdAt),
+                },
+                "users": [],
+                "queue": [],
+            }
+
+        return {
+            "success": True,
+            "message": f"Successfully created room {room_data.room_id}",
+            "room_id": room_data.room_id,
+        }
+    except ValueError as e:
+        if "already exists" in str(e):
+            raise HTTPException(status_code=400, detail="Room already exists")
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to create room: {str(e)}")
+
+
 @app.post("/join_room", response_model=RoomResponse)
 async def join_room(room_data: RoomRequest):
     """Endpoint for joining a room"""
@@ -121,17 +195,23 @@ async def join_room(room_data: RoomRequest):
 
         # Update room state cache - add new member
         if room_data.room_id not in room_state_cache:
-            room_state_cache[room_data.room_id] = {"members": []}
+            room_state_cache[room_data.room_id] = {
+                "room": {},
+                "host": {},
+                "users": [],
+                "queue": [],
+            }
 
-        if "members" not in room_state_cache[room_data.room_id]:
-            room_state_cache[room_data.room_id]["members"] = []
+        if "users" not in room_state_cache[room_data.room_id]:
+            room_state_cache[room_data.room_id]["users"] = []
 
-        # Add the new member to the members list
-        room_state_cache[room_data.room_id]["members"].append(
+        # Add the new member to the users list
+        room_state_cache[room_data.room_id]["users"].append(
             {
                 "user": {
                     "userId": room_data.user_id,
                     "displayName": room_data.user_id,
+                    "createdAt": str(datetime.utcnow()),
                 },
                 "membership": {
                     "joinedAt": str(datetime.utcnow()),
@@ -178,13 +258,13 @@ async def leave_room(room_data: RoomRequest):
 
         # Update room state cache - update user's membership status
         if room_data.room_id in room_state_cache:
-            if "members" in room_state_cache[room_data.room_id]:
-                for member in room_state_cache[room_data.room_id]["members"]:
-                    if member.get("user", {}).get("userId") == room_data.user_id:
-                        if "membership" not in member:
-                            member["membership"] = {}
-                        member["membership"]["leftAt"] = str(datetime.utcnow())
-                        member["membership"]["membershipStatus"] = "inactive"
+            if "users" in room_state_cache[room_data.room_id]:
+                for user_entry in room_state_cache[room_data.room_id]["users"]:
+                    if user_entry.get("user", {}).get("userId") == room_data.user_id:
+                        if "membership" not in user_entry:
+                            user_entry["membership"] = {}
+                        user_entry["membership"]["leftAt"] = str(datetime.utcnow())
+                        user_entry["membership"]["membershipStatus"] = "inactive"
                         break
 
         # Broadcast updated room state to all connected clients
