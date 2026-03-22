@@ -1,3 +1,5 @@
+from typing import Optional
+
 from pydantic import BaseModel
 
 
@@ -38,3 +40,104 @@ class RoomResponse(BaseModel):
     success: bool
     message: str
     room_id: str | None = None
+
+
+class Track(BaseModel):
+    """Model representing a track/song"""
+
+    trackId: str
+    providerTrackId: str
+    title: str
+    artist: str
+    album: str
+    duration: int
+    coverUrl: str
+    deepLink: str
+
+
+class UserInfo(BaseModel):
+    """Model representing basic user information"""
+
+    userId: str
+    displayName: str
+    createdAt: str
+
+
+class Membership(BaseModel):
+    """Model representing a user's membership in a room"""
+
+    joinedAt: str
+    leftAt: Optional[str] = None
+    membershipStatus: str
+
+
+class UserEntry(BaseModel):
+    """Model representing a user entry in the room's users list"""
+
+    user: UserInfo
+    membership: Membership
+
+
+class Feedback(BaseModel):
+    """Model representing feedback on a queue entry"""
+
+    userId: str
+    votedAt: str
+    type: str  # "upvote" or "downvote"
+
+
+class AddedBy(BaseModel):
+    """Model representing who added a queue entry"""
+
+    userId: str
+    displayName: str
+
+
+class QueueEntry(BaseModel):
+    """Model representing a song entry in the queue"""
+
+    queueEntryId: str
+    track: Track
+    addedBy: AddedBy
+    queuedAt: str
+    position: int
+    status: str  # "queued", "playing", "skipped", etc.
+    voteScore: int
+    orderRank: int
+    feedback: list[Feedback] = []
+
+
+class Room(BaseModel):
+    """Model representing room information"""
+
+    roomId: str
+    joinCode: str
+    name: str
+    status: str
+    createdAt: str
+
+
+class Host(BaseModel):
+    """Model representing the host of a room"""
+
+    userId: str
+    displayName: str
+    createdAt: str
+
+
+class RoomState(BaseModel):
+    """Model representing the complete state of a room"""
+
+    room: Room
+    host: Host
+    users: list[UserEntry]
+    queue: list[QueueEntry]
+
+
+class AddQueueRequest(BaseModel):
+    """Request model for adding a song to the queue"""
+
+    type: str = "addqueue"
+    room_id: str
+    track: Track
+    user_id: str

@@ -95,7 +95,6 @@
       "status": "queued",
       "voteScore": 15,
       "orderRank": 1,
-      "isCurrent": false,
       "feedback": [
         {
           "userId": "USER123",
@@ -125,7 +124,6 @@
       "status": "queued",
       "voteScore": 10,
       "orderRank": 2,
-      "isCurrent": false,
       "feedback": [
         {
           "userId": "USER123",
@@ -155,7 +153,6 @@
       "status": "queued",
       "voteScore": 7,
       "orderRank": 3,
-      "isCurrent": false,
       "feedback": []
     }
   ]

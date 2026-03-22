@@ -1,3 +1,4 @@
+import json
 import os
 from collections import defaultdict
 from datetime import datetime
@@ -21,6 +22,7 @@ from models import (
     CreateRoomRequest,
     RoomRequest,
     RoomResponse,
+    Track,
 )
 
 app = FastAPI()
@@ -52,11 +54,22 @@ async def root():
 
 @app.get("/db-health")
 async def db_health():
-    conn = await asyncpg.connect(os.environ["DATABASE_URL"])
+    # During unit test collection or in environments without a configured
+    # DATABASE_URL we should avoid attempting a real database connection.
+    database_url = os.environ.get("DATABASE_URL")
+    if not database_url:
+        return {"db-status": "skipped", "reason": "DATABASE_URL not configured"}
+
+    # If DATABASE_URL is present, attempt a real check. Catch exceptions and
+    # return an error status instead of letting the error propagate.
     try:
-        resp = await conn.fetchval("SELECT 1")
-    finally:
-        await conn.close()
+        conn = await asyncpg.connect(database_url)
+        try:
+            resp = await conn.fetchval("SELECT 1")
+        finally:
+            await conn.close()
+    except Exception as e:
+        return {"db-status": "error", "reason": str(e)}
 
     if resp == 1:
         return {"db-status": "ok"}
@@ -77,17 +90,89 @@ async def websocket_endpoint_room(websocket: WebSocket, room_id: str):
     try:
         while True:
             data = await websocket.receive_text()
-            handle_room_events(room_id, data)
+            await handle_room_events(room_id, data)
             # Send new room state to users
             await send_room_state(room_id)
     finally:
         active_room_connections[room_id].remove(websocket)
 
 
-def handle_room_events(room_id: str, data: str):
-    """Dummy method to handle room events"""
-    # In a real implementation, this would update the room state based on the event
-    pass
+async def handle_room_events(room_id: str, data: str):
+    """Handle room events based on event type"""
+    try:
+        event = json.loads(data)
+    except json.JSONDecodeError:
+        print(f"Invalid JSON received: {data}")
+        return
+
+    event_type = event.get("type")
+
+    if event_type == "addqueue":
+        track_data = event.get("track")
+        user_id = event.get("user_id")
+
+        # Validate room exists
+        if room_id not in room_state_cache:
+            print(f"Error: Room {room_id} does not exist")
+            return
+
+        # Look up user's display name from room state
+        display_name = user_id  # fallback to user_id
+        for user_entry in room_state_cache[room_id].get("users", []):
+            if user_entry.get("user", {}).get("userId") == user_id:
+                display_name = user_entry.get("user", {}).get("displayName", user_id)
+                break
+
+        if track_data:
+            try:
+                track = Track(**track_data)
+                await add_to_queue(
+                    room_id=room_id,
+                    track=track,
+                    user_id=user_id,
+                    display_name=display_name,
+                )
+            except ValueError as e:
+                print(f"Error adding to queue: {e}")
+            except Exception as e:
+                print(f"Unexpected error adding to queue: {e}")
+
+
+async def add_to_queue(
+    room_id: str,
+    track: Track,
+    user_id: str,
+    display_name: str,
+):
+    # TODO: Add check if song exists
+    """Add a song to the room's queue"""
+    if room_id not in room_state_cache:
+        raise ValueError(f"Room {room_id} does not exist")
+
+    if "queue" not in room_state_cache[room_id]:
+        room_state_cache[room_id]["queue"] = []
+
+    # Generate unique queue entry ID and determine position
+    queue_count = len(room_state_cache[room_id]["queue"])
+    queue_entry_id = f"QENTRY{queue_count + 1:03d}"
+    position = queue_count + 1
+
+    queue_entry = {
+        "queueEntryId": queue_entry_id,
+        "track": track.dict(),
+        "addedBy": {
+            "userId": user_id,
+            "displayName": display_name,
+        },
+        "queuedAt": str(datetime.utcnow()),
+        "position": position,
+        "status": "queued",
+        "voteScore": 0,
+        "orderRank": position,
+        "feedback": [],
+    }
+
+    room_state_cache[room_id]["queue"].append(queue_entry)
 
 
 # Dummy authenticaiton endpoints
@@ -189,18 +274,13 @@ async def join_room(room_data: RoomRequest):
     if not room:
         raise HTTPException(status_code=404, detail="Room not found")
 
+    # Verify room exists in cache
+    if room_data.room_id not in room_state_cache:
+        raise HTTPException(status_code=404, detail="Room state not initialized")
+
     # Create room membership
     try:
         await create_room_membership(room_data.user_id, room_data.room_id)
-
-        # Update room state cache - add new member
-        if room_data.room_id not in room_state_cache:
-            room_state_cache[room_data.room_id] = {
-                "room": {},
-                "host": {},
-                "users": [],
-                "queue": [],
-            }
 
         if "users" not in room_state_cache[room_data.room_id]:
             room_state_cache[room_data.room_id]["users"] = []
@@ -252,20 +332,23 @@ async def leave_room(room_data: RoomRequest):
     if not room:
         raise HTTPException(status_code=404, detail="Room not found")
 
+    # Verify room exists in cache
+    if room_data.room_id not in room_state_cache:
+        raise HTTPException(status_code=404, detail="Room state not initialized")
+
     # Remove user from room membership
     try:
         await db_leave_room(room_data.user_id, room_data.room_id)
 
         # Update room state cache - update user's membership status
-        if room_data.room_id in room_state_cache:
-            if "users" in room_state_cache[room_data.room_id]:
-                for user_entry in room_state_cache[room_data.room_id]["users"]:
-                    if user_entry.get("user", {}).get("userId") == room_data.user_id:
-                        if "membership" not in user_entry:
-                            user_entry["membership"] = {}
-                        user_entry["membership"]["leftAt"] = str(datetime.utcnow())
-                        user_entry["membership"]["membershipStatus"] = "inactive"
-                        break
+        if "users" in room_state_cache[room_data.room_id]:
+            for user_entry in room_state_cache[room_data.room_id]["users"]:
+                if user_entry.get("user", {}).get("userId") == room_data.user_id:
+                    if "membership" not in user_entry:
+                        user_entry["membership"] = {}
+                    user_entry["membership"]["leftAt"] = str(datetime.utcnow())
+                    user_entry["membership"]["membershipStatus"] = "inactive"
+                    break
 
         # Broadcast updated room state to all connected clients
         await send_room_state(room_data.room_id)
