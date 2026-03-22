@@ -95,10 +95,14 @@ backend:integration:
   image: python:3.14
   <<: *cache_uv
   <<: *rules_backend_changes
-  # Add services here if you need them, example:
-  # services:
-  #   - name: postgres:16
-  #     alias: postgres
+  services:
+    - name: postgres:16
+      alias: postgres
+      variables:
+        POSTGRES_PASSWORD: "testpass"
+        POSTGRES_DB: "wunschkonzert"
+  variables:
+    DATABASE_URL: "postgresql://postgres:testpass@postgres:5432/wunschkonzert"
   before_script:
     - pip install uv
     - cd backend/python
