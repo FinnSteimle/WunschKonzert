@@ -3,9 +3,10 @@ from collections import defaultdict
 
 import asyncpg
 import httpx
-from fastapi import FastAPI, WebSocket
+from fastapi import FastAPI, HTTPException, WebSocket
 from fastapi.middleware.cors import CORSMiddleware
 
+from db_utils import create_room_membership, create_user, get_room, get_user
 from models import AuthRequest, AuthResponse, RoomRequest, RoomResponse
 
 app = FastAPI()
@@ -93,13 +94,33 @@ async def auth_user(auth_data: AuthRequest):
 # Room management endpoints
 @app.post("/join_room", response_model=RoomResponse)
 async def join_room(room_data: RoomRequest):
-    """Dummy endpoint for joining a room"""
-    # In a real implementation, this would add user to room in database
-    return {
-        "success": True,
-        "message": f"Successfully joined room {room_data.room_id}",
-        "room_id": room_data.room_id,
-    }
+    """Endpoint for joining a room"""
+    # Check if user exists
+    user = await get_user(room_data.user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    # Check if room exists
+    room = await get_room(room_data.room_id)
+    if not room:
+        raise HTTPException(status_code=404, detail="Room not found")
+
+    # Create room membership
+    try:
+        await create_room_membership(room_data.user_id, room_data.room_id)
+        return {
+            "success": True,
+            "message": f"Successfully joined room {room_data.room_id}",
+            "room_id": room_data.room_id,
+        }
+    except ValueError as e:
+        if "already a member" in str(e):
+            raise HTTPException(
+                status_code=400, detail="User is already a member of this room"
+            )
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to join room: {str(e)}")
 
 
 @app.post("/leave_room", response_model=RoomResponse)
