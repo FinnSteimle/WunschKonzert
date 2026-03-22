@@ -80,7 +80,7 @@ backend:unit:
   before_script:
     - pip install uv
     - cd backend/python
-    - cp ../../.env.example .env
+    - cp ../.env.example .env
     - uv sync --frozen
   script:
     # Convention: integration tests are marked with "integration"

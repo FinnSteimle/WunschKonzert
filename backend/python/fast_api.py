@@ -89,6 +89,7 @@ async def websocket_endpoint_room(websocket: WebSocket, room_id: str):
         active_room_connections[room_id].remove(websocket)
 
 
+# ToDO: addqueue into own method & more type of events implement
 async def handle_room_events(room_id: str, data: str):
     """Handle room events based on event type"""
     try:
@@ -167,7 +168,7 @@ async def add_to_queue(
     room_state_cache[room_id]["queue"].append(queue_entry)
 
 
-# Dummy authenticaiton endpoints
+# TODO: Implement auth for an account
 @app.post("/auth/account", response_model=AuthResponse)
 async def auth_account(auth_data: AuthRequest):
     """Dummy endpoint for account authentication"""
