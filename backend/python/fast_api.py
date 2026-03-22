@@ -65,11 +65,17 @@ async def websocket_endpoint_room(websocket: WebSocket, room_id: str):
     try:
         while True:
             data = await websocket.receive_text()
-
+            handle_room_events(room_id, data)
             # Send new room state to users
             await send_room_state(room_id)
     finally:
         active_room_connections[room_id].remove(websocket)
+
+
+def handle_room_events(room_id: str, data: str):
+    """Dummy method to handle room events"""
+    # In a real implementation, this would update the room state based on the event
+    pass
 
 
 # Dummy authenticaiton endpoints
