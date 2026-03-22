@@ -21,6 +21,9 @@ app.add_middleware(
 active_room_connections: dict[str, set] = defaultdict(set)
 generic_connections: set = set()
 
+# Room state cache
+room_state_cache: dict[str, dict] = {}
+
 
 @app.get("/health")
 async def health():
@@ -50,10 +53,16 @@ async def websocket_endpoint_room(websocket: WebSocket, room_id: str):
     await websocket.accept()
     active_room_connections[room_id].add(websocket)
 
+    # Send the current room state to the newly connected client
+    if room_id in room_state_cache:
+        await websocket.send_text(f"ROOM_STATE:{room_state_cache[room_id]}")
+
     try:
         while True:
             data = await websocket.receive_text()
-            await websocket.send_text(f"Message text was: {data} for room {room_id}")
+
+            # Send new room state to users
+            await send_room_state(room_id, {"message": data, "room_id": room_id})
     finally:
         active_room_connections[room_id].remove(websocket)
 
@@ -102,6 +111,16 @@ async def leave_room(room_data: RoomRequest):
         "message": f"Successfully left room {room_data.room_id}",
         "room_id": room_data.room_id,
     }
+
+
+async def send_room_state(room_id: str, room_state: dict):
+    # Broadcast to all connections in the room
+    if room_id in active_room_connections:
+        for websocket in active_room_connections[room_id]:
+            try:
+                await websocket.send_text(f"ROOM_STATE:{room_state}")
+            except Exception as e:
+                print(f"Error sending to websocket: {e}")
 
 
 @app.websocket("/ws")
