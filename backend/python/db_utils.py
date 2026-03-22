@@ -1,8 +1,9 @@
 import os
+from datetime import datetime
 
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
-from database import Room, RoomMembership, User
+from database import MembershipStatus, Room, RoomMembership, User
 
 # Create async engine and session factory
 # Ensure we use asyncpg driver for async operations
@@ -72,3 +73,25 @@ async def create_user(user_id: str, display_name: str) -> User:
         await session.commit()
         await session.refresh(user)
         return user
+
+
+async def leave_room(user_id: str, room_id: str) -> RoomMembership:
+    """Leave a room by setting leftAt timestamp"""
+    async with AsyncSessionLocal() as session:
+        from sqlalchemy import select
+
+        result = await session.execute(
+            select(RoomMembership).where(
+                RoomMembership.userId == user_id, RoomMembership.roomId == room_id
+            )
+        )
+        membership = result.scalar_one_or_none()
+
+        if not membership:
+            raise ValueError("User is not a member of this room")
+
+        membership.leftAt = datetime.utcnow()  # type: ignore[attr-defined]
+        membership.membershipStatus = MembershipStatus.INACTIVE  # type: ignore[attr-defined]
+        await session.commit()
+        await session.refresh(membership)
+        return membership

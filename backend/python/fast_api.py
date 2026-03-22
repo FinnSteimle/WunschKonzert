@@ -1,5 +1,6 @@
 import os
 from collections import defaultdict
+from datetime import datetime
 
 import asyncpg
 import httpx
@@ -7,6 +8,7 @@ from fastapi import FastAPI, HTTPException, WebSocket
 from fastapi.middleware.cors import CORSMiddleware
 
 from db_utils import create_room_membership, create_user, get_room, get_user
+from db_utils import leave_room as db_leave_room
 from models import AuthRequest, AuthResponse, RoomRequest, RoomResponse
 
 app = FastAPI()
@@ -56,14 +58,16 @@ async def websocket_endpoint_room(websocket: WebSocket, room_id: str):
 
     # Send the current room state to the newly connected client
     if room_id in room_state_cache:
-        await websocket.send_text(f"ROOM_STATE:{room_state_cache[room_id]}")
+        import json
+
+        await websocket.send_text(json.dumps(room_state_cache[room_id]))
 
     try:
         while True:
             data = await websocket.receive_text()
 
             # Send new room state to users
-            await send_room_state(room_id, {"message": data, "room_id": room_id})
+            await send_room_state(room_id)
     finally:
         active_room_connections[room_id].remove(websocket)
 
@@ -80,25 +84,25 @@ async def auth_account(auth_data: AuthRequest):
     }
 
 
-@app.post("/auth/user", response_model=AuthResponse)
-async def auth_user(auth_data: AuthRequest):
-    """Dummy endpoint for user authentication"""
-    # In a real implementation, this would validate credentials
-    return {
-        "success": True,
-        "message": "User authentication successful",
-        "token": "dummy_user_token_67890",
-    }
-
-
 # Room management endpoints
 @app.post("/join_room", response_model=RoomResponse)
 async def join_room(room_data: RoomRequest):
     """Endpoint for joining a room"""
-    # Check if user exists
+    # Check if user exists, create if not
     user = await get_user(room_data.user_id)
     if not user:
-        raise HTTPException(status_code=404, detail="User not found")
+        try:
+            await create_user(room_data.user_id, room_data.user_id)
+        except ValueError as e:
+            if "already exists" in str(e):
+                # User was created by another request
+                pass
+            else:
+                raise HTTPException(status_code=400, detail=str(e))
+        except Exception as e:
+            raise HTTPException(
+                status_code=500, detail=f"Failed to create user: {str(e)}"
+            )
 
     # Check if room exists
     room = await get_room(room_data.room_id)
@@ -108,6 +112,32 @@ async def join_room(room_data: RoomRequest):
     # Create room membership
     try:
         await create_room_membership(room_data.user_id, room_data.room_id)
+
+        # Update room state cache - add new member
+        if room_data.room_id not in room_state_cache:
+            room_state_cache[room_data.room_id] = {"members": []}
+
+        if "members" not in room_state_cache[room_data.room_id]:
+            room_state_cache[room_data.room_id]["members"] = []
+
+        # Add the new member to the members list
+        room_state_cache[room_data.room_id]["members"].append(
+            {
+                "user": {
+                    "userId": room_data.user_id,
+                    "displayName": room_data.user_id,
+                },
+                "membership": {
+                    "joinedAt": str(datetime.utcnow()),
+                    "leftAt": None,
+                    "membershipStatus": "active",
+                },
+            }
+        )
+
+        # Broadcast updated room state to all connected clients
+        await send_room_state(room_data.room_id)
+
         return {
             "success": True,
             "message": f"Successfully joined room {room_data.room_id}",
@@ -125,21 +155,55 @@ async def join_room(room_data: RoomRequest):
 
 @app.post("/leave_room", response_model=RoomResponse)
 async def leave_room(room_data: RoomRequest):
-    """Dummy endpoint for leaving a room"""
-    # In a real implementation, this would remove user from room in database
-    return {
-        "success": True,
-        "message": f"Successfully left room {room_data.room_id}",
-        "room_id": room_data.room_id,
-    }
+    """Endpoint for leaving a room"""
+    # Check if user exists
+    user = await get_user(room_data.user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    # Check if room exists
+    room = await get_room(room_data.room_id)
+    if not room:
+        raise HTTPException(status_code=404, detail="Room not found")
+
+    # Remove user from room membership
+    try:
+        await db_leave_room(room_data.user_id, room_data.room_id)
+
+        # Update room state cache - update user's membership status
+        if room_data.room_id in room_state_cache:
+            if "members" in room_state_cache[room_data.room_id]:
+                for member in room_state_cache[room_data.room_id]["members"]:
+                    if member.get("user", {}).get("userId") == room_data.user_id:
+                        if "membership" not in member:
+                            member["membership"] = {}
+                        member["membership"]["leftAt"] = str(datetime.utcnow())
+                        member["membership"]["membershipStatus"] = "inactive"
+                        break
+
+        # Broadcast updated room state to all connected clients
+        await send_room_state(room_data.room_id)
+
+        return {
+            "success": True,
+            "message": f"Successfully left room {room_data.room_id}",
+            "room_id": room_data.room_id,
+        }
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to leave room: {str(e)}")
 
 
-async def send_room_state(room_id: str, room_state: dict):
+async def send_room_state(room_id: str):
     # Broadcast to all connections in the room
     if room_id in active_room_connections:
+        import json
+
+        room_state = room_state_cache.get(room_id, {})
         for websocket in active_room_connections[room_id]:
             try:
-                await websocket.send_text(f"ROOM_STATE:{room_state}")
+                await websocket.send_text(json.dumps(room_state))
             except Exception as e:
                 print(f"Error sending to websocket: {e}")
 
