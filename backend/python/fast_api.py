@@ -9,6 +9,7 @@ from fastapi import FastAPI, HTTPException, WebSocket
 from fastapi.middleware.cors import CORSMiddleware
 
 from db_utils import (
+    create_provider_account,
     create_room,
     create_room_membership,
     create_user,
@@ -17,6 +18,8 @@ from db_utils import (
 )
 from db_utils import leave_room as db_leave_room
 from models import (
+    AddMusicProviderRequest,
+    AddMusicProviderResponse,
     AuthRequest,
     AuthResponse,
     CreateRoomRequest,
@@ -351,6 +354,35 @@ async def leave_room(room_data: RoomRequest):
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to leave room: {str(e)}")
+
+
+@app.post("/add_music_provider", response_model=AddMusicProviderResponse)
+async def add_music_provider(provider_data: AddMusicProviderRequest):
+    """Endpoint for adding a music provider to a user"""
+    # Check if user exists
+    user = await get_user(provider_data.user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    # Create provider account
+    try:
+        provider_account = await create_provider_account(
+            provider_data.user_id,
+            provider_data.provider_id,
+            provider_data.external_user_id,
+        )
+
+        return {
+            "success": True,
+            "message": f"Successfully linked provider {provider_data.provider_id} to user",
+            "provider_account_id": provider_account.providerAccountId,
+        }
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(
+            status_code=500, detail=f"Failed to add music provider: {str(e)}"
+        )
 
 
 async def send_room_state(room_id: str):

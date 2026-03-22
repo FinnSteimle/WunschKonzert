@@ -141,3 +141,19 @@ class AddQueueRequest(BaseModel):
     room_id: str
     track: Track
     user_id: str
+
+
+class AddMusicProviderRequest(BaseModel):
+    """Request model for adding a music provider to a user"""
+
+    user_id: str
+    provider_id: str
+    external_user_id: str
+
+
+class AddMusicProviderResponse(BaseModel):
+    """Response model for adding a music provider"""
+
+    success: bool
+    message: str
+    provider_account_id: str | None = None

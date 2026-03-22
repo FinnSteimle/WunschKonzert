@@ -1,9 +1,18 @@
 import os
+import uuid
 from datetime import datetime
 
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
-from database import MembershipStatus, Room, RoomMembership, RoomStatus, User
+from database import (
+    AccountStatus,
+    MembershipStatus,
+    ProviderAccount,
+    Room,
+    RoomMembership,
+    RoomStatus,
+    User,
+)
 
 # Create async engine and session factory
 # Ensure we use asyncpg driver for async operations
@@ -120,3 +129,43 @@ async def create_room(
         await session.commit()
         await session.refresh(room)
         return room
+
+
+async def create_provider_account(
+    user_id: str, provider_id: str, external_user_id: str
+) -> ProviderAccount:
+    """Create a new provider account for a user"""
+    # Check if user exists
+    user = await get_user(user_id)
+    if not user:
+        raise ValueError("User not found")
+
+    # Check if provider account already exists for this user and provider
+    async with AsyncSessionLocal() as session:
+        from sqlalchemy import select
+
+        result = await session.execute(
+            select(ProviderAccount).where(
+                ProviderAccount.userId == user_id,
+                ProviderAccount.providerId == provider_id,
+            )
+        )
+        existing = result.scalar_one_or_none()
+        if existing:
+            raise ValueError(
+                f"User already has an account linked for provider {provider_id}"
+            )
+
+    # Create new provider account
+    async with AsyncSessionLocal() as session:
+        provider_account = ProviderAccount(
+            providerAccountId=str(uuid.uuid4()),
+            externalUserId=external_user_id,
+            userId=user_id,
+            providerId=provider_id,
+            status=AccountStatus.ACTIVE,
+        )
+        session.add(provider_account)
+        await session.commit()
+        await session.refresh(provider_account)
+        return provider_account
