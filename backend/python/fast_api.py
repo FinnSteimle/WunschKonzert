@@ -54,22 +54,11 @@ async def root():
 
 @app.get("/db-health")
 async def db_health():
-    # During unit test collection or in environments without a configured
-    # DATABASE_URL we should avoid attempting a real database connection.
-    database_url = os.environ.get("DATABASE_URL")
-    if not database_url:
-        return {"db-status": "skipped", "reason": "DATABASE_URL not configured"}
-
-    # If DATABASE_URL is present, attempt a real check. Catch exceptions and
-    # return an error status instead of letting the error propagate.
+    conn = await asyncpg.connect(os.environ["DATABASE_URL"])
     try:
-        conn = await asyncpg.connect(database_url)
-        try:
-            resp = await conn.fetchval("SELECT 1")
-        finally:
-            await conn.close()
-    except Exception as e:
-        return {"db-status": "error", "reason": str(e)}
+        resp = await conn.fetchval("SELECT 1")
+    finally:
+        await conn.close()
 
     if resp == 1:
         return {"db-status": "ok"}
