@@ -1,8 +1,14 @@
 import os
 import uuid
 from datetime import datetime
+from typing import Optional
 
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+from sqlalchemy.ext.asyncio import (
+    AsyncEngine,
+    AsyncSession,
+    async_sessionmaker,
+    create_async_engine,
+)
 
 from database import (
     AccountStatus,
@@ -14,36 +20,60 @@ from database import (
     User,
 )
 
-# Create async engine and session factory
-# Ensure we use asyncpg driver for async operations
-database_url = os.environ["DATABASE_URL"]
-if not database_url.startswith("postgresql+asyncpg"):
-    if database_url.startswith("postgresql:"):
-        database_url = database_url.replace("postgresql:", "postgresql+asyncpg:", 1)
-    else:
-        database_url = "postgresql+asyncpg:" + database_url
+# Create async engine and session factory lazily
+# This allows tests to run without DATABASE_URL environment variable
+_engine: Optional[AsyncEngine] = None
+_session_factory: Optional[async_sessionmaker] = None
 
-engine = create_async_engine(database_url)
-AsyncSessionLocal = async_sessionmaker(
-    engine, class_=AsyncSession, expire_on_commit=False
-)
+
+def _get_database_url() -> str:
+    """Get and format the database URL"""
+    database_url = os.environ.get("DATABASE_URL")
+    if not database_url:
+        raise RuntimeError(
+            "DATABASE_URL environment variable not set. "
+            "Please set it in your .env file or environment."
+        )
+
+    if not database_url.startswith("postgresql+asyncpg"):
+        if database_url.startswith("postgresql:"):
+            database_url = database_url.replace("postgresql:", "postgresql+asyncpg:", 1)
+        else:
+            database_url = "postgresql+asyncpg:" + database_url
+
+    return database_url
+
+
+def _get_session_factory() -> async_sessionmaker:
+    """Initialize and return the session factory"""
+    global _engine, _session_factory
+    if _session_factory is None:
+        database_url = _get_database_url()
+        _engine = create_async_engine(database_url)
+        _session_factory = async_sessionmaker(
+            _engine, class_=AsyncSession, expire_on_commit=False
+        )
+    return _session_factory
 
 
 async def get_user(user_id: str) -> User | None:
     """Get user by ID or return None if not found"""
-    async with AsyncSessionLocal() as session:
+    session_factory = _get_session_factory()
+    async with session_factory() as session:
         return await session.get(User, user_id)
 
 
 async def get_room(room_id: str) -> Room | None:
     """Get room by ID or return None if not found"""
-    async with AsyncSessionLocal() as session:
+    session_factory = _get_session_factory()
+    async with session_factory() as session:
         return await session.get(Room, room_id)
 
 
 async def get_room_membership(user_id: str, room_id: str) -> RoomMembership | None:
     """Get existing room membership or return None if not found"""
-    async with AsyncSessionLocal() as session:
+    session_factory = _get_session_factory()
+    async with session_factory() as session:
         from sqlalchemy import select
 
         result = await session.execute(
@@ -61,7 +91,8 @@ async def create_room_membership(user_id: str, room_id: str) -> RoomMembership:
     if existing:
         raise ValueError("User is already a member of this room")
 
-    async with AsyncSessionLocal() as session:
+    session_factory = _get_session_factory()
+    async with session_factory() as session:
         membership = RoomMembership(userId=user_id, roomId=room_id)
         session.add(membership)
         await session.commit()
@@ -76,7 +107,8 @@ async def create_user(user_id: str, display_name: str) -> User:
     if existing:
         raise ValueError("User already exists")
 
-    async with AsyncSessionLocal() as session:
+    session_factory = _get_session_factory()
+    async with session_factory() as session:
         user = User(userId=user_id, displayName=display_name)
         session.add(user)
         await session.commit()
@@ -86,7 +118,8 @@ async def create_user(user_id: str, display_name: str) -> User:
 
 async def leave_room(user_id: str, room_id: str) -> RoomMembership:
     """Leave a room by setting leftAt timestamp"""
-    async with AsyncSessionLocal() as session:
+    session_factory = _get_session_factory()
+    async with session_factory() as session:
         from sqlalchemy import select
 
         result = await session.execute(
@@ -115,7 +148,8 @@ async def create_room(
     if existing:
         raise ValueError("Room already exists")
 
-    async with AsyncSessionLocal() as session:
+    session_factory = _get_session_factory()
+    async with session_factory() as session:
         # Use room_id as joinCode
         room = Room(
             roomId=room_id,
@@ -141,7 +175,8 @@ async def create_provider_account(
         raise ValueError("User not found")
 
     # Check if provider account already exists for this user and provider
-    async with AsyncSessionLocal() as session:
+    session_factory = _get_session_factory()
+    async with session_factory() as session:
         from sqlalchemy import select
 
         result = await session.execute(
@@ -157,7 +192,8 @@ async def create_provider_account(
             )
 
     # Create new provider account
-    async with AsyncSessionLocal() as session:
+    session_factory = _get_session_factory()
+    async with session_factory() as session:
         provider_account = ProviderAccount(
             providerAccountId=str(uuid.uuid4()),
             externalUserId=external_user_id,
