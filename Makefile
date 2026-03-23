@@ -32,7 +32,12 @@ help:
 	@echo "Utilities (via Docker):"
 	@echo "  shell         - Open Python shell in container"
 	@echo "  check-health  - Check API health endpoint"
-	@echo "  db-health     - Check database health endpoint"
+	@echo "  db-health     - Check API database health endpoint"
+	@echo "  check-modular - Automatically verify that backend and frontend can run independently"
+	@echo ""
+	@echo "Independent Services:"
+	@echo "  run-backend   - Start only backend services"
+	@echo "  run-frontend  - Start only frontend services"
 
 # Development targets (Docker-based)
 .PHONY: install
@@ -44,6 +49,18 @@ run:
 	docker compose -f compose.yaml up --build -d
 	docker compose -f compose.yaml exec -T api uv run python -m alembic upgrade head
 	docker compose -f compose.yaml logs -f api
+
+.PHONY: run-backend
+run-backend:
+	docker compose -f backend/compose.yaml up --build -d
+
+.PHONY: run-frontend
+run-frontend:
+	docker compose -f frontend/compose.yaml up --build -d
+
+.PHONY: check-modular
+check-modular:
+	./scripts/check_independent.sh
 
 
 # Database migration targets (Docker-based)
