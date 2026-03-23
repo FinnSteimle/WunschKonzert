@@ -1,0 +1,159 @@
+{
+  "room": {
+    "roomId": "ROOM001",
+    "joinCode": "ROOM001",
+    "name": "Room ROOM001",
+    "status": "playing",
+    "createdAt": "2026-03-20T12:00:00Z"
+  },
+  "host": {
+    "userId": "HOST123",
+    "displayName": "DJ_Linus",
+    "createdAt": "2026-03-20T11:00:00Z"
+  },
+  "users": [
+    {
+      "user": {
+        "userId": "USER001",
+        "displayName": "Alice",
+        "createdAt": "2026-03-20T10:00:00Z"
+      },
+      "membership": {
+        "joinedAt": "2026-03-20T10:00:00Z",
+        "leftAt": null,
+        "membershipStatus": "active"
+      }
+    },
+    {
+      "user": {
+        "userId": "USER002",
+        "displayName": "Bob",
+        "createdAt": "2026-03-20T10:05:00Z"
+      },
+      "membership": {
+        "joinedAt": "2026-03-20T10:05:00Z",
+        "leftAt": null,
+        "membershipStatus": "active"
+      }
+    },
+    {
+      "user": {
+        "userId": "USER003",
+        "displayName": "Charlie",
+        "createdAt": "2026-03-20T10:10:00Z"
+      },
+      "membership": {
+        "joinedAt": "2026-03-20T10:10:00Z",
+        "leftAt": null,
+        "membershipStatus": "active"
+      }
+    },
+    {
+      "user": {
+        "userId": "USER004",
+        "displayName": "Eve",
+        "createdAt": "2026-03-20T10:15:00Z"
+      },
+      "membership": {
+        "joinedAt": "2026-03-20T10:15:00Z",
+        "leftAt": "2026-03-20T10:16:00Z",
+        "membershipStatus": "kicked"
+      }
+    },
+    {
+      "user": {
+        "userId": "USER005",
+        "displayName": "Frank",
+        "createdAt": "2026-03-20T10:20:00Z"
+      },
+      "membership": {
+        "joinedAt": "2026-03-20T10:20:00Z",
+        "leftAt": "2026-03-20T10:21:00Z",
+        "membershipStatus": "kicked"
+      }
+    }
+  ],
+  "queue": [
+    {
+      "queueEntryId": "QENTRY003",
+      "track": {
+        "trackId": "TRACK003",
+        "providerTrackId": "SONG003",
+        "title": "Starboy",
+        "artist": "The Weeknd",
+        "album": "",
+        "duration": 230,
+        "coverUrl": "https://example.com/starboy.jpg",
+        "deepLink": ""
+      },
+      "addedBy": {
+        "userId": "USER003",
+        "displayName": "Charlie"
+      },
+      "queuedAt": "2026-03-20T11:25:00Z",
+      "position": 1,
+      "status": "queued",
+      "voteScore": 15,
+      "orderRank": 1,
+      "feedback": [
+        {
+          "userId": "USER123",
+          "votedAt": "2026-03-20T11:30:00Z",
+          "type": "downvote"
+        }
+      ]
+    },
+    {
+      "queueEntryId": "QENTRY001",
+      "track": {
+        "trackId": "TRACK001",
+        "providerTrackId": "SONG001",
+        "title": "Blinding Lights",
+        "artist": "The Weeknd",
+        "album": "",
+        "duration": 200,
+        "coverUrl": "https://example.com/blinding_lights.jpg",
+        "deepLink": ""
+      },
+      "addedBy": {
+        "userId": "USER001",
+        "displayName": "Alice"
+      },
+      "queuedAt": "2026-03-20T11:15:00Z",
+      "position": 2,
+      "status": "queued",
+      "voteScore": 10,
+      "orderRank": 2,
+      "feedback": [
+        {
+          "userId": "USER123",
+          "votedAt": "2026-03-20T11:35:00Z",
+          "type": "upvote"
+        }
+      ]
+    },
+    {
+      "queueEntryId": "QENTRY002",
+      "track": {
+        "trackId": "TRACK002",
+        "providerTrackId": "SONG002",
+        "title": "Save Your Tears",
+        "artist": "The Weeknd",
+        "album": "",
+        "duration": 215,
+        "coverUrl": "https://example.com/save_your_tears.jpg",
+        "deepLink": ""
+      },
+      "addedBy": {
+        "userId": "USER002",
+        "displayName": "Bob"
+      },
+      "queuedAt": "2026-03-20T11:20:00Z",
+      "position": 3,
+      "status": "queued",
+      "voteScore": 7,
+      "orderRank": 3,
+      "feedback": []
+    }
+  ]
+}

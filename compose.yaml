@@ -1,0 +1,5 @@
+# Root compose — runs the full stack (backend + frontend + db)
+
+include:
+  - backend/compose.yaml
+  - frontend/compose.yaml
