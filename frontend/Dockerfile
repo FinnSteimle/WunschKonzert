@@ -2,11 +2,14 @@
 FROM node:21-alpine AS base
 WORKDIR /app
 COPY package.json package-lock.json ./
-RUN npm ci
+# Install dependencies without running scripts (avoids svelte-kit sync which needs source)
+RUN npm ci --no-scripts
 
 # 2) Test stage
 FROM base AS test
 COPY . .
+# Now that we have all source, run prepare manually to generate .svelte-kit
+RUN npm run prepare
 # This stage is for running tests in an isolated container
 # Usage: docker build --target test -t frontend-test . && docker run --network none frontend-test npm test
 
@@ -14,13 +17,13 @@ COPY . .
 FROM base AS build
 ENV DOCKER_BUILD=true
 COPY . .
-RUN npm run build
+RUN npm run prepare && npm run build
 
 # 4) Production dependencies stage
 FROM node:21-alpine AS deps
 WORKDIR /app
 COPY package.json package-lock.json ./
-RUN npm ci --omit=dev
+RUN npm ci --omit=dev --no-scripts
 
 # 5) Runtime stage
 FROM node:21-alpine AS runner

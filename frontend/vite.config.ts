@@ -9,6 +9,11 @@ export default defineConfig({
 		environment: 'jsdom',
 		root: 'src',
 		include: ['**/*.{test,spec}.{ts,js}'],
-		setupFiles: []
+		setupFiles: [],
+		server: {
+			deps: {
+				inline: [/^(?!.*node_modules).*$/, 'html-encoding-sniffer', '@exodus/bytes']
+			}
+		}
 	}
 });
