@@ -1,8 +1,8 @@
 stages:
   - lint
-  - modularity
   - unit_test
   - integration_test
+  - modularity
   - build
   - docker
 
