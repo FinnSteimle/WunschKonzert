@@ -1,0 +1,31 @@
+services:
+  api-test:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    environment:
+      DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD:-testpass}@db-test:5432/${POSTGRES_DB:-wunschkonzert}
+      ENVIRONMENT: test
+    networks:
+      - test-network
+    depends_on:
+      db-test:
+        condition: service_healthy
+
+  db-test:
+    image: postgres:17.9-alpine3.23@sha256:6f30057d31f5861b66f3545d4821f987aacf1dd920765f0acadea0c58ff975b1
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-testpass}
+      POSTGRES_DB: ${POSTGRES_DB:-wunschkonzert}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d ${POSTGRES_DB:-wunschkonzert}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - test-network
+
+networks:
+  test-network:
+    internal: true
