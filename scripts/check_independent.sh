@@ -16,7 +16,8 @@ docker compose -f backend/compose.yaml up -d --build
 MAX_RETRIES=30
 COUNT=0
 echo "Waiting for backend health at http://${HOST}:8000/health..."
-until curl --output /dev/null --silent --head --fail "http://${HOST}:8000/health"; do
+# Use GET instead of HEAD because FastAPI returns 405 for HEAD on GET-only routes
+until curl --output /dev/null --silent --fail "http://${HOST}:8000/health"; do
     printf '.'
     sleep 2
     COUNT=$((COUNT+1))
@@ -37,7 +38,7 @@ docker compose -f frontend/compose.yaml up -d --build
 # Wait for frontend responsiveness
 COUNT=0
 echo "Waiting for frontend responsiveness at http://${HOST}:3000..."
-until curl --output /dev/null --silent --head --fail "http://${HOST}:3000"; do
+until curl --output /dev/null --silent --fail "http://${HOST}:3000"; do
     printf '.'
     sleep 2
     COUNT=$((COUNT+1))
