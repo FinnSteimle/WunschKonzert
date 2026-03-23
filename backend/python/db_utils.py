@@ -3,6 +3,7 @@ import uuid
 from datetime import datetime
 from typing import Optional
 
+from sqlalchemy import text
 from sqlalchemy.ext.asyncio import (
     AsyncEngine,
     AsyncSession,
@@ -205,3 +206,16 @@ async def create_provider_account(
         await session.commit()
         await session.refresh(provider_account)
         return provider_account
+
+
+async def check_db_health() -> dict:
+    """Check if database is healthy by executing a simple query"""
+    try:
+        session_factory = _get_session_factory()
+        async with session_factory() as session:
+            result = await session.execute(text("SELECT 1"))
+            if result.scalar() == 1:
+                return {"status": "ok"}
+        return {"status": "error", "detail": "Query returned unexpected result"}
+    except Exception as e:
+        return {"status": "error", "detail": str(e)}

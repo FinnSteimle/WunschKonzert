@@ -1,14 +1,13 @@
 import json
-import os
 from collections import defaultdict
 from datetime import datetime
 
-import asyncpg
 import httpx
 from fastapi import FastAPI, HTTPException, WebSocket
 from fastapi.middleware.cors import CORSMiddleware
 
 from db_utils import (
+    check_db_health,
     create_provider_account,
     create_room,
     create_room_membership,
@@ -57,15 +56,8 @@ async def root():
 
 @app.get("/db-health")
 async def db_health():
-    conn = await asyncpg.connect(os.environ["DATABASE_URL"])
-    try:
-        resp = await conn.fetchval("SELECT 1")
-    finally:
-        await conn.close()
-
-    if resp == 1:
-        return {"db-status": "ok"}
-    return {"db-status": "error"}
+    result = await check_db_health()
+    return {"db-status": result.get("status"), **result}
 
 
 @app.websocket("/ws/{room_id}")
@@ -432,3 +424,9 @@ async def check_song_exists(access_token: str, endpoint: str, song_id: str):
         }
     except Exception as e:
         return {"status": "error", "error": str(e)}
+
+
+if __name__ == "__main__":
+    import uvicorn
+
+    uvicorn.run(app, host="0.0.0.0", port=8000)
