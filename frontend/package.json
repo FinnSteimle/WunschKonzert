@@ -14,8 +14,7 @@
 		"format": "prettier --write .",
 		"test:unit": "vitest run",
 		"test": "vitest run"
-		},
-
+	},
 	"devDependencies": {
 		"@internationalized/date": "^3.12.0",
 		"@lucide/svelte": "^0.561.0",
