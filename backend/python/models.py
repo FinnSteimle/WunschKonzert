@@ -1,5 +1,3 @@
-from typing import Optional
-
 from pydantic import BaseModel
 
 
@@ -67,7 +65,7 @@ class Membership(BaseModel):
     """Model representing a user's membership in a room"""
 
     joinedAt: str
-    leftAt: Optional[str] = None
+    leftAt: str | None = None
     membershipStatus: str
 
 

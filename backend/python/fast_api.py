@@ -7,13 +7,13 @@ from fastapi import FastAPI, HTTPException, WebSocket
 from fastapi.middleware.cors import CORSMiddleware
 
 from db_utils import (
-    check_db_health,
-    create_provider_account,
-    create_room,
-    create_room_membership,
-    create_user,
-    get_room,
-    get_user,
+    check_db_health as db_check_db_health,
+    create_provider_account as db_create_provider_account,
+    create_room as db_create_room,
+    create_room_membership as db_create_room_membership,
+    create_user as db_create_user,
+    get_room as db_get_room,
+    get_user as db_get_user,
 )
 from db_utils import leave_room as db_leave_room
 from models import (
@@ -37,8 +37,8 @@ app.add_middleware(
 )
 
 # Save the active websocket connections
-active_room_connections: dict[str, set] = defaultdict(set)
-generic_connections: set = set()
+active_room_connections: dict[str, set[WebSocket]] = defaultdict(set)
+generic_connections: set[WebSocket] = set()
 
 # Room state cache
 room_state_cache: dict[str, dict] = {}
@@ -56,7 +56,7 @@ async def root():
 
 @app.get("/db-health")
 async def db_health():
-    result = await check_db_health()
+    result = await db_check_db_health()
     return {"db-status": result.get("status"), **result}
 
 
@@ -78,7 +78,7 @@ async def websocket_endpoint_room(websocket: WebSocket, room_id: str):
             # Send new room state to users
             await send_room_state(room_id)
     finally:
-        active_room_connections[room_id].remove(websocket)
+        active_room_connections[room_id].discard(websocket)
 
 
 # ToDO: addqueue into own method & more type of events implement
@@ -177,14 +177,14 @@ async def auth_account(auth_data: AuthRequest):
 async def create_room_endpoint(room_data: CreateRoomRequest):
     """Endpoint for creating a new room"""
     # Check if user exists, create if not
-    user = await get_user(room_data.user_id)
+    user = await db_get_user(room_data.user_id)
     if not user:
         try:
-            await create_user(room_data.user_id, room_data.user_id)
-            user = await get_user(room_data.user_id)
+            await db_create_user(room_data.user_id, room_data.user_id)
+            user = await db_get_user(room_data.user_id)
         except ValueError:
             # User might have been created by another request, try to get it
-            user = await get_user(room_data.user_id)
+            user = await db_get_user(room_data.user_id)
         except Exception as e:
             raise HTTPException(
                 status_code=500, detail=f"Failed to create user: {str(e)}"
@@ -196,7 +196,7 @@ async def create_room_endpoint(room_data: CreateRoomRequest):
 
     # Create the room
     try:
-        room = await create_room(
+        room = await db_create_room(
             room_data.room_id,
             room_data.name,
             room_data.user_id,
@@ -239,10 +239,10 @@ async def create_room_endpoint(room_data: CreateRoomRequest):
 async def join_room(room_data: RoomRequest):
     """Endpoint for joining a room"""
     # Check if user exists, create if not
-    user = await get_user(room_data.user_id)
+    user = await db_get_user(room_data.user_id)
     if not user:
         try:
-            await create_user(room_data.user_id, room_data.user_id)
+            await db_create_user(room_data.user_id, room_data.user_id)
         except ValueError as e:
             if "already exists" in str(e):
                 # User was created by another request
@@ -255,7 +255,7 @@ async def join_room(room_data: RoomRequest):
             )
 
     # Check if room exists
-    room = await get_room(room_data.room_id)
+    room = await db_get_room(room_data.room_id)
     if not room:
         raise HTTPException(status_code=404, detail="Room not found")
 
@@ -265,7 +265,7 @@ async def join_room(room_data: RoomRequest):
 
     # Create room membership
     try:
-        await create_room_membership(room_data.user_id, room_data.room_id)
+        await db_create_room_membership(room_data.user_id, room_data.room_id)
 
         if "users" not in room_state_cache[room_data.room_id]:
             room_state_cache[room_data.room_id]["users"] = []
@@ -308,12 +308,12 @@ async def join_room(room_data: RoomRequest):
 async def leave_room(room_data: RoomRequest):
     """Endpoint for leaving a room"""
     # Check if user exists
-    user = await get_user(room_data.user_id)
+    user = await db_get_user(room_data.user_id)
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
 
     # Check if room exists
-    room = await get_room(room_data.room_id)
+    room = await db_get_room(room_data.room_id)
     if not room:
         raise HTTPException(status_code=404, detail="Room not found")
 
@@ -323,7 +323,7 @@ async def leave_room(room_data: RoomRequest):
 
     # Remove user from room membership
     try:
-        await db_leave_room(room_data.user_id, room_data.room_id)
+        _ = await db_leave_room(room_data.user_id, room_data.room_id)
 
         # Update room state cache - update user's membership status
         if "users" in room_state_cache[room_data.room_id]:
@@ -353,13 +353,13 @@ async def leave_room(room_data: RoomRequest):
 async def add_music_provider(provider_data: AddMusicProviderRequest):
     """Endpoint for adding a music provider to a user"""
     # Check if user exists
-    user = await get_user(provider_data.user_id)
+    user = await db_get_user(provider_data.user_id)
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
 
     # Create provider account
     try:
-        provider_account = await create_provider_account(
+        provider_account = await db_create_provider_account(
             provider_data.user_id,
             provider_data.provider_id,
             provider_data.external_user_id,
@@ -401,7 +401,7 @@ async def websocket_endpoint(websocket: WebSocket):
             await websocket.receive_text()
             await websocket.send_text("No detail provided")
     finally:
-        generic_connections.remove(websocket)
+        generic_connections.discard(websocket)
 
 
 # TODO: Add logic to test songs exist

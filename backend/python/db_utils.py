@@ -1,7 +1,6 @@
 import os
 import uuid
 from datetime import datetime
-from typing import Optional
 
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import (
@@ -23,8 +22,8 @@ from database import (
 
 # Create async engine and session factory lazily
 # This allows tests to run without DATABASE_URL environment variable
-_engine: Optional[AsyncEngine] = None
-_session_factory: Optional[async_sessionmaker] = None
+_engine: AsyncEngine | None = None
+_session_factory: async_sessionmaker[AsyncSession] | None = None
 
 
 def _get_database_url() -> str:
@@ -45,7 +44,7 @@ def _get_database_url() -> str:
     return database_url
 
 
-def _get_session_factory() -> async_sessionmaker:
+def _get_session_factory() -> async_sessionmaker[AsyncSession]:
     """Initialize and return the session factory"""
     global _engine, _session_factory
     if _session_factory is None:
