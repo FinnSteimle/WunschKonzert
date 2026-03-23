@@ -93,46 +93,35 @@ async def handle_room_events(room_id: str, data: str):
     event_type = event.get("type")
 
     if event_type == "addqueue":
-        track_data = event.get("track")
-        user_id = event.get("user_id")
-
-        # Validate room exists
-        if room_id not in room_state_cache:
-            print(f"Error: Room {room_id} does not exist")
-            return
-
-        # Look up user's display name from room state
-        display_name = user_id  # fallback to user_id
-        for user_entry in room_state_cache[room_id].get("users", []):
-            if user_entry.get("user", {}).get("userId") == user_id:
-                display_name = user_entry.get("user", {}).get("displayName", user_id)
-                break
-
-        if track_data:
-            try:
-                track = Track(**track_data)
-                await add_to_queue(
-                    room_id=room_id,
-                    track=track,
-                    user_id=user_id,
-                    display_name=display_name,
-                )
-            except ValueError as e:
-                print(f"Error adding to queue: {e}")
-            except Exception as e:
-                print(f"Unexpected error adding to queue: {e}")
+        await add_to_queue(room_id, event)
 
 
-async def add_to_queue(
-    room_id: str,
-    track: Track,
-    user_id: str,
-    display_name: str,
-):
-    # TODO: Add check if song exists
-    """Add a song to the room's queue"""
+async def add_to_queue(room_id: str, event: dict):
+    """Process addqueue event and add a song to the room's queue"""
+    track_data = event.get("track")
+    user_id = event.get("user_id")
+
+    # Validate room exists
     if room_id not in room_state_cache:
-        raise ValueError(f"Room {room_id} does not exist")
+        print(f"Error: Room {room_id} does not exist")
+        return
+
+    # Look up user's display name from room state
+    display_name = user_id  # fallback to user_id
+    for user_entry in room_state_cache[room_id].get("users", []):
+        if user_entry.get("user", {}).get("userId") == user_id:
+            display_name = user_entry.get("user", {}).get("displayName", user_id)
+            break
+
+    if not track_data:
+        print("Error: No track data in event")
+        return
+
+    try:
+        track = Track(**track_data)
+    except Exception as e:
+        print(f"Error parsing track data: {e}")
+        return
 
     if "queue" not in room_state_cache[room_id]:
         room_state_cache[room_id]["queue"] = []
