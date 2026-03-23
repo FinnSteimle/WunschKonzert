@@ -3,6 +3,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      target: test
     environment:
       DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD:-testpass}@db-test:5432/${POSTGRES_DB:-wunschkonzert}
       ENVIRONMENT: test
