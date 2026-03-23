@@ -152,18 +152,21 @@ frontend:check:
 
 frontend:unit:
   stage: unit_test
-  image: node:20
-  <<: *cache_npm
+  image: docker:24
+  services:
+    - name: docker:24-dind
   <<: *rules_frontend_changes
+  before_script:
+    - apk add --no-cache docker-compose
   script:
     - cd frontend
-    - npm ci
+    - docker build --target test -t frontend-unit .
     - |
-      if npm run | grep -q " test:unit"; then
-        npm run test:unit
+      if grep -q "test:unit" package.json; then
+        docker run --rm --network none frontend-unit npm run test:unit
       else
         echo "No npm script 'test:unit' found, running 'npm test' instead."
-        npm test
+        docker run --rm --network none frontend-unit npm test
       fi
 
 frontend:integration:
@@ -177,7 +180,7 @@ frontend:integration:
   script:
     - cd frontend
     # Use docker run with --network none to ensure total isolation
-    - docker build -t frontend-test .
+    - docker build --target test -t frontend-test .
     - |
       if grep -q "test:integration" package.json; then
         docker run --rm --network none frontend-test npm run test:integration
