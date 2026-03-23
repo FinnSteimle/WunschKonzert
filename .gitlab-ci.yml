@@ -1,5 +1,6 @@
 stages:
   - lint
+  - modularity
   - unit_test
   - integration_test
   - build
@@ -56,10 +57,12 @@ variables:
     - if: '$CI_COMMIT_BRANCH == "dev" || $CI_COMMIT_BRANCH == "main"'
 
 modularity:check:
-  stage: lint
+  stage: modularity
   image: docker:24
   services:
     - name: docker:24-dind
+  variables:
+    CHECK_HOST: "docker"
   script:
     - apk add --no-cache docker-compose curl bash
     - chmod +x ./scripts/check_independent.sh

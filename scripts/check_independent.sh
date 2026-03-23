@@ -6,14 +6,17 @@ GREEN='\033[0;32m'
 RED='\033[0;31m'
 NC='\033[0m'
 
+# Use CHECK_HOST if provided (e.g., in CI dind), otherwise default to localhost
+HOST="${CHECK_HOST:-localhost}"
+
 echo "--- Testing Independent Backend ---"
 docker compose -f backend/compose.yaml up -d --build
 
 # Wait for backend health
 MAX_RETRIES=30
 COUNT=0
-echo "Waiting for backend health..."
-until $(curl --output /dev/null --silent --head --fail http://localhost:8000/health); do
+echo "Waiting for backend health at http://${HOST}:8000/health..."
+until curl --output /dev/null --silent --head --fail "http://${HOST}:8000/health"; do
     printf '.'
     sleep 2
     COUNT=$((COUNT+1))
@@ -31,10 +34,10 @@ docker compose -f backend/compose.yaml down -v
 echo "--- Testing Independent Frontend ---"
 docker compose -f frontend/compose.yaml up -d --build
 
-# Wait for frontend (it doesn't have a specific /health endpoint usually, but port 3000 should respond)
+# Wait for frontend responsiveness
 COUNT=0
-echo "Waiting for frontend responsiveness..."
-until $(curl --output /dev/null --silent --head --fail http://localhost:3000); do
+echo "Waiting for frontend responsiveness at http://${HOST}:3000..."
+until curl --output /dev/null --silent --head --fail "http://${HOST}:3000"; do
     printf '.'
     sleep 2
     COUNT=$((COUNT+1))
