@@ -22,9 +22,9 @@ from database import (
     RoomMembership,
     RoomStatus,
     SongFeedback,
+    Track,
     User,
 )
-from models import Track
 
 # Create async engine and session factory lazily
 # This allows tests to run without DATABASE_URL environment variable

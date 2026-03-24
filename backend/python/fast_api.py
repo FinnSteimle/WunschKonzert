@@ -434,7 +434,7 @@ async def _vote_queue_entry(
 
     # Get queue entry
     queue_entry = await db_get_queue_entry(queue_entry_id)
-    if not queue_entry or queue_entry.roomId.first() != room_id:
+    if not queue_entry or queue_entry.roomId != room_id:
         raise HTTPException(status_code=404, detail="Queue entry not found")
 
     if vote_type == "neutral":
