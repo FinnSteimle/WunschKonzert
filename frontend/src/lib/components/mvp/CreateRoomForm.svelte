@@ -8,6 +8,7 @@
 	} from '$lib/components/ui/native-select';
 	import { apiClient } from '$lib/api/client';
 	import { getOrCreateSessionUser } from '$lib/session/userSession';
+	import { recordRecentRoom } from '$lib/session/recentRooms';
 	import type { ProviderId } from '$lib/types/api';
 	import { toast } from 'svelte-sonner';
 
@@ -40,6 +41,11 @@
 				throw new Error(res.message || 'Could not create room');
 			}
 			toast.success('Room created');
+			recordRecentRoom({
+				joinCode: res.join_code,
+				name: trimmed,
+				isHost: true
+			});
 			onsuccess?.({ roomId: res.room_id, joinCode: res.join_code });
 		} catch (err) {
 			toast.error(err instanceof Error ? err.message : 'Could not create room');

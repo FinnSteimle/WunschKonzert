@@ -8,6 +8,7 @@
 		CardTitle
 	} from '$lib/components/ui/card';
 	import RoomCodeJoinForm from '$lib/components/mvp/RoomCodeJoinForm.svelte';
+	import RecentRoomsPanel from '$lib/components/mvp/RecentRoomsPanel.svelte';
 </script>
 
 <svelte:head>
@@ -22,6 +23,8 @@
 				Join a listening room with a code, or start your own and share the link.
 			</p>
 		</header>
+
+		<RecentRoomsPanel />
 
 		<Card class="min-w-0 shadow-sm">
 			<CardHeader>

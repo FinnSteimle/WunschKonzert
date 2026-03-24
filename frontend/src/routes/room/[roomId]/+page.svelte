@@ -5,7 +5,9 @@
 	import { apiClient } from '$lib/api/client';
 	import { roomStore, getCurrentSong } from '$lib/stores/room';
 	import { RoomSocketClient } from '$lib/realtime/roomSocket';
+	import { browser } from '$app/environment';
 	import { getOrCreateSessionUser } from '$lib/session/userSession';
+	import { recordRecentRoom } from '$lib/session/recentRooms';
 	import type { QueueEntryDto, RoomStateDto, TrackDto, VoteRequest } from '$lib/types/api';
 	import { Badge } from '$lib/components/ui/badge';
 	import {
@@ -31,6 +33,7 @@
 	import { parseRoomSlug } from '$lib/room/slug';
 
 	let sessionUser = $state<{ userId: string; displayName: string } | null>(null);
+	let recordedRecentThisMount = $state(false);
 	let socketClient = $state<RoomSocketClient | null>(null);
 	let voteBusyId = $state<string | null>(null);
 	let playbackBusy = $state(false);
@@ -38,10 +41,9 @@
 	function queueWithoutCurrent(state: RoomStateDto | null): QueueEntryDto[] {
 		if (!state) return [];
 		const currentId = state.playback?.currentQueueEntryId;
-		const list = currentId
+		return currentId
 			? state.queue.filter((e) => e.queueEntryId !== currentId)
 			: state.queue.filter((e) => e.status !== 'playing');
-		return [...list].sort((a, b) => a.orderRank - b.orderRank);
 	}
 
 	async function handleVote(queueEntryId: string, vote: VoteRequest['vote_type']) {
@@ -81,6 +83,19 @@
 			playbackBusy = false;
 		}
 	}
+
+	$effect(() => {
+		if (!browser) return;
+		const rs = $roomStore.roomState;
+		const su = sessionUser;
+		if (recordedRecentThisMount || !rs || !su) return;
+		recordedRecentThisMount = true;
+		recordRecentRoom({
+			joinCode: rs.room.joinCode,
+			name: rs.room.name,
+			isHost: rs.host.userId === su.userId
+		});
+	});
 
 	async function handleAddTrack(track: TrackDto) {
 		const uid = sessionUser?.userId;
