@@ -12,10 +12,12 @@
 
 	let {
 		users,
-		hostUserId
+		hostUserId,
+		currentUserId
 	}: {
 		users: RoomStateDto['users'];
 		hostUserId: string;
+		currentUserId: string;
 	} = $props();
 
 	const active = $derived(users.filter((u) => u.membership.leftAt == null));
@@ -32,13 +34,22 @@
 		{:else}
 			<ul class="flex flex-col gap-2" aria-label="Room members">
 				{#each active as row (row.user.userId)}
+					{@const isSelf = row.user.userId === currentUserId}
 					<li
-						class="border-border flex min-w-0 items-center justify-between gap-2 rounded-md border px-3 py-2"
+						class="flex min-w-0 items-center justify-between gap-2 rounded-md border px-3 py-2 {isSelf
+							? 'border-primary/30 bg-primary/10 ring-1 ring-primary/15 dark:bg-primary/15'
+							: 'border-border'}"
+						aria-current={isSelf ? 'true' : undefined}
 					>
 						<span class="truncate text-sm font-medium">{row.user.displayName}</span>
-						{#if row.user.userId === hostUserId}
-							<Badge variant="secondary" class="shrink-0 text-[10px]">Host</Badge>
-						{/if}
+						<div class="flex shrink-0 flex-wrap items-center justify-end gap-1">
+							{#if isSelf}
+								<Badge variant="default" class="text-[10px] font-semibold">You</Badge>
+							{/if}
+							{#if row.user.userId === hostUserId}
+								<Badge variant="secondary" class="text-[10px]">Host</Badge>
+							{/if}
+						</div>
 					</li>
 				{/each}
 			</ul>

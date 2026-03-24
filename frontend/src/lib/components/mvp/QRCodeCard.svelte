@@ -27,7 +27,7 @@
 				src={qrSrc}
 				width="220"
 				height="220"
-				class="bg-background rounded-md border"
+				class="bg-background rounded-md"
 				alt="QR code for room invite"
 			/>
 		{:else}

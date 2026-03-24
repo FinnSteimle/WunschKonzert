@@ -1,6 +1,4 @@
 <script lang="ts">
-	import { browser } from '$app/environment';
-	import { onDestroy } from 'svelte';
 	import { Input } from '$lib/components/ui/input';
 	import { Label } from '$lib/components/ui/label';
 	import { Button } from '$lib/components/ui/button';
@@ -27,27 +25,19 @@
 	let searchError = $state<string | null>(null);
 	let addingTrackId = $state<string | null>(null);
 
-	let debounceTimer: ReturnType<typeof setTimeout> | null = null;
-
-	onDestroy(() => {
-		if (debounceTimer) clearTimeout(debounceTimer);
-	});
-
-	function scheduleSearch(q: string) {
-		if (debounceTimer) clearTimeout(debounceTimer);
-		const trimmed = q.trim();
-		if (trimmed.length < 2) {
+	function onQueryInput() {
+		if (query.trim().length < 2) {
 			results = [];
 			searchError = null;
-			return;
 		}
-		debounceTimer = setTimeout(() => {
-			void runSearch(trimmed);
-		}, 320);
 	}
 
-	function onQueryInput() {
-		if (browser) scheduleSearch(query);
+	function onSearchKeydown(e: KeyboardEvent) {
+		if (e.key !== 'Enter') return;
+		e.preventDefault();
+		const trimmed = query.trim();
+		if (trimmed.length < 2 || searchBusy) return;
+		void runSearch(trimmed);
 	}
 
 	async function runSearch(q: string) {
@@ -93,6 +83,7 @@
 				autocomplete="off"
 				class="min-w-0 flex-1"
 				oninput={onQueryInput}
+				onkeydown={onSearchKeydown}
 			/>
 			<Button
 				type="button"
@@ -104,7 +95,9 @@
 				Search
 			</Button>
 		</div>
-		<p class="text-muted-foreground text-xs">Type at least two characters. Results update as you type.</p>
+		<p class="text-muted-foreground text-xs">
+			Type at least two characters, then press Search or Enter.
+		</p>
 	</div>
 
 	{#if searchBusy && results.length === 0}

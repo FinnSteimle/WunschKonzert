@@ -220,7 +220,7 @@
 						class="shrink-0"
 					/>
 					{#if $roomStore.connected}
-						<Badge variant="secondary">Live</Badge>
+						<Badge variant="success">Live</Badge>
 					{:else}
 						<Badge variant="outline">Reconnecting…</Badge>
 					{/if}
@@ -277,7 +277,11 @@
 
 			<section aria-labelledby="wk-people">
 				<h2 id="wk-people" class="mb-3 text-sm font-medium">Who is here</h2>
-				<UserList users={rs.users} hostUserId={rs.host.userId} />
+				<UserList
+					users={rs.users}
+					hostUserId={rs.host.userId}
+					currentUserId={sessionUser.userId}
+				/>
 			</section>
 
 			<footer class="border-border flex flex-col gap-2 border-t pt-6 min-[400px]:flex-row min-[400px]:flex-wrap">

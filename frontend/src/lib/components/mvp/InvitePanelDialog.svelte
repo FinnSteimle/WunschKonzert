@@ -28,7 +28,7 @@
 	>
 		{buttonLabel}
 	</Dialog.Trigger>
-	<Dialog.Content class="max-h-[min(90dvh,40rem)] gap-4 overflow-y-auto">
+	<Dialog.Content class="max-h-full gap-4 overflow-y-auto">
 		<Dialog.Header>
 			<Dialog.Title>Invite guests</Dialog.Title>
 			<Dialog.Description>
