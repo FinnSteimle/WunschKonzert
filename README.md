@@ -7,11 +7,15 @@ WunschKonzert is a collaborative music room application that allows users to joi
 The easiest way to get the entire project running is using Docker and the provided Makefile.
 
 1. Clone the repository:
-   git clone https://gitlab.ost.ch/SEProj/2026-FS/g15-wunschkonzert/wunschkonzert.git
-   cd wunschkonzert
+```bash
+git clone https://gitlab.ost.ch/SEProj/2026-FS/g15-wunschkonzert/wunschkonzert.git
+cd wunschkonzert
+```
 
 2. Start everything (Backend, Frontend, and Database):
-   make run
+```bash
+make run
+```
 
 The application will be available at:
 - Frontend: http://localhost:5173
@@ -28,6 +32,7 @@ WunschKonzert follows a modern full-stack architecture:
 
 ## Project Structure
 
+```text
 .
 ├── backend/            # Python FastAPI service
 │   ├── python/         # Source code, models, and migrations
@@ -38,6 +43,7 @@ WunschKonzert follows a modern full-stack architecture:
 ├── scripts/            # Utility scripts (e.g., CI/CD checks)
 ├── Makefile            # Root automation for dev workflows
 └── compose.yaml        # Docker orchestration
+```
 
 ## Development Commands
 
@@ -45,20 +51,20 @@ The root Makefile provides several commands to manage the project:
 
 | Command | Description |
 |---------|-------------|
-| make run | Build and start all services (API + Frontend + DB) |
-| make install | Build and start containers in the background |
-| make test | Run backend unit tests |
-| make lint | Run backend linter (Ruff) |
-| make format | Format backend code |
-| make migrate | Apply database migrations |
-| make clean | Stop containers and remove build artifacts |
+| `make run` | Build and start all services (API + Frontend + DB) |
+| `make install` | Build and start containers in the background |
+| `make test` | Run backend unit tests |
+| `make lint` | Run backend linter (Ruff) |
+| `make format` | Format backend code |
+| `make migrate` | Apply database migrations |
+| `make clean` | Stop containers and remove build artifacts |
 
 ## Testing
 
 We prioritize code quality through automated testing:
 
-- Backend: Run "make test" to execute the Python test suite.
-- Frontend: Navigate to frontend/ and run "npm test" or "npm run test:unit".
+- Backend: Run `make test` to execute the Python test suite.
+- Frontend: Navigate to `frontend/` and run `npm test` or `npm run test:unit`.
 - Integration: Automated checks ensure services can run independently and together.
 
 ## License
