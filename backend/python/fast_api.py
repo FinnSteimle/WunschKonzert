@@ -396,7 +396,7 @@ async def _add_to_queue(room_id: str, track_data: dict, user_id: str) -> dict:
 
     # Create queue entry
     queue_entry_id = f"QENTRY{uuid.uuid4().hex[:8].upper()}"
-    queue_entry = await db_create_queue_entry(
+    _ = await db_create_queue_entry(
         {
             "queueEntryId": queue_entry_id,
             "roomId": room_id,
@@ -434,7 +434,7 @@ async def _vote_queue_entry(
 
     # Get queue entry
     queue_entry = await db_get_queue_entry(queue_entry_id)
-    if not queue_entry or queue_entry.roomId != room_id:
+    if not queue_entry or queue_entry.roomId.first() != room_id:
         raise HTTPException(status_code=404, detail="Queue entry not found")
 
     if vote_type == "neutral":
@@ -542,7 +542,7 @@ async def _delete_room(room_id: str, user_id: str) -> dict:
     room = await db_get_room(room_id)
     if not room:
         raise HTTPException(status_code=404, detail="Room not found")
-    if room.hostedBy != user_id:
+    if room.hostedBy.first() != user_id:
         raise HTTPException(status_code=403, detail="Only host can delete room")
 
     # Update room status

@@ -24,6 +24,7 @@ from database import (
     SongFeedback,
     User,
 )
+from models import Track
 
 # Create async engine and session factory lazily
 # This allows tests to run without DATABASE_URL environment variable
@@ -328,18 +329,18 @@ async def get_current_playback_session(room_id: str) -> PlaybackSession | None:
         return result.scalar_one_or_none()
 
 
-async def get_track(track_id: str) -> DbTrack | None:
+async def get_track(track_id: str) -> Track | None:
     """Get track by ID or return None if not found"""
     session_factory = _get_session_factory()
     async with session_factory() as session:
-        return await session.get(DbTrack, track_id)
+        return await session.get(Track, track_id)
 
 
-async def create_track(track_data: dict) -> DbTrack:
+async def create_track(track_data: dict) -> Track:
     """Create a new track"""
     session_factory = _get_session_factory()
     async with session_factory() as session:
-        track = DbTrack(**track_data)
+        track = Track(**track_data)
         session.add(track)
         await session.commit()
         await session.refresh(track)
