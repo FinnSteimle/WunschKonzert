@@ -18,25 +18,113 @@ from database import (
     PlaybackState,
     QueueEntry,
     QueueEntryStatus,
-    Room as DbRoom,
     RoomMembership,
     RoomStatus,
     SongFeedback,
-    Track as DbTrack,
     User,
+)
+from database import (
+    Room as DbRoom,
+)
+from database import (
+    Track as DbTrack,
 )
 from db_utils import (
     _get_session_factory,
+)
+from db_utils import (
     check_db_health as db_check_db_health,
+)
+from db_utils import (
+    create_music_provider as db_create_music_provider,
+)
+from db_utils import (
+    create_or_update_song_feedback as db_create_or_update_song_feedback,
+)
+from db_utils import (
+    create_playback_session as db_create_playback_session,
+)
+from db_utils import (
     create_provider_account as db_create_provider_account,
+)
+from db_utils import (
+    create_queue_entry as db_create_queue_entry,
+)
+from db_utils import (
     create_room as db_create_room,
+)
+from db_utils import (
     create_room_membership as db_create_room_membership,
+)
+from db_utils import (
+    create_track as db_create_track,
+)
+from db_utils import (
     create_user as db_create_user,
+)
+from db_utils import (
+    delete_song_feedback as db_delete_song_feedback,
+)
+from db_utils import (
+    get_current_playback_session as db_get_current_playback_session,
+)
+from db_utils import (
+    get_first_queued_entry as db_get_first_queued_entry,
+)
+from db_utils import (
+    get_max_queue_position as db_get_max_queue_position,
+)
+from db_utils import (
+    get_music_provider as db_get_music_provider,
+)
+from db_utils import (
+    get_playing_queue_entry as db_get_playing_queue_entry,
+)
+from db_utils import (
+    get_queue_entries as db_get_queue_entries,
+)
+from db_utils import (
+    get_queue_entry as db_get_queue_entry,
+)
+from db_utils import (
     get_room as db_get_room,
+)
+from db_utils import (
     get_room_by_join_code as db_get_room_by_join_code,
+)
+from db_utils import (
+    get_room_members as db_get_room_members,
+)
+from db_utils import (
+    get_room_memberships as db_get_room_memberships,
+)
+from db_utils import (
+    get_song_feedback as db_get_song_feedback,
+)
+from db_utils import (
+    get_song_feedback_by_queue_entry as db_get_song_feedback_by_queue_entry,
+)
+from db_utils import (
+    get_track as db_get_track,
+)
+from db_utils import (
     get_user as db_get_user,
 )
-from db_utils import leave_room as db_leave_room
+from db_utils import (
+    leave_room as db_leave_room,
+)
+from db_utils import (
+    update_membership_status as db_update_membership_status,
+)
+from db_utils import (
+    update_playback_session as db_update_playback_session,
+)
+from db_utils import (
+    update_queue_entry as db_update_queue_entry,
+)
+from db_utils import (
+    update_room_status as db_update_room_status,
+)
 from models import (
     AddMusicProviderRequest,
     AddMusicProviderResponse,
@@ -63,7 +151,10 @@ app.add_middleware(
 active_room_connections: dict[str, set[WebSocket]] = defaultdict(set)
 generic_connections: set[WebSocket] = set()
 room_state_cache: dict[str, dict] = {}
-spotify_token_cache: dict[str, str | datetime | None] = {"token": None, "expires_at": None}
+spotify_token_cache: dict[str, str | datetime | None] = {
+    "token": None,
+    "expires_at": None,
+}
 
 
 def _now_iso() -> str:
@@ -89,218 +180,182 @@ def _ui_to_feedback(vote_type: str) -> FeedbackType | None:
 
 
 async def ensure_provider_exists(provider_id: str) -> None:
-    session_factory = _get_session_factory()
-    async with session_factory() as session:
-        provider = await session.get(MusicProvider, provider_id)
-        if provider:
-            return
+    provider = await db_get_music_provider(provider_id)
+    if provider:
+        return
 
-        provider = MusicProvider(
-            providerId=provider_id,
-            name=provider_id.capitalize(),
-        )
-        session.add(provider)
-        await session.commit()
+    await db_create_music_provider(provider_id, provider_id.capitalize())
 
 
 async def ensure_active_membership(user_id: str, room_id: str) -> None:
-    session_factory = _get_session_factory()
-    async with session_factory() as session:
-        membership = (
-            await session.execute(
-                select(RoomMembership).where(
-                    RoomMembership.userId == user_id,
-                    RoomMembership.roomId == room_id,
-                )
-            )
-        ).scalar_one_or_none()
-
-        if not membership:
-            await db_create_room_membership(user_id, room_id)
-            return
-
-        membership.membershipStatus = MembershipStatus.ACTIVE
-        membership.leftAt = None
-        await session.commit()
+    try:
+        await db_update_membership_status(user_id, room_id, MembershipStatus.ACTIVE)
+    except ValueError:
+        # Membership doesn't exist, create it
+        await db_create_room_membership(user_id, room_id)
 
 
 async def _build_room_state(room_id: str) -> dict | None:
-    session_factory = _get_session_factory()
-    async with session_factory() as session:
-        room = await session.get(DbRoom, room_id)
-        if not room:
-            return None
+    # Get room and host
+    room = await db_get_room(room_id)
+    if not room:
+        return None
 
-        host = await session.get(User, room.hostedBy)
-        if not host:
-            return None
+    host = await db_get_user(room.hostedBy)
+    if not host:
+        return None
 
-        memberships = (
-            await session.execute(
-                select(RoomMembership, User)
-                .join(User, RoomMembership.userId == User.userId)
-                .where(
-                    RoomMembership.roomId == room_id,
-                    RoomMembership.membershipStatus == MembershipStatus.ACTIVE,
-                    RoomMembership.leftAt.is_(None),
-                )
-                .order_by(RoomMembership.joinedAt.asc())
-            )
-        ).all()
+    # Get room members
+    memberships = await db_get_room_members(room_id)
 
-        users: list[dict] = [
-            {
-                "user": {
-                    "userId": host.userId,
-                    "displayName": host.displayName,
-                    "createdAt": host.createdAt.isoformat(),
-                },
-                "membership": {
-                    "joinedAt": room.createdAt.isoformat(),
-                    "leftAt": None,
-                    "membershipStatus": "active",
-                },
-            }
-        ]
-        seen_user_ids = {host.userId}
-        for membership, user in memberships:
-            if user.userId in seen_user_ids:
-                continue
-            seen_user_ids.add(user.userId)
-            users.append(
-                {
-                    "user": {
-                        "userId": user.userId,
-                        "displayName": user.displayName,
-                        "createdAt": user.createdAt.isoformat(),
-                    },
-                    "membership": {
-                        "joinedAt": membership.joinedAt.isoformat(),
-                        "leftAt": membership.leftAt.isoformat() if membership.leftAt else None,
-                        "membershipStatus": _enum_value(membership.membershipStatus),
-                    },
-                }
-            )
-
-        queue_rows = (
-            await session.execute(
-                select(QueueEntry, DbTrack, User)
-                .join(DbTrack, QueueEntry.trackId == DbTrack.trackId)
-                .join(User, QueueEntry.addedBy == User.userId)
-                .where(QueueEntry.roomId == room_id)
-                .where(
-                    QueueEntry.status.in_(
-                        [QueueEntryStatus.QUEUED, QueueEntryStatus.PLAYING, QueueEntryStatus.PLAYED]
-                    )
-                )
-                .order_by(QueueEntry.position.asc())
-            )
-        ).all()
-
-        queue_entry_ids = [row[0].queueEntryId for row in queue_rows]
-        feedback_map: dict[str, list[SongFeedback]] = {entry_id: [] for entry_id in queue_entry_ids}
-        if queue_entry_ids:
-            feedback_rows = (
-                await session.execute(
-                    select(SongFeedback).where(SongFeedback.queueEntryId.in_(queue_entry_ids))
-                )
-            ).scalars()
-            for feedback in feedback_rows:
-                feedback_map[feedback.queueEntryId].append(feedback)
-
-        queue: list[dict] = []
-        for queue_entry, track, added_by_user in queue_rows:
-            feedback_entries = feedback_map.get(queue_entry.queueEntryId, [])
-            upvotes = sum(1 for feedback in feedback_entries if feedback.type == FeedbackType.LIKE)
-            downvotes = sum(1 for feedback in feedback_entries if feedback.type == FeedbackType.DISLIKE)
-            vote_score = upvotes - downvotes
-            queue.append(
-                {
-                    "queueEntryId": queue_entry.queueEntryId,
-                    "track": {
-                        "trackId": track.trackId,
-                        "providerTrackId": track.providerTrackId,
-                        "title": track.title,
-                        "artist": track.artist,
-                        "album": track.album or "",
-                        "duration": track.duration or 0,
-                        "coverUrl": track.coverUrl or "",
-                        "deepLink": track.deepLink or "",
-                    },
-                    "addedBy": {
-                        "userId": added_by_user.userId,
-                        "displayName": added_by_user.displayName,
-                    },
-                    "queuedAt": queue_entry.queuedAt.isoformat(),
-                    "position": queue_entry.position,
-                    "status": _enum_value(queue_entry.status),
-                    "voteScore": vote_score,
-                    "orderRank": float(queue_entry.orderRank or queue_entry.position),
-                    "feedback": [
-                        {
-                            "userId": feedback.userId,
-                            "votedAt": feedback.votedAt.isoformat(),
-                            "type": _feedback_to_ui(feedback.type),
-                        }
-                        for feedback in feedback_entries
-                    ],
-                }
-            )
-
-        queue.sort(
-            key=lambda item: (
-                0 if item["status"] == "playing" else 1,
-                -item["voteScore"],
-                item["position"],
-            )
-        )
-
-        latest_playback = (
-            await session.execute(
-                select(PlaybackSession)
-                .where(PlaybackSession.roomId == room_id)
-                .order_by(PlaybackSession.startedAt.desc())
-                .limit(1)
-            )
-        ).scalar_one_or_none()
-
-        playback = {
-            "state": "stopped",
-            "currentQueueEntryId": None,
-            "updatedAt": _now_iso(),
-            "positionMs": 0,
-        }
-        if latest_playback:
-            playback_state = _enum_value(latest_playback.state)
-            playback = {
-                "state": playback_state,
-                "currentQueueEntryId": (
-                    latest_playback.queueEntryId if playback_state != "stopped" else None
-                ),
-                "updatedAt": latest_playback.startedAt.isoformat(),
-                "positionMs": int(latest_playback.elapsedTime or 0) * 1000,
-            }
-
-        state = {
-            "room": {
-                "roomId": room.roomId,
-                "joinCode": room.joinCode,
-                "name": room.name,
-                "status": _enum_value(room.status),
-                "createdAt": room.createdAt.isoformat(),
-                "supportedProviderId": room.supportedProviderId,
-            },
-            "host": {
+    users: list[dict] = [
+        {
+            "user": {
                 "userId": host.userId,
                 "displayName": host.displayName,
                 "createdAt": host.createdAt.isoformat(),
             },
-            "users": users,
-            "queue": queue,
-            "playback": playback,
+            "membership": {
+                "joinedAt": room.createdAt.isoformat(),
+                "leftAt": None,
+                "membershipStatus": "active",
+            },
+        }
+    ]
+    seen_user_ids = {host.userId}
+    for membership, user in memberships:
+        if user.userId in seen_user_ids:
+            continue
+        seen_user_ids.add(user.userId)
+        users.append(
+            {
+                "user": {
+                    "userId": user.userId,
+                    "displayName": user.displayName,
+                    "createdAt": user.createdAt.isoformat(),
+                },
+                "membership": {
+                    "joinedAt": membership.joinedAt.isoformat(),
+                    "leftAt": membership.leftAt.isoformat()
+                    if membership.leftAt
+                    else None,
+                    "membershipStatus": _enum_value(membership.membershipStatus),
+                },
+            }
+        )
+
+    # Get queue entries with tracks and users
+    queue_entries = await db_get_queue_entries(room_id)
+    queue_entry_ids = [entry.queueEntryId for entry in queue_entries]
+
+    # Build feedback map
+    feedback_map: dict[str, list[SongFeedback]] = {
+        entry_id: [] for entry_id in queue_entry_ids
+    }
+
+    for entry_id in queue_entry_ids:
+        feedback_list = await db_get_song_feedback_by_queue_entry(entry_id)
+        feedback_map[entry_id].extend(feedback_list)
+
+    # Build queue
+    queue: list[dict] = []
+    for queue_entry in queue_entries:
+        track = await db_get_track(queue_entry.trackId)
+        added_by_user = await db_get_user(queue_entry.addedBy)
+
+        if not track or not added_by_user:
+            continue
+
+        feedback_entries = feedback_map.get(queue_entry.queueEntryId, [])
+        upvotes = sum(
+            1 for feedback in feedback_entries if feedback.type == FeedbackType.LIKE
+        )
+        downvotes = sum(
+            1 for feedback in feedback_entries if feedback.type == FeedbackType.DISLIKE
+        )
+        vote_score = upvotes - downvotes
+
+        queue.append(
+            {
+                "queueEntryId": queue_entry.queueEntryId,
+                "track": {
+                    "trackId": track.trackId,
+                    "providerTrackId": track.providerTrackId,
+                    "title": track.title,
+                    "artist": track.artist,
+                    "album": track.album or "",
+                    "duration": track.duration or 0,
+                    "coverUrl": track.coverUrl or "",
+                    "deepLink": track.deepLink or "",
+                },
+                "addedBy": {
+                    "userId": added_by_user.userId,
+                    "displayName": added_by_user.displayName,
+                },
+                "queuedAt": queue_entry.queuedAt.isoformat(),
+                "position": queue_entry.position,
+                "status": _enum_value(queue_entry.status),
+                "voteScore": vote_score,
+                "orderRank": float(queue_entry.orderRank or queue_entry.position),
+                "feedback": [
+                    {
+                        "userId": feedback.userId,
+                        "votedAt": feedback.votedAt.isoformat(),
+                        "type": _feedback_to_ui(feedback.type),
+                    }
+                    for feedback in feedback_entries
+                ],
+            }
+        )
+
+    queue.sort(
+        key=lambda item: (
+            0 if item["status"] == "playing" else 1,
+            -item["voteScore"],
+            item["position"],
+        )
+    )
+
+    # Get latest playback session
+    latest_playback = await db_get_current_playback_session(room_id)
+
+    playback = {
+        "state": "stopped",
+        "currentQueueEntryId": None,
+        "updatedAt": _now_iso(),
+        "positionMs": 0,
+    }
+    if latest_playback:
+        playback_state = _enum_value(latest_playback.state)
+        playback = {
+            "state": playback_state,
+            "currentQueueEntryId": (
+                latest_playback.queueEntryId if playback_state != "stopped" else None
+            ),
+            "updatedAt": latest_playback.startedAt.isoformat(),
+            "positionMs": int(latest_playback.elapsedTime or 0) * 1000,
         }
 
-        return state
+    state = {
+        "room": {
+            "roomId": room.roomId,
+            "joinCode": room.joinCode,
+            "name": room.name,
+            "status": _enum_value(room.status),
+            "createdAt": room.createdAt.isoformat(),
+            "supportedProviderId": room.supportedProviderId,
+        },
+        "host": {
+            "userId": host.userId,
+            "displayName": host.displayName,
+            "createdAt": host.createdAt.isoformat(),
+        },
+        "users": users,
+        "queue": queue,
+        "playback": playback,
+    }
+
+    return state
 
 
 async def refresh_room_state(room_id: str, event_type: str | None = None) -> dict:
@@ -320,130 +375,117 @@ async def _add_to_queue(room_id: str, track_data: dict, user_id: str) -> dict:
         raise HTTPException(status_code=400, detail="No track data provided")
 
     track = Track(**track_data)
-    session_factory = _get_session_factory()
-    async with session_factory() as session:
-        room = await session.get(DbRoom, room_id)
-        if not room:
-            raise HTTPException(status_code=404, detail="Room not found")
-        if room.status != RoomStatus.ACTIVE:
-            raise HTTPException(status_code=400, detail="Room is not active")
 
-        user = await session.get(User, user_id)
-        if not user:
-            raise HTTPException(status_code=404, detail="User not found")
+    # Get room and validate
+    room = await db_get_room(room_id)
+    if not room:
+        raise HTTPException(status_code=404, detail="Room not found")
+    if room.status != RoomStatus.ACTIVE:
+        raise HTTPException(status_code=400, detail="Room is not active")
 
-        db_track = await session.get(DbTrack, track.trackId)
-        if not db_track:
-            db_track = DbTrack(
-                trackId=track.trackId,
-                providerTrackId=track.providerTrackId,
-                title=track.title,
-                artist=track.artist,
-                album=track.album,
-                duration=track.duration,
-                coverUrl=track.coverUrl,
-                deepLink=track.deepLink,
-            )
-            session.add(db_track)
+    # Get user
+    user = await db_get_user(user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
 
-        max_position = (
-            await session.execute(
-                select(func.max(QueueEntry.position)).where(QueueEntry.roomId == room_id)
-            )
-        ).scalar_one_or_none()
-        next_position = int(max_position or 0) + 1
-
-        has_playing = (
-            await session.execute(
-                select(QueueEntry)
-                .where(QueueEntry.roomId == room_id, QueueEntry.status == QueueEntryStatus.PLAYING)
-                .limit(1)
-            )
-        ).scalar_one_or_none()
-
-        queue_entry_id = f"QENTRY{uuid.uuid4().hex[:8].upper()}"
-        queue_entry = QueueEntry(
-            queueEntryId=queue_entry_id,
-            roomId=room_id,
-            trackId=track.trackId,
-            addedBy=user_id,
-            position=next_position,
-            status=QueueEntryStatus.PLAYING if has_playing is None else QueueEntryStatus.QUEUED,
-            voteScore=0,
-            orderRank=float(next_position),
+    # Get or create track
+    db_track = await db_get_track(track.trackId)
+    if not db_track:
+        db_track = await db_create_track(
+            {
+                "trackId": track.trackId,
+                "providerTrackId": track.providerTrackId,
+                "title": track.title,
+                "artist": track.artist,
+                "album": track.album,
+                "duration": track.duration,
+                "coverUrl": track.coverUrl,
+                "deepLink": track.deepLink,
+            }
         )
-        session.add(queue_entry)
-        await session.flush()
 
-        if has_playing is None:
-            playback_session = PlaybackSession(
-                playbackSessionId=str(uuid.uuid4()),
-                roomId=room_id,
-                queueEntryId=queue_entry_id,
-                state=PlaybackState.PLAYING,
-                elapsedTime=0,
-            )
-            session.add(playback_session)
+    # Get max position and check for playing entries
+    max_position = await db_get_max_queue_position(room_id)
+    next_position = max_position + 1
+    has_playing = await db_get_playing_queue_entry(room_id)
 
-        await session.commit()
+    # Create queue entry
+    queue_entry_id = f"QENTRY{uuid.uuid4().hex[:8].upper()}"
+    queue_entry = await db_create_queue_entry(
+        {
+            "queueEntryId": queue_entry_id,
+            "roomId": room_id,
+            "trackId": track.trackId,
+            "addedBy": user_id,
+            "position": next_position,
+            "status": QueueEntryStatus.PLAYING
+            if has_playing is None
+            else QueueEntryStatus.QUEUED,
+            "voteScore": 0,
+            "orderRank": float(next_position),
+        }
+    )
+
+    # Create playback session if this is the first entry
+    if has_playing is None:
+        await db_create_playback_session(
+            {
+                "playbackSessionId": str(uuid.uuid4()),
+                "roomId": room_id,
+                "queueEntryId": queue_entry_id,
+                "state": PlaybackState.PLAYING,
+                "elapsedTime": 0,
+            }
+        )
 
     return await refresh_room_state(room_id, "queue_updated")
 
 
-async def _vote_queue_entry(room_id: str, queue_entry_id: str, user_id: str, vote_type: str) -> dict:
+async def _vote_queue_entry(
+    room_id: str, queue_entry_id: str, user_id: str, vote_type: str
+) -> dict:
     if vote_type not in {"upvote", "downvote", "neutral"}:
         raise HTTPException(status_code=400, detail="Invalid vote type")
 
-    session_factory = _get_session_factory()
-    async with session_factory() as session:
-        queue_entry = await session.get(QueueEntry, queue_entry_id)
-        if not queue_entry or queue_entry.roomId != room_id:
-            raise HTTPException(status_code=404, detail="Queue entry not found")
+    # Get queue entry
+    queue_entry = await db_get_queue_entry(queue_entry_id)
+    if not queue_entry or queue_entry.roomId != room_id:
+        raise HTTPException(status_code=404, detail="Queue entry not found")
 
-        existing = (
-            await session.execute(
-                select(SongFeedback).where(
-                    SongFeedback.queueEntryId == queue_entry_id, SongFeedback.userId == user_id
-                )
-            )
-        ).scalar_one_or_none()
+    if vote_type == "neutral":
+        await db_delete_song_feedback(queue_entry_id, user_id)
+    else:
+        mapped_feedback = _ui_to_feedback(vote_type)
+        if mapped_feedback is None:
+            raise HTTPException(status_code=400, detail="Invalid vote type")
 
-        if vote_type == "neutral":
-            if existing:
-                session.delete(existing)
-        else:
-            mapped_feedback = _ui_to_feedback(vote_type)
-            if mapped_feedback is None:
-                raise HTTPException(status_code=400, detail="Invalid vote type")
+        await db_create_or_update_song_feedback(
+            {
+                "queueEntryId": queue_entry_id,
+                "userId": user_id,
+                "type": mapped_feedback,
+                "votedAt": datetime.now(UTC).replace(tzinfo=None),
+            }
+        )
 
-            if existing:
-                existing.type = mapped_feedback
-                existing.votedAt = datetime.now(UTC).replace(tzinfo=None)
-            else:
-                session.add(
-                    SongFeedback(
-                        queueEntryId=queue_entry_id,
-                        userId=user_id,
-                        type=mapped_feedback,
-                    )
-                )
+    # Recalculate vote score
+    feedback_list = await db_get_song_feedback_by_queue_entry(queue_entry_id)
+    upvotes = sum(1 for feedback in feedback_list if feedback.type == FeedbackType.LIKE)
+    downvotes = sum(
+        1 for feedback in feedback_list if feedback.type == FeedbackType.DISLIKE
+    )
 
-        feedback_rows = (
-            await session.execute(
-                select(SongFeedback).where(SongFeedback.queueEntryId == queue_entry_id)
-            )
-        ).scalars()
-        upvotes = sum(1 for feedback in feedback_rows if feedback.type == FeedbackType.LIKE)
+    vote_score = upvotes - downvotes
+    order_rank = float(queue_entry.position) - float(vote_score) / 100.0
 
-        feedback_rows = (
-            await session.execute(
-                select(SongFeedback).where(SongFeedback.queueEntryId == queue_entry_id)
-            )
-        ).scalars()
-        downvotes = sum(1 for feedback in feedback_rows if feedback.type == FeedbackType.DISLIKE)
-        queue_entry.voteScore = upvotes - downvotes
-        queue_entry.orderRank = float(queue_entry.position) - float(queue_entry.voteScore) / 100.0
-        await session.commit()
+    # Update queue entry
+    await db_update_queue_entry(
+        queue_entry_id,
+        {
+            "voteScore": vote_score,
+            "orderRank": order_rank,
+        },
+    )
 
     return await refresh_room_state(room_id, "vote_updated")
 
@@ -452,56 +494,55 @@ async def _set_playback_state(room_id: str, user_id: str, action: str) -> dict:
     if action not in {"pause", "resume", "stop"}:
         raise HTTPException(status_code=400, detail="Invalid playback action")
 
-    session_factory = _get_session_factory()
-    async with session_factory() as session:
-        room = await session.get(DbRoom, room_id)
-        if not room:
-            raise HTTPException(status_code=404, detail="Room not found")
-        if room.hostedBy != user_id:
-            raise HTTPException(status_code=403, detail="Only the host can control playback")
+    # Get room and validate
+    room = await db_get_room(room_id)
+    if not room:
+        raise HTTPException(status_code=404, detail="Room not found")
+    if room.hostedBy != user_id:
+        raise HTTPException(
+            status_code=403, detail="Only the host can control playback"
+        )
 
-        playback_session = (
-            await session.execute(
-                select(PlaybackSession)
-                .where(PlaybackSession.roomId == room_id)
-                .order_by(PlaybackSession.startedAt.desc())
-                .limit(1)
-            )
-        ).scalar_one_or_none()
+    # Get or create playback session
+    playback_session = await db_get_current_playback_session(room_id)
 
-        if not playback_session:
-            current_queue_entry = (
-                await session.execute(
-                    select(QueueEntry)
-                    .where(QueueEntry.roomId == room_id)
-                    .order_by(QueueEntry.position.asc())
-                    .limit(1)
-                )
-            ).scalar_one_or_none()
-            if not current_queue_entry:
-                raise HTTPException(status_code=400, detail="No queued songs")
+    if not playback_session:
+        # Get first queued entry
+        current_queue_entry = await db_get_first_queued_entry(room_id)
 
-            current_queue_entry.status = QueueEntryStatus.PLAYING
-            playback_session = PlaybackSession(
-                playbackSessionId=str(uuid.uuid4()),
-                roomId=room_id,
-                queueEntryId=current_queue_entry.queueEntryId,
-                state=PlaybackState.PLAYING,
-                elapsedTime=0,
-            )
-            session.add(playback_session)
+        if not current_queue_entry:
+            raise HTTPException(status_code=400, detail="No queued songs")
 
-        if action == "pause":
-            playback_session.state = PlaybackState.PAUSED
-            playback_session.pausedAt = datetime.now(UTC).replace(tzinfo=None)
-        elif action == "stop":
-            playback_session.state = PlaybackState.STOPPED
-            playback_session.pausedAt = datetime.now(UTC).replace(tzinfo=None)
-        else:
-            playback_session.state = PlaybackState.PLAYING
-            playback_session.pausedAt = None
+        # Update queue entry status
+        await db_update_queue_entry(
+            current_queue_entry.queueEntryId, {"status": QueueEntryStatus.PLAYING}
+        )
 
-        await session.commit()
+        # Create playback session
+        playback_session = await db_create_playback_session(
+            {
+                "playbackSessionId": str(uuid.uuid4()),
+                "roomId": room_id,
+                "queueEntryId": current_queue_entry.queueEntryId,
+                "state": PlaybackState.PLAYING,
+                "elapsedTime": 0,
+            }
+        )
+
+    # Update playback session state
+    updates = {"state": PlaybackState.PLAYING, "pausedAt": None}
+    if action == "pause":
+        updates = {
+            "state": PlaybackState.PAUSED,
+            "pausedAt": datetime.now(UTC).replace(tzinfo=None),
+        }
+    elif action == "stop":
+        updates = {
+            "state": PlaybackState.STOPPED,
+            "pausedAt": datetime.now(UTC).replace(tzinfo=None),
+        }
+
+    await db_update_playback_session(playback_session.playbackSessionId, updates)
 
     return await refresh_room_state(room_id, "playback_updated")
 
@@ -512,20 +553,23 @@ async def _leave_room(room_id: str, user_id: str) -> dict:
 
 
 async def _delete_room(room_id: str, user_id: str) -> dict:
+    # Get room and validate
+    room = await db_get_room(room_id)
+    if not room:
+        raise HTTPException(status_code=404, detail="Room not found")
+    if room.hostedBy != user_id:
+        raise HTTPException(status_code=403, detail="Only host can delete room")
+
+    # Update room status
+    await db_update_room_status(room_id, RoomStatus.DELETED)
+
+    # Update all memberships
     session_factory = _get_session_factory()
     async with session_factory() as session:
-        room = await session.get(DbRoom, room_id)
-        if not room:
-            raise HTTPException(status_code=404, detail="Room not found")
-        if room.hostedBy != user_id:
-            raise HTTPException(status_code=403, detail="Only host can delete room")
+        from sqlalchemy import select
 
-        room.status = RoomStatus.DELETED
-        memberships = (
-            await session.execute(
-                select(RoomMembership).where(RoomMembership.roomId == room_id)
-            )
-        ).scalars()
+        memberships = await db_get_room_memberships(room_id)
+
         for membership in memberships:
             membership.membershipStatus = MembershipStatus.INACTIVE
             if membership.leftAt is None:
@@ -609,7 +653,9 @@ async def _get_spotify_access_token() -> str:
         token = payload.get("access_token")
         expires_in = int(payload.get("expires_in", 3600))
         if not token:
-            raise HTTPException(status_code=502, detail="Spotify token response invalid")
+            raise HTTPException(
+                status_code=502, detail="Spotify token response invalid"
+            )
         spotify_token_cache["token"] = token
         spotify_token_cache["expires_at"] = datetime.now(UTC).replace(
             microsecond=0
@@ -667,7 +713,9 @@ async def create_room_endpoint(room_data: CreateRoomRequest):
         except ValueError:
             user = await db_get_user(room_data.user_id)
         except Exception as e:
-            raise HTTPException(status_code=500, detail=f"Failed to create user: {str(e)}")
+            raise HTTPException(
+                status_code=500, detail=f"Failed to create user: {str(e)}"
+            )
 
     if not user:
         raise HTTPException(status_code=500, detail="Failed to create or retrieve user")
@@ -706,7 +754,9 @@ async def join_room(room_data: RoomRequest):
             if "already exists" not in str(e):
                 raise HTTPException(status_code=400, detail=str(e))
         except Exception as e:
-            raise HTTPException(status_code=500, detail=f"Failed to create user: {str(e)}")
+            raise HTTPException(
+                status_code=500, detail=f"Failed to create user: {str(e)}"
+            )
 
     room = await db_get_room_by_join_code(room_data.room_id.upper())
     if not room:
@@ -772,7 +822,9 @@ async def get_room_state(room_id: str):
 
 
 @app.get("/rooms/{room_id}/search")
-async def search_tracks(room_id: str, q: str = Query(..., min_length=1, max_length=120)):
+async def search_tracks(
+    room_id: str, q: str = Query(..., min_length=1, max_length=120)
+):
     room = await db_get_room(room_id)
     if not room:
         raise HTTPException(status_code=404, detail="Room not found")
@@ -811,7 +863,10 @@ async def search_tracks(room_id: str, q: str = Query(..., min_length=1, max_leng
                 "trackId": item.get("id"),
                 "providerTrackId": item.get("id"),
                 "title": item.get("name") or "Unknown title",
-                "artist": ", ".join(artist.get("name", "") for artist in artists if artist.get("name")) or "Unknown artist",
+                "artist": ", ".join(
+                    artist.get("name", "") for artist in artists if artist.get("name")
+                )
+                or "Unknown artist",
                 "album": album.get("name") or "",
                 "duration": int((item.get("duration_ms") or 0) / 1000),
                 "coverUrl": images[0].get("url") if images else "",
@@ -865,7 +920,9 @@ async def add_music_provider(provider_data: AddMusicProviderRequest):
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to add music provider: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Failed to add music provider: {str(e)}"
+        )
 
 
 @app.websocket("/ws")
