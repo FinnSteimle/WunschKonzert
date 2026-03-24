@@ -28,6 +28,7 @@
 	import EmptyState from '$lib/components/mvp/EmptyState.svelte';
 	import { Button } from '$lib/components/ui/button';
 	import { toast } from 'svelte-sonner';
+	import { parseRoomSlug } from '$lib/room/slug';
 
 	let sessionUser = $state<{ userId: string; displayName: string } | null>(null);
 	let socketClient = $state<RoomSocketClient | null>(null);
@@ -44,9 +45,8 @@
 	}
 
 	async function handleVote(queueEntryId: string, vote: VoteRequest['vote_type']) {
-		const roomId = page.params.roomId;
 		const uid = sessionUser?.userId;
-		if (!roomId || !uid || !socketClient || !socketClient.isConnected()) {
+		if (!uid || !socketClient || !socketClient.isConnected()) {
 			toast.error('Not connected to room');
 			return;
 		}
@@ -64,9 +64,8 @@
 	}
 
 	async function handlePlayback(action: 'pause' | 'resume' | 'stop') {
-		const roomId = page.params.roomId;
 		const uid = sessionUser?.userId;
-		if (!roomId || !uid || !socketClient || !socketClient.isConnected()) {
+		if (!uid || !socketClient || !socketClient.isConnected()) {
 			toast.error('Not connected to room');
 			return;
 		}
@@ -84,9 +83,8 @@
 	}
 
 	async function handleAddTrack(track: TrackDto) {
-		const roomId = page.params.roomId;
 		const uid = sessionUser?.userId;
-		if (!roomId || !uid || !socketClient || !socketClient.isConnected()) {
+		if (!uid || !socketClient || !socketClient.isConnected()) {
 			throw new Error('Not connected to room');
 		}
 		try {
@@ -100,48 +98,91 @@
 	}
 
 	onMount(() => {
-		const roomId = page.params.roomId;
-		if (!roomId) return undefined;
+		const segment = page.params.roomId ?? '';
+		const parsed = parseRoomSlug(segment);
 
 		sessionUser = getOrCreateSessionUser();
-		roomStore.reset();
-		roomStore.setLoading(true);
 
-		let roomDeletedRedirectDone = false;
-		const unsubDeleted = roomStore.subscribe((ui) => {
-			if (roomDeletedRedirectDone) return;
-			if (ui.roomState?.room.status === 'deleted') {
-				roomDeletedRedirectDone = true;
-				toast.message('Room ended by host');
-				void goto('/');
-			}
-		});
+		if (parsed.kind === 'invalid') {
+			roomStore.reset();
+			roomStore.setLoading(false);
+			roomStore.setError('This link is not a valid room or join code.');
+			return undefined;
+		}
 
-		void apiClient
-			.getRoomState(roomId)
-			.then((state) => roomStore.setRoomState(state))
-			.catch((err: unknown) => {
-				roomStore.setLoading(false);
-				roomStore.setError(err instanceof Error ? err.message : 'Could not load room');
+		function beginRoomSession(roomId: string): () => void {
+			roomStore.reset();
+			roomStore.setLoading(true);
+
+			let roomDeletedRedirectDone = false;
+			const unsubDeleted = roomStore.subscribe((ui) => {
+				if (roomDeletedRedirectDone) return;
+				if (ui.roomState?.room.status === 'deleted') {
+					roomDeletedRedirectDone = true;
+					toast.message('Room ended by host');
+					void goto('/');
+				}
 			});
 
-		const socket = new RoomSocketClient(roomId, {
-			onState: (s) => roomStore.setRoomState(s),
-			onError: (m) => {
-				toast.error(m);
-				roomStore.setError(m);
-			},
-			onConnectionChange: (c) => roomStore.setConnected(c)
-		});
-		socketClient = socket;
-		socket.connect();
+			void apiClient
+				.getRoomState(roomId)
+				.then((state) => roomStore.setRoomState(state))
+				.catch((err: unknown) => {
+					roomStore.setLoading(false);
+					roomStore.setError(err instanceof Error ? err.message : 'Could not load room');
+				});
 
-		return () => {
-			unsubDeleted();
-			socket.disconnect();
-			socketClient = null;
+			const socket = new RoomSocketClient(roomId, {
+				onState: (s) => roomStore.setRoomState(s),
+				onError: (m) => {
+					toast.error(m);
+					roomStore.setError(m);
+				},
+				onConnectionChange: (c) => roomStore.setConnected(c)
+			});
+			socketClient = socket;
+			socket.connect();
+
+			return () => {
+				unsubDeleted();
+				socket.disconnect();
+				socketClient = null;
+				roomStore.reset();
+			};
+		}
+
+		if (parsed.kind === 'joinCode') {
 			roomStore.reset();
-		};
+			roomStore.setLoading(true);
+			let cancelled = false;
+			let endSession: (() => void) | undefined;
+			void (async () => {
+				try {
+					const { userId } = getOrCreateSessionUser();
+					const res = await apiClient.joinRoom({
+						room_id: parsed.joinCode,
+						user_id: userId
+					});
+					if (!res.success || !res.room_id) {
+						throw new Error(res.message || 'Could not join this room.');
+					}
+					if (cancelled) return;
+					endSession = beginRoomSession(res.room_id);
+				} catch (err: unknown) {
+					if (cancelled) return;
+					roomStore.setLoading(false);
+					roomStore.setError(
+						err instanceof Error ? err.message : 'Could not join this room.'
+					);
+				}
+			})();
+			return () => {
+				cancelled = true;
+				endSession?.();
+			};
+		}
+
+		return beginRoomSession(parsed.roomId);
 	});
 </script>
 
@@ -163,7 +204,7 @@
 			{@const current = getCurrentSong(rs)}
 			{@const durationMs = current ? Math.max(0, current.track.duration) * 1000 : 0}
 			{@const positionMs = rs.playback?.positionMs ?? 0}
-			{@const inviteUrl = `${page.url.origin}/join/${rs.room.joinCode}`}
+			{@const inviteUrl = `${page.url.origin}/room/${rs.room.joinCode}`}
 
 			<header class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
 				<div class="min-w-0">

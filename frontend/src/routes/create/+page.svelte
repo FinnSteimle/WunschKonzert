@@ -17,7 +17,7 @@
 	const inviteUrl = $derived.by(() => {
 		if (!created || !browser) return '';
 		const origin = page.url.origin;
-		return `${origin}/join/${created.joinCode}`;
+		return `${origin}/room/${created.joinCode}`;
 	});
 
 	function onsuccess(payload: { roomId: string; joinCode: string }) {
@@ -55,7 +55,7 @@
 					inviteUrl={inviteUrl}
 					class="w-full flex-1"
 				/>
-				<Button href={`/room/${created.roomId}`} class="w-full flex-1">Open room</Button>
+				<Button href={`/room/${created.joinCode}`} class="w-full flex-1">Open room</Button>
 				<Button variant="outline" href="/" class="w-full flex-1">Back home</Button>
 			</div>
 		{/if}

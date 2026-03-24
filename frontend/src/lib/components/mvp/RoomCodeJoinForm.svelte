@@ -3,7 +3,6 @@
 	import { Button } from '$lib/components/ui/button';
 	import { Input } from '$lib/components/ui/input';
 	import { Label } from '$lib/components/ui/label';
-	import { apiClient } from '$lib/api/client';
 	import { getOrCreateSessionUser } from '$lib/session/userSession';
 	import { toast } from 'svelte-sonner';
 
@@ -23,17 +22,10 @@
 			toast.error('Enter a valid 6-character room code.');
 			return;
 		}
+		getOrCreateSessionUser();
 		busy = true;
 		try {
-			const { userId } = getOrCreateSessionUser();
-			const res = await apiClient.joinRoom({ room_id: normalized, user_id: userId });
-			if (!res.success || !res.room_id) {
-				throw new Error(res.message || 'Could not join room');
-			}
-			toast.success('Joined room');
-			await goto(`/room/${res.room_id}`);
-		} catch (err) {
-			toast.error(err instanceof Error ? err.message : 'Could not join room');
+			await goto(`/room/${normalized}`);
 		} finally {
 			busy = false;
 		}
