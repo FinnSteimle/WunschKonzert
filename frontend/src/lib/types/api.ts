@@ -31,7 +31,7 @@ export interface DeleteRoomRequest {
 
 export interface PlaybackRequest {
 	user_id: string;
-	action: 'pause' | 'resume' | 'stop';
+	action: 'pause' | 'resume';
 }
 
 export interface VoteRequest {

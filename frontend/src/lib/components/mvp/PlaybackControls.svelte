@@ -1,7 +1,6 @@
 <script lang="ts">
 	import PauseIcon from '@lucide/svelte/icons/pause';
 	import PlayIcon from '@lucide/svelte/icons/play';
-	import SquareIcon from '@lucide/svelte/icons/square';
 	import { Button } from '$lib/components/ui/button';
 
 	let {
@@ -13,7 +12,7 @@
 		disabled?: boolean;
 		playbackState?: 'playing' | 'paused' | 'stopped';
 		busy?: boolean;
-		onPlaybackAction?: (action: 'pause' | 'resume' | 'stop') => void;
+		onPlaybackAction?: (action: 'pause' | 'resume') => void;
 	} = $props();
 
 	const isPlaying = $derived(playbackState === 'playing');
@@ -35,16 +34,5 @@
 			<PlayIcon class="size-4" aria-hidden="true" />
 			Resume
 		{/if}
-	</Button>
-	<Button
-		type="button"
-		variant="outline"
-		size="sm"
-		class="gap-2"
-		disabled={disabled || busy || playbackState === 'stopped'}
-		onclick={() => onPlaybackAction?.('stop')}
-	>
-		<SquareIcon class="size-4" aria-hidden="true" />
-		Stop
 	</Button>
 </div>

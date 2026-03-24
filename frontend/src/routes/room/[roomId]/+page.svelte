@@ -63,7 +63,7 @@
 		}
 	}
 
-	async function handlePlayback(action: 'pause' | 'resume' | 'stop') {
+	async function handlePlayback(action: 'pause' | 'resume') {
 		const uid = sessionUser?.userId;
 		if (!uid || !socketClient || !socketClient.isConnected()) {
 			toast.error('Not connected to room');

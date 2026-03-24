@@ -82,7 +82,7 @@ export class RoomSocketClient {
 		});
 	}
 
-	setPlayback(userId: string, action: 'pause' | 'resume' | 'stop') {
+	setPlayback(userId: string, action: 'pause' | 'resume') {
 		return this.send({
 			type: 'playback',
 			user_id: userId,
