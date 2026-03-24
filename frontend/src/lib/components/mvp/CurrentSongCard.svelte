@@ -18,7 +18,7 @@
 
 {#if entry}
 	<Card class="min-w-0 overflow-hidden">
-		<div class="flex min-w-0 gap-3 p-4 sm:gap-4">
+		<div class="flex min-w-0 gap-3 px-4 py-0 sm:gap-4">
 			{#if entry.track.coverUrl}
 				<img
 					src={entry.track.coverUrl}
