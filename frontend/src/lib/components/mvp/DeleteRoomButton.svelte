@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
+	import { resolve } from '$app/paths';
 	import { Button } from '$lib/components/ui/button';
 	import {
 		AlertDialog,
@@ -11,14 +12,17 @@
 		AlertDialogTitle
 	} from '$lib/components/ui/alert-dialog';
 	import { apiClient } from '$lib/api/client';
+	import { removeRecentRoom } from '$lib/session/recentRooms';
 	import { toast } from 'svelte-sonner';
 
 	let {
 		roomId,
+		joinCode,
 		userId,
 		disabled = false
 	}: {
 		roomId: string;
+		joinCode: string;
 		userId: string;
 		disabled?: boolean;
 	} = $props();
@@ -30,9 +34,10 @@
 		busy = true;
 		try {
 			await apiClient.deleteRoom({ room_id: roomId, user_id: userId });
+			removeRecentRoom(joinCode);
 			toast.success('Room deleted');
 			open = false;
-			await goto('/');
+			await goto(resolve('/'));
 		} catch (err) {
 			toast.error(err instanceof Error ? err.message : 'Could not delete room');
 		} finally {

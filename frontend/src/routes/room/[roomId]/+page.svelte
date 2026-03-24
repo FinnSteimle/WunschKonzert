@@ -1,13 +1,18 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { goto } from '$app/navigation';
+	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
 	import { apiClient } from '$lib/api/client';
 	import { roomStore, getCurrentSong } from '$lib/stores/room';
 	import { RoomSocketClient } from '$lib/realtime/roomSocket';
 	import { browser } from '$app/environment';
 	import { getOrCreateSessionUser } from '$lib/session/userSession';
-	import { recordRecentRoom } from '$lib/session/recentRooms';
+	import {
+		isJoinFailureForRemovedRoom,
+		recordRecentRoom,
+		removeRecentRoom
+	} from '$lib/session/recentRooms';
 	import type { QueueEntryDto, RoomStateDto, TrackDto, VoteRequest } from '$lib/types/api';
 	import { Badge } from '$lib/components/ui/badge';
 	import {
@@ -54,10 +59,10 @@
 		}
 		voteBusyId = queueEntryId;
 		try {
-		const sent = await socketClient.sendVote(queueEntryId, uid, vote);
-		if (!sent) {
-			throw new Error('Vote failed');
-		}
+			const sent = await socketClient.sendVote(queueEntryId, uid, vote);
+			if (!sent) {
+				throw new Error('Vote failed');
+			}
 		} catch (err) {
 			toast.error(err instanceof Error ? err.message : 'Vote failed');
 		} finally {
@@ -73,10 +78,10 @@
 		}
 		playbackBusy = true;
 		try {
-		const sent = await socketClient.setPlayback(uid, action);
-		if (!sent) {
-			throw new Error('Playback command failed');
-		}
+			const sent = await socketClient.setPlayback(uid, action);
+			if (!sent) {
+				throw new Error('Playback command failed');
+			}
 		} catch (err) {
 			toast.error(err instanceof Error ? err.message : 'Playback command failed');
 		} finally {
@@ -103,10 +108,10 @@
 			throw new Error('Not connected to room');
 		}
 		try {
-		const sent = await socketClient.addToQueue(track, uid);
-		if (!sent) {
-			throw new Error('Could not add song');
-		}
+			const sent = await socketClient.addToQueue(track, uid);
+			if (!sent) {
+				throw new Error('Could not add song');
+			}
 		} catch (err) {
 			throw new Error(err instanceof Error ? err.message : 'Could not add song');
 		}
@@ -125,7 +130,7 @@
 			return undefined;
 		}
 
-		function beginRoomSession(roomId: string): () => void {
+		function beginRoomSession(roomId: string, opts?: { joinCodeForRecents?: string }): () => void {
 			roomStore.reset();
 			roomStore.setLoading(true);
 
@@ -134,8 +139,9 @@
 				if (roomDeletedRedirectDone) return;
 				if (ui.roomState?.room.status === 'deleted') {
 					roomDeletedRedirectDone = true;
+					removeRecentRoom(ui.roomState.room.joinCode);
 					toast.message('Room ended by host');
-					void goto('/');
+					void goto(resolve('/'));
 				}
 			});
 
@@ -144,7 +150,12 @@
 				.then((state) => roomStore.setRoomState(state))
 				.catch((err: unknown) => {
 					roomStore.setLoading(false);
-					roomStore.setError(err instanceof Error ? err.message : 'Could not load room');
+					const msg = err instanceof Error ? err.message : '';
+					const code = opts?.joinCodeForRecents;
+					if (code && isJoinFailureForRemovedRoom(msg)) {
+						removeRecentRoom(code);
+					}
+					roomStore.setError(msg || 'Could not load room');
 				});
 
 			const socket = new RoomSocketClient(roomId, {
@@ -179,16 +190,24 @@
 						user_id: userId
 					});
 					if (!res.success || !res.room_id) {
-						throw new Error(res.message || 'Could not join this room.');
+						const msg = res.message || 'Could not join this room.';
+						if (isJoinFailureForRemovedRoom(msg)) {
+							removeRecentRoom(parsed.joinCode);
+						}
+						throw new Error(msg);
 					}
 					if (cancelled) return;
-					endSession = beginRoomSession(res.room_id);
+					endSession = beginRoomSession(res.room_id, {
+						joinCodeForRecents: parsed.joinCode
+					});
 				} catch (err: unknown) {
 					if (cancelled) return;
+					const msg = err instanceof Error ? err.message : '';
+					if (isJoinFailureForRemovedRoom(msg)) {
+						removeRecentRoom(parsed.joinCode);
+					}
 					roomStore.setLoading(false);
-					roomStore.setError(
-						err instanceof Error ? err.message : 'Could not join this room.'
-					);
+					roomStore.setError(msg || 'Could not join this room.');
 				}
 			})();
 			return () => {
@@ -229,11 +248,7 @@
 					</p>
 				</div>
 				<div class="flex flex-wrap items-center gap-2">
-					<InvitePanelDialog
-						joinCode={rs.room.joinCode}
-						inviteUrl={inviteUrl}
-						class="shrink-0"
-					/>
+					<InvitePanelDialog joinCode={rs.room.joinCode} {inviteUrl} class="shrink-0" />
 					{#if $roomStore.connected}
 						<Badge variant="success">Live</Badge>
 					{:else}
@@ -249,11 +264,7 @@
 				<h2 id="wk-now-playing" class="text-sm font-medium">Now playing</h2>
 				<CurrentSongCard entry={current} />
 				{#if current && durationMs > 0}
-					<PlaybackProgress
-						positionMs={positionMs}
-						durationMs={durationMs}
-						state={rs.playback?.state}
-					/>
+					<PlaybackProgress {positionMs} {durationMs} state={rs.playback?.state} />
 				{/if}
 				{#if isHost}
 					<PlaybackControls
@@ -282,26 +293,25 @@
 						<CardDescription>Results come from the room provider (Spotify).</CardDescription>
 					</CardHeader>
 					<CardContent>
-						<SongSearchPanel
-							roomId={rs.room.roomId}
-							onAddTrack={handleAddTrack}
-						/>
+						<SongSearchPanel roomId={rs.room.roomId} onAddTrack={handleAddTrack} />
 					</CardContent>
 				</Card>
 			</section>
 
 			<section aria-labelledby="wk-people">
 				<h2 id="wk-people" class="mb-3 text-sm font-medium">Who is here</h2>
-				<UserList
-					users={rs.users}
-					hostUserId={rs.host.userId}
-					currentUserId={sessionUser.userId}
-				/>
+				<UserList users={rs.users} hostUserId={rs.host.userId} currentUserId={sessionUser.userId} />
 			</section>
 
-			<footer class="border-border flex flex-col gap-2 border-t pt-6 min-[400px]:flex-row min-[400px]:flex-wrap">
+			<footer
+				class="border-border flex flex-col gap-2 border-t pt-6 min-[400px]:flex-row min-[400px]:flex-wrap"
+			>
 				{#if isHost}
-					<DeleteRoomButton roomId={rs.room.roomId} userId={sessionUser.userId} />
+					<DeleteRoomButton
+						roomId={rs.room.roomId}
+						joinCode={rs.room.joinCode}
+						userId={sessionUser.userId}
+					/>
 				{:else}
 					<LeaveRoomButton roomId={rs.room.roomId} userId={sessionUser.userId} />
 				{/if}

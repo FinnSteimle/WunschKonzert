@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
+	import { resolve } from '$app/paths';
 	import { Button } from '$lib/components/ui/button';
 	import { apiClient } from '$lib/api/client';
 	import { toast } from 'svelte-sonner';
@@ -21,7 +22,7 @@
 		try {
 			await apiClient.leaveRoom({ room_id: roomId, user_id: userId });
 			toast.success('Left room');
-			await goto('/');
+			await goto(resolve('/'));
 		} catch (err) {
 			toast.error(err instanceof Error ? err.message : 'Could not leave room');
 		} finally {

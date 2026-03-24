@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
+	import { resolve } from '$app/paths';
 	import { Button } from '$lib/components/ui/button';
 	import { Input } from '$lib/components/ui/input';
 	import { Label } from '$lib/components/ui/label';
@@ -25,7 +26,7 @@
 		getOrCreateSessionUser();
 		busy = true;
 		try {
-			await goto(`/room/${normalized}`);
+			await goto(resolve('/room/[roomId]', { roomId: normalized }));
 		} finally {
 			busy = false;
 		}
@@ -50,7 +51,9 @@
 			disabled={busy}
 			aria-invalid={code.length > 0 && !JOIN_ALPHABET_RE.test(normalize(code))}
 		/>
-		<p class="text-muted-foreground text-xs">Six characters, letters and numbers (no I, O, 0, 1).</p>
+		<p class="text-muted-foreground text-xs">
+			Six characters, letters and numbers (no I, O, 0, 1).
+		</p>
 	</div>
 	<Button type="submit" class="w-full min-[400px]:w-auto" disabled={busy}>
 		{busy ? 'Joining…' : 'Join room'}
