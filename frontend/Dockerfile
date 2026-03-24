@@ -1,5 +1,5 @@
 # 1) Base dependencies stage (for shared cache)
-FROM node:21-alpine AS base
+FROM node:22-alpine AS base
 WORKDIR /app
 COPY package.json package-lock.json ./
 # Install dependencies without running scripts (avoids svelte-kit sync which needs source)
@@ -20,13 +20,13 @@ COPY . .
 RUN npm run prepare && npm run build
 
 # 4) Production dependencies stage
-FROM node:21-alpine AS deps
+FROM node:22-alpine AS deps
 WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm ci --omit=dev --no-scripts
 
 # 5) Runtime stage
-FROM node:21-alpine AS runner
+FROM node:22-alpine AS runner
 WORKDIR /app
 ENV NODE_ENV=production
 COPY --from=deps /app/node_modules ./node_modules

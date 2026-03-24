@@ -125,7 +125,7 @@ backend:integration:
 
 frontend:lint:
   stage: lint
-  image: node:20
+  image: node:22
   <<: *cache_npm
   <<: *rules_frontend_changes
   script:
@@ -136,7 +136,7 @@ frontend:lint:
 
 frontend:check:
   stage: lint
-  image: node:20
+  image: node:22
   <<: *cache_npm
   <<: *rules_frontend_changes
   script:
@@ -190,7 +190,7 @@ frontend:integration:
 
 frontend:build:
   stage: build
-  image: node:20
+  image: node:22
   <<: *cache_npm
   <<: *rules_frontend_changes
   script:

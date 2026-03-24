@@ -4,15 +4,17 @@ import { defineConfig } from 'vitest/config';
 
 export default defineConfig({
 	plugins: [tailwindcss(), sveltekit()],
+	ssr: {
+		noExternal: ['html-encoding-sniffer', '@exodus/bytes', 'jsdom']
+	},
 	test: {
 		globals: true,
 		environment: 'jsdom',
-		root: 'src',
-		include: ['**/*.{test,spec}.{ts,js}'],
+		include: ['src/**/*.{test,spec}.{ts,js}'],
 		setupFiles: [],
 		server: {
 			deps: {
-				inline: [/^(?!.*node_modules).*$/, 'html-encoding-sniffer', '@exodus/bytes']
+				inline: ['html-encoding-sniffer', '@exodus/bytes', 'jsdom']
 			}
 		}
 	}
