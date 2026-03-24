@@ -2,7 +2,7 @@ import os
 import uuid
 from datetime import datetime
 
-from sqlalchemy import text
+from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import (
     AsyncEngine,
     AsyncSession,
@@ -68,6 +68,14 @@ async def get_room(room_id: str) -> Room | None:
     session_factory = _get_session_factory()
     async with session_factory() as session:
         return await session.get(Room, room_id)
+
+
+async def get_room_by_join_code(join_code: str) -> Room | None:
+    """Get room by join code or return None if not found"""
+    session_factory = _get_session_factory()
+    async with session_factory() as session:
+        result = await session.execute(select(Room).where(Room.joinCode == join_code))
+        return result.scalar_one_or_none()
 
 
 async def get_room_membership(user_id: str, room_id: str) -> RoomMembership | None:
@@ -139,21 +147,32 @@ async def leave_room(user_id: str, room_id: str) -> RoomMembership:
         return membership
 
 
-async def create_room(
-    room_id: str, name: str, user_id: str, supported_provider_id: str
-) -> Room:
-    """Create a new room"""
-    # Check if room already exists
-    existing = await get_room(room_id)
-    if existing:
-        raise ValueError("Room already exists")
+def _generate_join_code(length: int = 6) -> str:
+    alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
+    # Sampling from UUID bytes keeps generation deterministic and server-side.
+    random_bytes = uuid.uuid4().bytes
+    out = []
+    for i in range(length):
+        out.append(alphabet[random_bytes[i] % len(alphabet)])
+    return "".join(out)
 
+
+async def create_room(name: str, user_id: str, supported_provider_id: str) -> Room:
+    """Create a new room"""
     session_factory = _get_session_factory()
     async with session_factory() as session:
-        # Use room_id as joinCode
+        room_id = str(uuid.uuid4())
+        join_code = _generate_join_code()
+
+        # Extremely unlikely collisions, but guaranteed unique before insert.
+        while (
+            await session.execute(select(Room).where(Room.joinCode == join_code))
+        ).scalar_one_or_none() is not None:
+            join_code = _generate_join_code()
+
         room = Room(
             roomId=room_id,
-            joinCode=room_id,
+            joinCode=join_code,
             name=name,
             hostedBy=user_id,
             supportedProviderId=supported_provider_id,

@@ -18,7 +18,6 @@ class RoomRequest(BaseModel):
 class CreateRoomRequest(BaseModel):
     """Request model for creating a room"""
 
-    room_id: str
     name: str
     user_id: str
     supported_provider_id: str
@@ -38,6 +37,7 @@ class RoomResponse(BaseModel):
     success: bool
     message: str
     room_id: str | None = None
+    join_code: str | None = None
 
 
 class Track(BaseModel):
@@ -155,3 +155,24 @@ class AddMusicProviderResponse(BaseModel):
     success: bool
     message: str
     provider_account_id: str | None = None
+
+
+class DeleteRoomRequest(BaseModel):
+    """Request model for deleting a room"""
+
+    room_id: str
+    user_id: str
+
+
+class VoteRequest(BaseModel):
+    """Request model for voting on a queue entry"""
+
+    user_id: str
+    vote_type: str  # "upvote", "downvote", "neutral"
+
+
+class PlaybackRequest(BaseModel):
+    """Request model for playback controls"""
+
+    user_id: str
+    action: str  # "pause" or "resume"
