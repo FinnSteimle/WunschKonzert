@@ -314,8 +314,8 @@
 					/>
 				{:else}
 					<LeaveRoomButton roomId={rs.room.roomId} userId={sessionUser.userId} />
+					<Button variant="ghost" href="/" class="w-full min-[400px]:w-auto">Home</Button>
 				{/if}
-				<Button variant="ghost" href="/" class="w-full min-[400px]:w-auto">Home</Button>
 			</footer>
 		{:else}
 			<LoadingState message="Preparing room…" />
