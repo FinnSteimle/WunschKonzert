@@ -1,6 +1,6 @@
 <script lang="ts">
-	import { page } from '$app/state';
-	import { Button } from '$lib/components/ui/button';
+	import { goto } from '$app/navigation';
+	import { resolve } from '$app/paths';
 	import {
 		Card,
 		CardContent,
@@ -9,19 +9,9 @@
 		CardTitle
 	} from '$lib/components/ui/card';
 	import CreateRoomForm from '$lib/components/mvp/CreateRoomForm.svelte';
-	import InvitePanelDialog from '$lib/components/mvp/InvitePanelDialog.svelte';
-	import { browser } from '$app/environment';
-
-	let created = $state<{ roomId: string; joinCode: string } | null>(null);
-
-	const inviteUrl = $derived.by(() => {
-		if (!created || !browser) return '';
-		const origin = page.url.origin;
-		return `${origin}/room/${created.joinCode}`;
-	});
 
 	function onsuccess(payload: { roomId: string; joinCode: string }) {
-		created = payload;
+		void goto(resolve('/room/[roomId]', { roomId: payload.joinCode }));
 	}
 </script>
 
@@ -34,30 +24,18 @@
 		<header class="flex flex-col gap-2">
 			<h1 class="text-2xl font-semibold tracking-tight sm:text-3xl">Create a room</h1>
 			<p class="text-muted-foreground text-sm">
-				Name your session, pick Spotify, and share the code or link.
+				Name your session and pick Spotify. You can invite guests from the room.
 			</p>
 		</header>
 
-		{#if !created}
-			<Card class="min-w-0 shadow-sm">
-				<CardHeader>
-					<CardTitle>Room details</CardTitle>
-					<CardDescription>We generate a short join code for you.</CardDescription>
-				</CardHeader>
-				<CardContent>
-					<CreateRoomForm {onsuccess} />
-				</CardContent>
-			</Card>
-		{:else}
-			<div class="flex flex-col gap-2 min-[400px]:flex-row">
-				<InvitePanelDialog
-					joinCode={created.joinCode}
-					inviteUrl={inviteUrl}
-					class="w-full flex-1"
-				/>
-				<Button href={`/room/${created.joinCode}`} class="w-full flex-1">Open room</Button>
-				<Button variant="outline" href="/" class="w-full flex-1">Back home</Button>
-			</div>
-		{/if}
+		<Card class="min-w-0 shadow-sm">
+			<CardHeader>
+				<CardTitle>Room details</CardTitle>
+				<CardDescription>We generate a short join code for you.</CardDescription>
+			</CardHeader>
+			<CardContent>
+				<CreateRoomForm {onsuccess} />
+			</CardContent>
+		</Card>
 	</div>
 </div>
