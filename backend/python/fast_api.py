@@ -8,26 +8,14 @@ from datetime import UTC, datetime, timedelta
 import httpx
 from fastapi import FastAPI, HTTPException, Query, WebSocket
 from fastapi.middleware.cors import CORSMiddleware
-from sqlalchemy import func, select
 
 from database import (
     FeedbackType,
     MembershipStatus,
-    MusicProvider,
-    PlaybackSession,
     PlaybackState,
-    QueueEntry,
     QueueEntryStatus,
-    RoomMembership,
     RoomStatus,
     SongFeedback,
-    User,
-)
-from database import (
-    Room as DbRoom,
-)
-from database import (
-    Track as DbTrack,
 )
 from db_utils import (
     _get_session_factory,
@@ -97,9 +85,6 @@ from db_utils import (
 )
 from db_utils import (
     get_room_memberships as db_get_room_memberships,
-)
-from db_utils import (
-    get_song_feedback as db_get_song_feedback,
 )
 from db_utils import (
     get_song_feedback_by_queue_entry as db_get_song_feedback_by_queue_entry,
@@ -566,8 +551,6 @@ async def _delete_room(room_id: str, user_id: str) -> dict:
     # Update all memberships
     session_factory = _get_session_factory()
     async with session_factory() as session:
-        from sqlalchemy import select
-
         memberships = await db_get_room_memberships(room_id)
 
         for membership in memberships:
