@@ -159,6 +159,13 @@ class AddMusicProviderResponse(BaseModel):
     provider_account_id: str | None = None
 
 
+class LeaveRoomRequest(BaseModel):
+    """Request model for leaving a room (identity only; no display name)."""
+
+    room_id: str
+    user_id: str
+
+
 class DeleteRoomRequest(BaseModel):
     """Request model for deleting a room"""
 

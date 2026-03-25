@@ -23,8 +23,12 @@ export interface CreateRoomRequest {
 export interface RoomRequest {
 	room_id: string;
 	user_id: string;
-	/** Required for join; omit on leave. */
-	display_name?: string;
+	display_name: string;
+}
+
+export interface LeaveRoomRequest {
+	room_id: string;
+	user_id: string;
 }
 
 export interface DeleteRoomRequest {

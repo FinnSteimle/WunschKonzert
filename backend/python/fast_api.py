@@ -59,6 +59,7 @@ from models import (
     AuthResponse,
     CreateRoomRequest,
     DeleteRoomRequest,
+    LeaveRoomRequest,
     PlaybackRequest,
     RoomRequest,
     RoomResponse,
@@ -717,7 +718,7 @@ async def join_room(room_data: RoomRequest):
 
 
 @app.post("/leave_room", response_model=RoomResponse)
-async def leave_room(room_data: RoomRequest):
+async def leave_room(room_data: LeaveRoomRequest):
     user = await db_get_user(room_data.user_id)
     if not user:
         raise HTTPException(status_code=404, detail="User not found")

@@ -1,6 +1,7 @@
 import {
 	type CreateRoomRequest,
 	type DeleteRoomRequest,
+	type LeaveRoomRequest,
 	type PlaybackRequest,
 	type RoomRequest,
 	type RoomResponse,
@@ -44,7 +45,7 @@ export const apiClient = {
 		return postJson<RoomResponse>('/join_room', payload);
 	},
 
-	async leaveRoom(payload: RoomRequest): Promise<RoomResponse> {
+	async leaveRoom(payload: LeaveRoomRequest): Promise<RoomResponse> {
 		return postJson<RoomResponse>('/leave_room', payload);
 	},
 
