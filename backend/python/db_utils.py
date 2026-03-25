@@ -448,6 +448,7 @@ async def create_or_update_song_feedback(feedback_data: dict) -> SongFeedback:
         )
 
         if existing:
+            existing = await session.merge(existing)
             for key, value in feedback_data.items():
                 setattr(existing, key, value)
             feedback = existing
@@ -455,8 +456,9 @@ async def create_or_update_song_feedback(feedback_data: dict) -> SongFeedback:
             feedback = SongFeedback(**feedback_data)
             session.add(feedback)
 
-        await session.commit()
+        await session.flush()
         await session.refresh(feedback)
+        await session.commit()
         return feedback
 
 
