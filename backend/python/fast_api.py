@@ -8,6 +8,7 @@ from datetime import UTC, datetime, timedelta
 import httpx
 from fastapi import FastAPI, HTTPException, Query, WebSocket
 from fastapi.middleware.cors import CORSMiddleware
+from starlette.websockets import WebSocketDisconnect
 
 from database import (
     FeedbackType,
@@ -618,7 +619,10 @@ async def websocket_endpoint_room(websocket: WebSocket, room_id: str):
 
     try:
         while True:
-            data = await websocket.receive_text()
+            try:
+                data = await websocket.receive_text()
+            except WebSocketDisconnect:
+                break
             await handle_room_events(room_id, data)
             await send_room_state(room_id)
     finally:
@@ -868,7 +872,10 @@ async def websocket_endpoint(websocket: WebSocket):
     generic_connections.add(websocket)
     try:
         while True:
-            await websocket.receive_text()
+            try:
+                await websocket.receive_text()
+            except WebSocketDisconnect:
+                break
             await websocket.send_text("No detail provided")
     finally:
         generic_connections.discard(websocket)
