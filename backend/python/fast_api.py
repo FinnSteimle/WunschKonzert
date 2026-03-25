@@ -17,100 +17,40 @@ from database import (
     RoomStatus,
     SongFeedback,
 )
-from db_utils import (
-    _get_session_factory,
-)
-from db_utils import (
-    check_db_health as db_check_db_health,
-)
-from db_utils import (
-    create_music_provider as db_create_music_provider,
-)
-from db_utils import (
-    create_or_update_song_feedback as db_create_or_update_song_feedback,
-)
-from db_utils import (
-    create_playback_session as db_create_playback_session,
-)
-from db_utils import (
-    create_provider_account as db_create_provider_account,
-)
-from db_utils import (
-    create_queue_entry as db_create_queue_entry,
-)
-from db_utils import (
-    create_room as db_create_room,
-)
-from db_utils import (
-    create_room_membership as db_create_room_membership,
-)
-from db_utils import (
-    create_track as db_create_track,
-)
-from db_utils import (
-    create_user as db_create_user,
-)
-from db_utils import (
-    delete_song_feedback as db_delete_song_feedback,
-)
-from db_utils import (
-    get_current_playback_session as db_get_current_playback_session,
-)
-from db_utils import (
-    get_first_queued_entry as db_get_first_queued_entry,
-)
-from db_utils import (
-    get_max_queue_position as db_get_max_queue_position,
-)
-from db_utils import (
-    get_music_provider as db_get_music_provider,
-)
-from db_utils import (
-    get_playing_queue_entry as db_get_playing_queue_entry,
-)
-from db_utils import (
-    get_queue_entries as db_get_queue_entries,
-)
-from db_utils import (
-    get_queue_entry as db_get_queue_entry,
-)
-from db_utils import (
-    get_room as db_get_room,
-)
-from db_utils import (
-    get_room_by_join_code as db_get_room_by_join_code,
-)
-from db_utils import (
-    get_room_members as db_get_room_members,
-)
-from db_utils import (
-    get_room_memberships as db_get_room_memberships,
-)
+from db_utils import _get_session_factory
+from db_utils import check_db_health as db_check_db_health
+from db_utils import create_music_provider as db_create_music_provider
+from db_utils import create_or_update_song_feedback as db_create_or_update_song_feedback
+from db_utils import create_playback_session as db_create_playback_session
+from db_utils import create_provider_account as db_create_provider_account
+from db_utils import create_queue_entry as db_create_queue_entry
+from db_utils import create_room as db_create_room
+from db_utils import create_room_membership as db_create_room_membership
+from db_utils import create_track as db_create_track
+from db_utils import create_user as db_create_user
+from db_utils import delete_song_feedback as db_delete_song_feedback
+from db_utils import get_current_playback_session as db_get_current_playback_session
+from db_utils import get_first_queued_entry as db_get_first_queued_entry
+from db_utils import get_max_queue_position as db_get_max_queue_position
+from db_utils import get_music_provider as db_get_music_provider
+from db_utils import get_playing_queue_entry as db_get_playing_queue_entry
+from db_utils import get_queue_entries as db_get_queue_entries
+from db_utils import get_queue_entry as db_get_queue_entry
+from db_utils import get_queue_entry_by_track as db_get_queue_entry_by_track
+from db_utils import get_room as db_get_room
+from db_utils import get_room_by_join_code as db_get_room_by_join_code
+from db_utils import get_room_members as db_get_room_members
+from db_utils import get_room_memberships as db_get_room_memberships
 from db_utils import (
     get_song_feedback_by_queue_entry as db_get_song_feedback_by_queue_entry,
 )
-from db_utils import (
-    get_track as db_get_track,
-)
-from db_utils import (
-    get_user as db_get_user,
-    update_user_display_name as db_update_user_display_name,
-)
-from db_utils import (
-    leave_room as db_leave_room,
-)
-from db_utils import (
-    update_membership_status as db_update_membership_status,
-)
-from db_utils import (
-    update_playback_session as db_update_playback_session,
-)
-from db_utils import (
-    update_queue_entry as db_update_queue_entry,
-)
-from db_utils import (
-    update_room_status as db_update_room_status,
-)
+from db_utils import get_track as db_get_track
+from db_utils import get_user as db_get_user
+from db_utils import leave_room as db_leave_room
+from db_utils import update_membership_status as db_update_membership_status
+from db_utils import update_playback_session as db_update_playback_session
+from db_utils import update_queue_entry as db_update_queue_entry
+from db_utils import update_room_status as db_update_room_status
 from models import (
     AddMusicProviderRequest,
     AddMusicProviderResponse,
@@ -389,6 +329,11 @@ async def _add_to_queue(room_id: str, track_data: dict, user_id: str) -> dict:
                 "deepLink": track.deepLink,
             }
         )
+
+    # Check if the song is already in the queue
+    existing_entry = await db_get_queue_entry_by_track(room_id, track.trackId)
+    if existing_entry:
+        raise HTTPException(status_code=409, detail="Song is already in the queue")
 
     # Get max position and check for playing entries
     max_position = await db_get_max_queue_position(room_id)
@@ -714,7 +659,26 @@ async def ensure_user_display_name(user_id: str, display_name: str) -> None:
 
 @app.post("/create_room", response_model=RoomResponse)
 async def create_room_endpoint(room_data: CreateRoomRequest):
+
     await ensure_user_display_name(room_data.user_id, room_data.display_name)
+
+    user = await db_get_user(room_data.user_id)
+    if not user:
+        try:
+            # TODO: Change code if display_name provided by frontend
+            if not room_data.display_name:
+                room_data.display_name = room_data.user_id
+            await db_create_user(room_data.user_id, room_data.display_name)
+            user = await db_get_user(room_data.user_id)
+        except ValueError:
+            user = await db_get_user(room_data.user_id)
+        except Exception as e:
+            raise HTTPException(
+                status_code=500, detail=f"Failed to create user: {str(e)}"
+            )
+
+    if not user:
+        raise HTTPException(status_code=500, detail="Failed to create or retrieve user")
 
     await ensure_provider_exists(room_data.supported_provider_id)
 
@@ -742,9 +706,24 @@ async def create_room_endpoint(room_data: CreateRoomRequest):
 
 @app.post("/join_room", response_model=RoomResponse)
 async def join_room(room_data: RoomRequest):
+
     if room_data.display_name is None or not room_data.display_name.strip():
         raise HTTPException(status_code=400, detail="Display name is required")
     await ensure_user_display_name(room_data.user_id, room_data.display_name)
+    user = await db_get_user(room_data.user_id)
+    if not user:
+        try:
+            # TODO: Change code if display_name provided by frontend
+            if not room_data.display_name:
+                room_data.display_name = room_data.user_id
+            await db_create_user(room_data.user_id, room_data.display_name)
+        except ValueError as e:
+            if "already exists" not in str(e):
+                raise HTTPException(status_code=400, detail=str(e))
+        except Exception as e:
+            raise HTTPException(
+                status_code=500, detail=f"Failed to create user: {str(e)}"
+            )
 
     room = await db_get_room_by_join_code(room_data.room_id.upper())
     if not room:

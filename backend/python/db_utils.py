@@ -393,6 +393,18 @@ async def update_queue_entry(queue_entry_id: str, updates: dict) -> QueueEntry:
         return queue_entry
 
 
+async def get_queue_entry_by_track(room_id: str, track_id: str) -> QueueEntry | None:
+    """Get queue entry by room ID and track ID"""
+    session_factory = _get_session_factory()
+    async with session_factory() as session:
+        result = await session.execute(
+            select(QueueEntry).where(
+                QueueEntry.roomId == room_id, QueueEntry.trackId == track_id
+            )
+        )
+        return result.scalar_one_or_none()
+
+
 async def create_playback_session(playback_data: dict) -> PlaybackSession:
     """Create a new playback session"""
     session_factory = _get_session_factory()

@@ -13,7 +13,7 @@ class RoomRequest(BaseModel):
 
     room_id: str
     user_id: str
-    display_name: str | None = None
+    display_name: str
 
 
 class CreateRoomRequest(BaseModel):
