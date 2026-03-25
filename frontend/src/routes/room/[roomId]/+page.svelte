@@ -365,6 +365,7 @@
 			{@const durationMs = current ? Math.max(0, current.track.duration) * 1000 : 0}
 			{@const positionMs = rs.playback?.positionMs ?? 0}
 			{@const inviteUrl = `${page.url.origin}/room/${rs.room.joinCode}`}
+			{@const queuedTrackIds = new Set(rs.queue.map((e) => e.track.trackId))}
 
 			<header class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
 				<div class="min-w-0">
@@ -420,7 +421,11 @@
 							<CardDescription>Results come from the room provider (Spotify).</CardDescription>
 						</CardHeader>
 						<CardContent>
-							<SongSearchPanel roomId={rs.room.roomId} onAddTrack={handleAddTrack} />
+							<SongSearchPanel
+								roomId={rs.room.roomId}
+								{queuedTrackIds}
+								onAddTrack={handleAddTrack}
+							/>
 						</CardContent>
 					</Card>
 				</section>

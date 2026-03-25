@@ -11,10 +11,12 @@
 
 	let {
 		roomId,
+		queuedTrackIds,
 		onTrackAdded,
 		onAddTrack
 	}: {
 		roomId: string;
+		queuedTrackIds?: ReadonlySet<string>;
 		onTrackAdded?: (track: TrackDto) => void;
 		onAddTrack?: (track: TrackDto) => Promise<void> | void;
 	} = $props();
@@ -111,6 +113,6 @@
 	{:else if searchError}
 		<EmptyState title="Search failed" description={searchError} />
 	{:else}
-		<SearchResultList tracks={results} {addingTrackId} onAdd={addTrack} />
+		<SearchResultList tracks={results} {addingTrackId} {queuedTrackIds} onAdd={addTrack} />
 	{/if}
 </div>
