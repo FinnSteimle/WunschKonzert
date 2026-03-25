@@ -51,6 +51,7 @@ from db_utils import update_membership_status as db_update_membership_status
 from db_utils import update_playback_session as db_update_playback_session
 from db_utils import update_queue_entry as db_update_queue_entry
 from db_utils import update_room_status as db_update_room_status
+from db_utils import update_user_display_name as db_update_user_display_name
 from models import (
     AddMusicProviderRequest,
     AddMusicProviderResponse,
@@ -488,7 +489,7 @@ async def _delete_room(room_id: str, user_id: str) -> dict:
     room = await db_get_room(room_id)
     if not room:
         raise HTTPException(status_code=404, detail="Room not found")
-    if room.hostedBy != user_id:
+    if room.hostedBy.first() != user_id:
         raise HTTPException(status_code=403, detail="Only host can delete room")
 
     # Update room status
@@ -662,24 +663,6 @@ async def create_room_endpoint(room_data: CreateRoomRequest):
 
     await ensure_user_display_name(room_data.user_id, room_data.display_name)
 
-    user = await db_get_user(room_data.user_id)
-    if not user:
-        try:
-            # TODO: Change code if display_name provided by frontend
-            if not room_data.display_name:
-                room_data.display_name = room_data.user_id
-            await db_create_user(room_data.user_id, room_data.display_name)
-            user = await db_get_user(room_data.user_id)
-        except ValueError:
-            user = await db_get_user(room_data.user_id)
-        except Exception as e:
-            raise HTTPException(
-                status_code=500, detail=f"Failed to create user: {str(e)}"
-            )
-
-    if not user:
-        raise HTTPException(status_code=500, detail="Failed to create or retrieve user")
-
     await ensure_provider_exists(room_data.supported_provider_id)
 
     try:
@@ -710,20 +693,6 @@ async def join_room(room_data: RoomRequest):
     if room_data.display_name is None or not room_data.display_name.strip():
         raise HTTPException(status_code=400, detail="Display name is required")
     await ensure_user_display_name(room_data.user_id, room_data.display_name)
-    user = await db_get_user(room_data.user_id)
-    if not user:
-        try:
-            # TODO: Change code if display_name provided by frontend
-            if not room_data.display_name:
-                room_data.display_name = room_data.user_id
-            await db_create_user(room_data.user_id, room_data.display_name)
-        except ValueError as e:
-            if "already exists" not in str(e):
-                raise HTTPException(status_code=400, detail=str(e))
-        except Exception as e:
-            raise HTTPException(
-                status_code=500, detail=f"Failed to create user: {str(e)}"
-            )
 
     room = await db_get_room_by_join_code(room_data.room_id.upper())
     if not room:
