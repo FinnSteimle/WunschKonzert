@@ -42,6 +42,7 @@
 	import { Label } from '$lib/components/ui/label';
 	import { toast } from 'svelte-sonner';
 	import { parseRoomSlug } from '$lib/room/slug';
+	import { get } from 'svelte/store';
 
 	let sessionUser = $state<{ userId: string; displayName: string } | null>(null);
 	let recordedRecentThisMount = $state(false);
@@ -120,6 +121,13 @@
 		if (!uid || !socketClient || !socketClient.isConnected()) {
 			throw new Error('Not connected to room');
 		}
+
+		// Avoid pointless backend 409 errors and show a nicer UX.
+		const currentState = get(roomStore).roomState;
+		if (currentState?.queue.some((entry) => entry.track.trackId === track.trackId)) {
+			throw new Error('Song is already in the queue');
+		}
+
 		try {
 			const sent = await socketClient.addToQueue(track, uid);
 			if (!sent) {

@@ -64,7 +64,13 @@
 			toast.success('Added to queue');
 			onTrackAdded?.(track);
 		} catch (err) {
-			toast.error(err instanceof Error ? err.message : 'Could not add song');
+			const msg = err instanceof Error ? err.message : 'Could not add song';
+			// Backend returns 409 "Song is already in the queue". In that case we show a neutral message.
+			if (msg === 'Song is already in the queue') {
+				toast.message(msg);
+			} else {
+				toast.error(msg);
+			}
 		} finally {
 			addingTrackId = null;
 		}
