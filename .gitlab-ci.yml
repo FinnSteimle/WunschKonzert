@@ -98,11 +98,15 @@ backend:unit:
   script:
     # Convention: integration tests are marked with "integration"
     - uv run --with pytest pytest --disable-socket --allow-unix-socket -m "not integration" -q --junit-xml=junit-unit.xml
+  coverage: '/TOTAL.*\s+(\d+\%)/'
   artifacts:
     when: always
     expire_in: 7 days
     reports:
       junit: backend/python/junit-unit.xml
+      coverage_report:
+        coverage_format: cobertura
+        path: backend/python/cobertura.xml
 
 backend:integration:
   stage: integration_test
@@ -161,13 +165,22 @@ frontend:unit:
   script:
     - cd frontend
     - docker build --target test -t frontend-unit .
+    - mkdir -p coverage
     - |
       if grep -q "test:unit" package.json; then
-        docker run --rm --network none frontend-unit npm run test:unit
+        docker run --rm --network none -v $(pwd)/coverage:/usr/src/app/coverage frontend-unit npm run test:unit -- --coverage
       else
         echo "No npm script 'test:unit' found, running 'npm test' instead."
-        docker run --rm --network none frontend-unit npm test
+        docker run --rm --network none -v $(pwd)/coverage:/usr/src/app/coverage frontend-unit npm test -- --coverage
       fi
+  coverage: '/Statements\s+:\s+(\d+.\d+\%)/'
+  artifacts:
+    when: always
+    expire_in: 7 days
+    reports:
+      coverage_report:
+        coverage_format: cobertura
+        path: frontend/coverage/cobertura-coverage.xml
 
 frontend:integration:
   stage: integration_test

@@ -16,6 +16,18 @@ export default defineConfig({
 			deps: {
 				inline: ['html-encoding-sniffer', '@exodus/bytes', 'jsdom']
 			}
+		},
+		coverage: {
+			provider: 'v8',
+			reporter: ['text', 'cobertura'],
+			/*
+			thresholds: {
+				lines: 80,
+				functions: 80,
+				branches: 80,
+				statements: 80
+			}
+			*/
 		}
 	}
 });
