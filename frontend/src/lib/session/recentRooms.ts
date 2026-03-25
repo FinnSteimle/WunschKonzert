@@ -18,7 +18,7 @@ export function recordRecentRoom(
 	if (typeof window === 'undefined') return;
 	const joinCode = normalizeJoinCode(entry.joinCode);
 	if (!joinCode) return;
-	const name = entry.name.trim().slice(0, 120) || 'Room';
+	const name = entry.name.trim().slice(0, 60) || 'Room';
 	const list = getRecentRooms().filter((e) => e.joinCode !== joinCode);
 	const next: RecentRoomEntry = {
 		joinCode,
@@ -41,7 +41,7 @@ export function getRecentRooms(): RecentRoomEntry[] {
 			if (!item || typeof item !== 'object') continue;
 			const rec = item as Record<string, unknown>;
 			const joinCode = typeof rec.joinCode === 'string' ? normalizeJoinCode(rec.joinCode) : '';
-			const name = typeof rec.name === 'string' ? rec.name.slice(0, 120) : '';
+			const name = typeof rec.name === 'string' ? rec.name.slice(0, 60) : '';
 			const isHost = rec.isHost === true;
 			const visitedAt =
 				typeof rec.visitedAt === 'number' && Number.isFinite(rec.visitedAt) ? rec.visitedAt : 0;

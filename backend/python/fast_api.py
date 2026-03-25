@@ -94,6 +94,7 @@ from db_utils import (
 )
 from db_utils import (
     get_user as db_get_user,
+    update_user_display_name as db_update_user_display_name,
 )
 from db_utils import (
     leave_room as db_leave_room,
@@ -542,7 +543,7 @@ async def _delete_room(room_id: str, user_id: str) -> dict:
     room = await db_get_room(room_id)
     if not room:
         raise HTTPException(status_code=404, detail="Room not found")
-    if room.hostedBy.first() != user_id:
+    if room.hostedBy != user_id:
         raise HTTPException(status_code=403, detail="Only host can delete room")
 
     # Update room status
@@ -686,22 +687,34 @@ async def auth_account(auth_data: AuthRequest):
     }
 
 
+def _normalize_display_name(display_name: str) -> str:
+    trimmed = display_name.strip()
+    if not trimmed:
+        raise HTTPException(status_code=400, detail="Display name is required")
+    if len(trimmed) > 60:
+        raise HTTPException(status_code=400, detail="Display name is too long")
+    return trimmed
+
+
+async def ensure_user_display_name(user_id: str, display_name: str) -> None:
+    trimmed = _normalize_display_name(display_name)
+    user = await db_get_user(user_id)
+    if user is None:
+        try:
+            await db_create_user(user_id, trimmed)
+            return
+        except ValueError as e:
+            if "already exists" not in str(e):
+                raise HTTPException(status_code=400, detail=str(e)) from e
+    try:
+        await db_update_user_display_name(user_id, trimmed)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+
+
 @app.post("/create_room", response_model=RoomResponse)
 async def create_room_endpoint(room_data: CreateRoomRequest):
-    user = await db_get_user(room_data.user_id)
-    if not user:
-        try:
-            await db_create_user(room_data.user_id, room_data.user_id)
-            user = await db_get_user(room_data.user_id)
-        except ValueError:
-            user = await db_get_user(room_data.user_id)
-        except Exception as e:
-            raise HTTPException(
-                status_code=500, detail=f"Failed to create user: {str(e)}"
-            )
-
-    if not user:
-        raise HTTPException(status_code=500, detail="Failed to create or retrieve user")
+    await ensure_user_display_name(room_data.user_id, room_data.display_name)
 
     await ensure_provider_exists(room_data.supported_provider_id)
 
@@ -729,17 +742,9 @@ async def create_room_endpoint(room_data: CreateRoomRequest):
 
 @app.post("/join_room", response_model=RoomResponse)
 async def join_room(room_data: RoomRequest):
-    user = await db_get_user(room_data.user_id)
-    if not user:
-        try:
-            await db_create_user(room_data.user_id, room_data.user_id)
-        except ValueError as e:
-            if "already exists" not in str(e):
-                raise HTTPException(status_code=400, detail=str(e))
-        except Exception as e:
-            raise HTTPException(
-                status_code=500, detail=f"Failed to create user: {str(e)}"
-            )
+    if room_data.display_name is None or not room_data.display_name.strip():
+        raise HTTPException(status_code=400, detail="Display name is required")
+    await ensure_user_display_name(room_data.user_id, room_data.display_name)
 
     room = await db_get_room_by_join_code(room_data.room_id.upper())
     if not room:

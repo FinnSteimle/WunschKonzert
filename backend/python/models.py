@@ -13,6 +13,7 @@ class RoomRequest(BaseModel):
 
     room_id: str
     user_id: str
+    display_name: str | None = None
 
 
 class CreateRoomRequest(BaseModel):
@@ -20,6 +21,7 @@ class CreateRoomRequest(BaseModel):
 
     name: str
     user_id: str
+    display_name: str
     supported_provider_id: str
 
 

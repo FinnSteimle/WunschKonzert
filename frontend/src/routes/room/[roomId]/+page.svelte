@@ -7,7 +7,11 @@
 	import { roomStore, getCurrentSong } from '$lib/stores/room';
 	import { RoomSocketClient } from '$lib/realtime/roomSocket';
 	import { browser } from '$app/environment';
-	import { getOrCreateSessionUser } from '$lib/session/userSession';
+	import {
+		getOrCreateSessionUser,
+		saveSessionDisplayName,
+		shouldPromptJoinLinkDisplayName
+	} from '$lib/session/userSession';
 	import {
 		isJoinFailureForRemovedRoom,
 		recordRecentRoom,
@@ -34,6 +38,8 @@
 	import LoadingState from '$lib/components/mvp/LoadingState.svelte';
 	import EmptyState from '$lib/components/mvp/EmptyState.svelte';
 	import { Button } from '$lib/components/ui/button';
+	import { Input } from '$lib/components/ui/input';
+	import { Label } from '$lib/components/ui/label';
 	import { toast } from 'svelte-sonner';
 	import { parseRoomSlug } from '$lib/room/slug';
 
@@ -42,6 +48,13 @@
 	let socketClient = $state<RoomSocketClient | null>(null);
 	let voteBusyId = $state<string | null>(null);
 	let playbackBusy = $state(false);
+
+	/** Direct link /room/{code}: ask for name before calling join API. */
+	let linkJoinCode = $state<string | null>(null);
+	let linkJoinDisplayName = $state('');
+	let linkJoinBusy = $state(false);
+	let linkJoinError = $state<string | null>(null);
+	const linkJoinLifecycle = { cancelled: false, endSession: undefined as (() => void) | undefined };
 
 	function queueWithoutCurrent(state: RoomStateDto | null): QueueEntryDto[] {
 		if (!state) return [];
@@ -117,7 +130,99 @@
 		}
 	}
 
+	function beginRoomSession(roomId: string, opts?: { joinCodeForRecents?: string }): () => void {
+		roomStore.reset();
+		roomStore.setLoading(true);
+
+		let roomDeletedRedirectDone = false;
+		const unsubDeleted = roomStore.subscribe((ui) => {
+			if (roomDeletedRedirectDone) return;
+			if (ui.roomState?.room.status === 'deleted') {
+				roomDeletedRedirectDone = true;
+				removeRecentRoom(ui.roomState.room.joinCode);
+				toast.message('Room ended by host');
+				void goto(resolve('/'));
+			}
+		});
+
+		void apiClient
+			.getRoomState(roomId)
+			.then((state) => roomStore.setRoomState(state))
+			.catch((err: unknown) => {
+				roomStore.setLoading(false);
+				const msg = err instanceof Error ? err.message : '';
+				const code = opts?.joinCodeForRecents;
+				if (code && isJoinFailureForRemovedRoom(msg)) {
+					removeRecentRoom(code);
+				}
+				roomStore.setError(msg || 'Could not load room');
+			});
+
+		const socket = new RoomSocketClient(roomId, {
+			onState: (s) => roomStore.setRoomState(s),
+			onError: (m) => {
+				toast.error(m);
+				roomStore.setError(m);
+			},
+			onConnectionChange: (c) => roomStore.setConnected(c)
+		});
+		socketClient = socket;
+		socket.connect();
+
+		return () => {
+			unsubDeleted();
+			socket.disconnect();
+			socketClient = null;
+			roomStore.reset();
+		};
+	}
+
+	async function confirmLinkJoin() {
+		const code = linkJoinCode;
+		if (!code) return;
+		const trimmed = linkJoinDisplayName.trim();
+		if (!trimmed) {
+			toast.error('Please enter your display name.');
+			return;
+		}
+		linkJoinBusy = true;
+		linkJoinError = null;
+		try {
+			saveSessionDisplayName(trimmed);
+			const { userId } = getOrCreateSessionUser();
+			const res = await apiClient.joinRoom({
+				room_id: code,
+				user_id: userId,
+				display_name: trimmed
+			});
+			if (!res.success || !res.room_id) {
+				const msg = res.message || 'Could not join this room.';
+				if (isJoinFailureForRemovedRoom(msg)) {
+					removeRecentRoom(code);
+				}
+				throw new Error(msg);
+			}
+			if (linkJoinLifecycle.cancelled) return;
+			linkJoinLifecycle.endSession = beginRoomSession(res.room_id, {
+				joinCodeForRecents: code
+			});
+			linkJoinCode = null;
+			sessionUser = getOrCreateSessionUser();
+		} catch (err: unknown) {
+			if (linkJoinLifecycle.cancelled) return;
+			const msg = err instanceof Error ? err.message : '';
+			if (isJoinFailureForRemovedRoom(msg)) {
+				removeRecentRoom(code);
+			}
+			linkJoinError = msg || 'Could not join this room.';
+		} finally {
+			linkJoinBusy = false;
+		}
+	}
+
 	onMount(() => {
+		linkJoinLifecycle.cancelled = false;
+		linkJoinLifecycle.endSession = undefined;
 		const segment = page.params.roomId ?? '';
 		const parsed = parseRoomSlug(segment);
 
@@ -130,89 +235,62 @@
 			return undefined;
 		}
 
-		function beginRoomSession(roomId: string, opts?: { joinCodeForRecents?: string }): () => void {
-			roomStore.reset();
-			roomStore.setLoading(true);
-
-			let roomDeletedRedirectDone = false;
-			const unsubDeleted = roomStore.subscribe((ui) => {
-				if (roomDeletedRedirectDone) return;
-				if (ui.roomState?.room.status === 'deleted') {
-					roomDeletedRedirectDone = true;
-					removeRecentRoom(ui.roomState.room.joinCode);
-					toast.message('Room ended by host');
-					void goto(resolve('/'));
-				}
-			});
-
-			void apiClient
-				.getRoomState(roomId)
-				.then((state) => roomStore.setRoomState(state))
-				.catch((err: unknown) => {
-					roomStore.setLoading(false);
-					const msg = err instanceof Error ? err.message : '';
-					const code = opts?.joinCodeForRecents;
-					if (code && isJoinFailureForRemovedRoom(msg)) {
-						removeRecentRoom(code);
-					}
-					roomStore.setError(msg || 'Could not load room');
-				});
-
-			const socket = new RoomSocketClient(roomId, {
-				onState: (s) => roomStore.setRoomState(s),
-				onError: (m) => {
-					toast.error(m);
-					roomStore.setError(m);
-				},
-				onConnectionChange: (c) => roomStore.setConnected(c)
-			});
-			socketClient = socket;
-			socket.connect();
-
-			return () => {
-				unsubDeleted();
-				socket.disconnect();
-				socketClient = null;
-				roomStore.reset();
-			};
-		}
-
 		if (parsed.kind === 'joinCode') {
 			roomStore.reset();
-			roomStore.setLoading(true);
-			let cancelled = false;
-			let endSession: (() => void) | undefined;
-			void (async () => {
-				try {
-					const { userId } = getOrCreateSessionUser();
-					const res = await apiClient.joinRoom({
-						room_id: parsed.joinCode,
-						user_id: userId
-					});
-					if (!res.success || !res.room_id) {
-						const msg = res.message || 'Could not join this room.';
+			const fromHomeForm =
+				browser && sessionStorage.getItem('wk_prefilled_join_code') === parsed.joinCode;
+			if (fromHomeForm) {
+				sessionStorage.removeItem('wk_prefilled_join_code');
+			}
+			const skipNamePrompt = fromHomeForm || (browser && !shouldPromptJoinLinkDisplayName());
+			if (skipNamePrompt) {
+				roomStore.setLoading(true);
+				linkJoinCode = null;
+				void (async () => {
+					try {
+						const { userId, displayName } = getOrCreateSessionUser();
+						const res = await apiClient.joinRoom({
+							room_id: parsed.joinCode,
+							user_id: userId,
+							display_name: displayName
+						});
+						if (!res.success || !res.room_id) {
+							const msg = res.message || 'Could not join this room.';
+							if (isJoinFailureForRemovedRoom(msg)) {
+								removeRecentRoom(parsed.joinCode);
+							}
+							throw new Error(msg);
+						}
+						if (linkJoinLifecycle.cancelled) return;
+						linkJoinLifecycle.endSession = beginRoomSession(res.room_id, {
+							joinCodeForRecents: parsed.joinCode
+						});
+						sessionUser = getOrCreateSessionUser();
+					} catch (err: unknown) {
+						if (linkJoinLifecycle.cancelled) return;
+						const msg = err instanceof Error ? err.message : '';
 						if (isJoinFailureForRemovedRoom(msg)) {
 							removeRecentRoom(parsed.joinCode);
 						}
-						throw new Error(msg);
+						roomStore.setLoading(false);
+						roomStore.setError(msg || 'Could not join this room.');
 					}
-					if (cancelled) return;
-					endSession = beginRoomSession(res.room_id, {
-						joinCodeForRecents: parsed.joinCode
-					});
-				} catch (err: unknown) {
-					if (cancelled) return;
-					const msg = err instanceof Error ? err.message : '';
-					if (isJoinFailureForRemovedRoom(msg)) {
-						removeRecentRoom(parsed.joinCode);
-					}
-					roomStore.setLoading(false);
-					roomStore.setError(msg || 'Could not join this room.');
-				}
-			})();
+				})();
+				return () => {
+					linkJoinLifecycle.cancelled = true;
+					linkJoinLifecycle.endSession?.();
+					linkJoinLifecycle.endSession = undefined;
+				};
+			}
+
+			roomStore.setLoading(false);
+			linkJoinCode = parsed.joinCode;
+			linkJoinDisplayName = getOrCreateSessionUser().displayName;
+			linkJoinError = null;
 			return () => {
-				cancelled = true;
-				endSession?.();
+				linkJoinLifecycle.cancelled = true;
+				linkJoinLifecycle.endSession?.();
+				linkJoinLifecycle.endSession = undefined;
 			};
 		}
 
@@ -226,7 +304,47 @@
 
 <div class="bg-background min-h-[100dvh] pb-10">
 	<div class="mx-auto flex w-full max-w-7xl min-w-0 flex-col gap-6 px-6 py-6 sm:gap-8 sm:py-10">
-		{#if $roomStore.loading && !$roomStore.roomState}
+		{#if linkJoinCode && !$roomStore.roomState}
+			<Card class="mx-auto w-full max-w-md">
+				<CardHeader>
+					<CardTitle>Join room</CardTitle>
+					<CardDescription>
+						You opened a room link. Choose how your name appears to others.
+					</CardDescription>
+					<p class="text-muted-foreground font-mono text-sm tracking-wide">
+						Code {linkJoinCode}
+					</p>
+				</CardHeader>
+				<CardContent class="flex flex-col gap-4">
+					<div class="flex flex-col gap-2">
+						<Label for="wk-link-join-display">Your display name</Label>
+						<Input
+							id="wk-link-join-display"
+							type="text"
+							placeholder="How others see you"
+							bind:value={linkJoinDisplayName}
+							disabled={linkJoinBusy}
+							maxlength={60}
+							autocomplete="nickname"
+						/>
+					</div>
+					{#if linkJoinError}
+						<p class="text-destructive text-sm">{linkJoinError}</p>
+					{/if}
+					<div class="flex flex-col gap-2 min-[400px]:flex-row min-[400px]:flex-wrap">
+						<Button
+							type="button"
+							class="w-full min-[400px]:w-auto"
+							disabled={linkJoinBusy}
+							onclick={() => void confirmLinkJoin()}
+						>
+							{linkJoinBusy ? 'Joining…' : 'Join room'}
+						</Button>
+						<Button variant="outline" href="/" class="w-full min-[400px]:w-auto">Back home</Button>
+					</div>
+				</CardContent>
+			</Card>
+		{:else if $roomStore.loading && !$roomStore.roomState}
 			<LoadingState message="Loading room…" />
 		{:else if $roomStore.error && !$roomStore.roomState}
 			<EmptyState title="Room unavailable" description={$roomStore.error}>

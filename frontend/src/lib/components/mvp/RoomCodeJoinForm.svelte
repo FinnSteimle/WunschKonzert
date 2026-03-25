@@ -1,14 +1,21 @@
 <script lang="ts">
+	import { onMount } from 'svelte';
+	import { browser } from '$app/environment';
 	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import { Button } from '$lib/components/ui/button';
 	import { Input } from '$lib/components/ui/input';
 	import { Label } from '$lib/components/ui/label';
-	import { getOrCreateSessionUser } from '$lib/session/userSession';
+	import { getOrCreateSessionUser, saveSessionDisplayName } from '$lib/session/userSession';
 	import { toast } from 'svelte-sonner';
 
 	let code = $state('');
+	let displayName = $state('');
 	let busy = $state(false);
+
+	onMount(() => {
+		displayName = getOrCreateSessionUser().displayName;
+	});
 
 	const JOIN_ALPHABET_RE = /^[A-HJ-NP-Z2-9]{6}$/i;
 
@@ -19,11 +26,20 @@
 	async function submit(e: Event) {
 		e.preventDefault();
 		const normalized = normalize(code);
+		const trimmedDisplay = displayName.trim();
 		if (!JOIN_ALPHABET_RE.test(normalized)) {
 			toast.error('Enter a valid 6-character room code.');
 			return;
 		}
+		if (!trimmedDisplay) {
+			toast.error('Please enter your display name.');
+			return;
+		}
+		saveSessionDisplayName(trimmedDisplay);
 		getOrCreateSessionUser();
+		if (browser) {
+			sessionStorage.setItem('wk_prefilled_join_code', normalized);
+		}
 		busy = true;
 		try {
 			await goto(resolve('/room/[roomId]', { roomId: normalized }));
@@ -34,6 +50,19 @@
 </script>
 
 <form class="flex w-full min-w-0 flex-col gap-4" onsubmit={submit}>
+	<div class="flex flex-col gap-2">
+		<Label for="wk-display-name-join">Your display name</Label>
+		<Input
+			id="wk-display-name-join"
+			name="displayName"
+			type="text"
+			placeholder="How others see you"
+			bind:value={displayName}
+			disabled={busy}
+			maxlength={120}
+			autocomplete="nickname"
+		/>
+	</div>
 	<div class="flex flex-col gap-2">
 		<Label for="wk-join-code">Room code</Label>
 		<Input

@@ -130,6 +130,18 @@ async def create_user(user_id: str, display_name: str) -> User:
         return user
 
 
+async def update_user_display_name(user_id: str, display_name: str) -> None:
+    """Update an existing user's display name."""
+    session_factory = _get_session_factory()
+    async with session_factory() as session:
+        result = await session.execute(select(User).where(User.userId == user_id))
+        user = result.scalar_one_or_none()
+        if not user:
+            raise ValueError("User not found")
+        user.displayName = display_name  # type: ignore[attr-defined]
+        await session.commit()
+
+
 async def leave_room(user_id: str, room_id: str) -> RoomMembership:
     """Leave a room by setting leftAt timestamp"""
     session_factory = _get_session_factory()

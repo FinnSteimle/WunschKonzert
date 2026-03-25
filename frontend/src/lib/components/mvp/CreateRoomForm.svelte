@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { onMount } from 'svelte';
 	import { Button } from '$lib/components/ui/button';
 	import { Input } from '$lib/components/ui/input';
 	import { Label } from '$lib/components/ui/label';
@@ -7,7 +8,7 @@
 		NativeSelectOption
 	} from '$lib/components/ui/native-select';
 	import { apiClient } from '$lib/api/client';
-	import { getOrCreateSessionUser } from '$lib/session/userSession';
+	import { getOrCreateSessionUser, saveSessionDisplayName } from '$lib/session/userSession';
 	import { recordRecentRoom } from '$lib/session/recentRooms';
 	import type { ProviderId } from '$lib/types/api';
 	import { toast } from 'svelte-sonner';
@@ -19,22 +20,34 @@
 	} = $props();
 
 	let name = $state('');
+	let displayName = $state('');
 	let provider = $state<ProviderId>('spotify');
 	let busy = $state(false);
+
+	onMount(() => {
+		displayName = getOrCreateSessionUser().displayName;
+	});
 
 	async function submit(e: Event) {
 		e.preventDefault();
 		const trimmed = name.trim();
+		const trimmedDisplay = displayName.trim();
 		if (!trimmed) {
 			toast.error('Please enter a room name.');
 			return;
 		}
+		if (!trimmedDisplay) {
+			toast.error('Please enter your display name.');
+			return;
+		}
 		busy = true;
 		try {
+			saveSessionDisplayName(trimmedDisplay);
 			const { userId } = getOrCreateSessionUser();
 			const res = await apiClient.createRoom({
 				name: trimmed,
 				user_id: userId,
+				display_name: trimmedDisplay,
 				supported_provider_id: provider
 			});
 			if (!res.success || !res.room_id || !res.join_code) {
@@ -56,6 +69,19 @@
 </script>
 
 <form class="flex w-full min-w-0 flex-col gap-4" onsubmit={submit}>
+	<div class="flex flex-col gap-2">
+		<Label for="wk-display-name-create">Your display name</Label>
+		<Input
+			id="wk-display-name-create"
+			name="displayName"
+			type="text"
+			placeholder="How others see you"
+			bind:value={displayName}
+			disabled={busy}
+			maxlength={120}
+			autocomplete="nickname"
+		/>
+	</div>
 	<div class="flex flex-col gap-2">
 		<Label for="wk-room-name">Room name</Label>
 		<Input

@@ -16,12 +16,15 @@ export interface RoomResponse {
 export interface CreateRoomRequest {
 	name: string;
 	user_id: string;
+	display_name: string;
 	supported_provider_id: ProviderId;
 }
 
 export interface RoomRequest {
 	room_id: string;
 	user_id: string;
+	/** Required for join; omit on leave. */
+	display_name?: string;
 }
 
 export interface DeleteRoomRequest {
