@@ -225,7 +225,7 @@
 </svelte:head>
 
 <div class="bg-background min-h-[100dvh] pb-10">
-	<div class="mx-auto flex w-full max-w-2xl min-w-0 flex-col gap-6 px-4 py-6 sm:gap-8 sm:py-10">
+	<div class="mx-auto flex w-full max-w-7xl min-w-0 flex-col gap-6 px-6 py-6 sm:gap-8 sm:py-10">
 		{#if $roomStore.loading && !$roomStore.roomState}
 			<LoadingState message="Loading room…" />
 		{:else if $roomStore.error && !$roomStore.roomState}
@@ -260,48 +260,54 @@
 				</div>
 			</header>
 
-			<section class="flex flex-col gap-3" aria-labelledby="wk-now-playing">
-				<h2 id="wk-now-playing" class="text-sm font-medium">Now playing</h2>
-				<CurrentSongCard entry={current} />
-				{#if current && durationMs > 0}
-					<PlaybackProgress {positionMs} {durationMs} state={rs.playback?.state} />
-				{/if}
-				{#if isHost}
-					<PlaybackControls
-						playbackState={rs.playback?.state}
-						busy={playbackBusy}
-						onPlaybackAction={handlePlayback}
+			<main class="grid grid-cols-1 gap-6 lg:grid-cols-12 lg:gap-8">
+				<section class="flex min-w-0 flex-col gap-3 lg:col-span-4" aria-labelledby="wk-now-playing">
+					<h2 id="wk-now-playing" class="text-sm font-medium">Now playing</h2>
+					<CurrentSongCard entry={current} />
+					{#if current && durationMs > 0}
+						<PlaybackProgress {positionMs} {durationMs} state={rs.playback?.state} />
+					{/if}
+					{#if isHost}
+						<PlaybackControls
+							playbackState={rs.playback?.state}
+							busy={playbackBusy}
+							onPlaybackAction={handlePlayback}
+						/>
+					{/if}
+				</section>
+
+				<section class="flex min-w-0 flex-col gap-3 lg:col-span-8" aria-labelledby="wk-queue">
+					<h2 id="wk-queue" class="text-sm font-medium">Queue</h2>
+					<QueueList
+						entries={queueWithoutCurrent(rs)}
+						userId={sessionUser.userId}
+						{voteBusyId}
+						onVote={handleVote}
 					/>
-				{/if}
-			</section>
+				</section>
 
-			<section class="flex flex-col gap-3" aria-labelledby="wk-queue">
-				<h2 id="wk-queue" class="text-sm font-medium">Queue</h2>
-				<QueueList
-					entries={queueWithoutCurrent(rs)}
-					userId={sessionUser.userId}
-					{voteBusyId}
-					onVote={handleVote}
-				/>
-			</section>
+				<section class="flex min-w-0 flex-col gap-3 lg:col-span-8" aria-labelledby="wk-search">
+					<h2 id="wk-search" class="text-sm font-medium">Add a song</h2>
+					<Card>
+						<CardHeader class="pb-2">
+							<CardTitle class="text-base">Search</CardTitle>
+							<CardDescription>Results come from the room provider (Spotify).</CardDescription>
+						</CardHeader>
+						<CardContent>
+							<SongSearchPanel roomId={rs.room.roomId} onAddTrack={handleAddTrack} />
+						</CardContent>
+					</Card>
+				</section>
 
-			<section class="flex flex-col gap-3" aria-labelledby="wk-search">
-				<h2 id="wk-search" class="text-sm font-medium">Add a song</h2>
-				<Card>
-					<CardHeader class="pb-2">
-						<CardTitle class="text-base">Search</CardTitle>
-						<CardDescription>Results come from the room provider (Spotify).</CardDescription>
-					</CardHeader>
-					<CardContent>
-						<SongSearchPanel roomId={rs.room.roomId} onAddTrack={handleAddTrack} />
-					</CardContent>
-				</Card>
-			</section>
-
-			<section aria-labelledby="wk-people">
-				<h2 id="wk-people" class="mb-3 text-sm font-medium">Who is here</h2>
-				<UserList users={rs.users} hostUserId={rs.host.userId} currentUserId={sessionUser.userId} />
-			</section>
+				<section class="min-w-0 lg:col-span-4" aria-labelledby="wk-people">
+					<h2 id="wk-people" class="mb-3 text-sm font-medium">Who is here</h2>
+					<UserList
+						users={rs.users}
+						hostUserId={rs.host.userId}
+						currentUserId={sessionUser.userId}
+					/>
+				</section>
+			</main>
 
 			<footer
 				class="border-border flex flex-col gap-2 border-t pt-6 min-[400px]:flex-row min-[400px]:flex-wrap"
