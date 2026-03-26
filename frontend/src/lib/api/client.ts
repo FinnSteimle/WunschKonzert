@@ -2,13 +2,11 @@ import {
 	type CreateRoomRequest,
 	type DeleteRoomRequest,
 	type LeaveRoomRequest,
-	type PlaybackRequest,
 	type RoomRequest,
 	type RoomResponse,
 	type RoomStateDto,
 	type SearchResponseDto,
 	type TrackDto,
-	type VoteRequest
 } from '$lib/types/api';
 
 const API_BASE_URL = import.meta.env.PUBLIC_API_URL ?? 'http://localhost:8000';
@@ -71,17 +69,6 @@ export const apiClient = {
 			user_id: userId,
 			track
 		});
-	},
-
-	async vote(roomId: string, queueEntryId: string, payload: VoteRequest): Promise<{ success: boolean }> {
-		return postJson<{ success: boolean }>(
-			`/rooms/${encodeURIComponent(roomId)}/queue/${encodeURIComponent(queueEntryId)}/vote`,
-			payload
-		);
-	},
-
-	async setPlayback(roomId: string, payload: PlaybackRequest): Promise<{ success: boolean }> {
-		return postJson<{ success: boolean }>(`/rooms/${encodeURIComponent(roomId)}/playback`, payload);
 	}
 };
 

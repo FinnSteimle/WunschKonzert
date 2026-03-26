@@ -36,16 +36,6 @@ export interface DeleteRoomRequest {
 	user_id: string;
 }
 
-export interface PlaybackRequest {
-	user_id: string;
-	action: 'pause' | 'resume';
-}
-
-export interface VoteRequest {
-	user_id: string;
-	vote_type: 'upvote' | 'downvote' | 'neutral';
-}
-
 export interface TrackDto {
 	trackId: string;
 	providerTrackId: string;
