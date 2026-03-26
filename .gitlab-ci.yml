@@ -239,8 +239,6 @@ docker:build_only:
   rules:
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
   script:
-    - chmod +x ./scripts/setup_backend_env.sh
-    - ./scripts/setup_backend_env.sh
     - docker build -t backend-local -f backend/Dockerfile backend
     - docker build -t frontend-local -f frontend/Dockerfile frontend
 
