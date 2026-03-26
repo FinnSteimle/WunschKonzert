@@ -1,5 +1,4 @@
 services:
-
   api:
     build:
       context: .
@@ -10,9 +9,10 @@ services:
       DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD:-changeme}@db:5432/${POSTGRES_DB:-wunschkonzert}
       ENVIRONMENT: ${ENVIRONMENT:-development}
     volumes:
-      - ./python:/app                   # hot reload in dev
-      - venv:/app/.venv                 # keep container's venv, don't override with host
-    command: uv run uvicorn fast_api:app --reload --host 0.0.0.0 --port 8000
+      - ./python:/app # hot reload in dev
+      - venv:/app/.venv # keep container's venv, don't override with host
+      - ./.env:/.env # mount .env file
+    command: uv run --env-file ../.env uvicorn fast_api:app --reload --host 0.0.0.0 --port 8000
     depends_on:
       db:
         condition: service_healthy
@@ -29,9 +29,10 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
     ports:
-      - "5432:5432"                     # expose for local tooling (e.g. pgAdmin, psql); remove in prod
+      - "5432:5432" # expose for local tooling (e.g. pgAdmin, psql); remove in prod
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres -d ${POSTGRES_DB:-wunschkonzert}"]
+      test:
+        ["CMD-SHELL", "pg_isready -U postgres -d ${POSTGRES_DB:-wunschkonzert}"]
       interval: 10s
       timeout: 5s
       retries: 5
