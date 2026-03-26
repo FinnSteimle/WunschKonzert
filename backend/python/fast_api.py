@@ -489,7 +489,7 @@ async def _delete_room(room_id: str, user_id: str) -> dict:
     room = await db_get_room(room_id)
     if not room:
         raise HTTPException(status_code=404, detail="Room not found")
-    if room.hostedBy.first() != user_id:
+    if room.hostedBy != user_id:
         raise HTTPException(status_code=403, detail="Only host can delete room")
 
     # Update room status
