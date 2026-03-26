@@ -61,11 +61,9 @@ from models import (
     CreateRoomRequest,
     DeleteRoomRequest,
     LeaveRoomRequest,
-    PlaybackRequest,
     RoomRequest,
     RoomResponse,
     Track,
-    VoteRequest,
 )
 
 app = FastAPI()

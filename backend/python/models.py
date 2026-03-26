@@ -171,17 +171,3 @@ class DeleteRoomRequest(BaseModel):
 
     room_id: str
     user_id: str
-
-
-class VoteRequest(BaseModel):
-    """Request model for voting on a queue entry"""
-
-    user_id: str
-    vote_type: str  # "upvote", "downvote", "neutral"
-
-
-class PlaybackRequest(BaseModel):
-    """Request model for playback controls"""
-
-    user_id: str
-    action: str  # "pause" or "resume"
