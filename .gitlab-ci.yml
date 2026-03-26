@@ -66,6 +66,8 @@ modularity:check:
   script:
     - apk add --no-cache docker-compose curl bash
     - chmod +x ./scripts/check_independent.sh
+    - chmod +x ./scripts/setup_backend_env.sh
+    - ./scripts/setup_backend_env.sh
     - ./scripts/check_independent.sh
 
 # -----------------------
@@ -237,15 +239,8 @@ docker:build_only:
   rules:
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
   script:
-    - cd backend
-    - cp .env.example .env
-    - sed -i "s/POSTGRES_PASSWORD=.*/POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-changeme}/" .env
-    - sed -i "s/POSTGRES_DB=.*/POSTGRES_DB=${POSTGRES_DB:-wunschkonzert}/" .env
-    - sed -i "s|DATABASE_URL=.*|DATABASE_URL=postgresql://postgres:${POSTGRES_PASSWORD:-changeme}@db:5432/${POSTGRES_DB:-wunschkonzert}|" .env
-    - sed -i "s/ENVIRONMENT=.*/ENVIRONMENT=production/" .env
-    - sed -i "s/SPOTIFY_CLIENT_ID=.*/SPOTIFY_CLIENT_ID=${SPOTIFY_CLIENT_ID:-your_spotify_client_id}/" .env
-    - sed -i "s/SPOTIFY_CLIENT_SECRET=.*/SPOTIFY_CLIENT_SECRET=${SPOTIFY_CLIENT_SECRET:-your_spotify_client_secret}/" .env
-    - cd ..
+    - chmod +x ./scripts/setup_backend_env.sh
+    - ./scripts/setup_backend_env.sh
     - docker build -t backend-local -f backend/Dockerfile backend
     - docker build -t frontend-local -f frontend/Dockerfile frontend
 
@@ -257,15 +252,8 @@ docker:push_backend:
       changes:
         - backend/**/*
   script:
-    - cd backend
-    - cp .env.example .env
-    - sed -i "s/POSTGRES_PASSWORD=.*/POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-changeme}/" .env
-    - sed -i "s/POSTGRES_DB=.*/POSTGRES_DB=${POSTGRES_DB:-wunschkonzert}/" .env
-    - sed -i "s|DATABASE_URL=.*|DATABASE_URL=postgresql://postgres:${POSTGRES_PASSWORD:-changeme}@db:5432/${POSTGRES_DB:-wunschkonzert}|" .env
-    - sed -i "s/ENVIRONMENT=.*/ENVIRONMENT=production/" .env
-    - sed -i "s/SPOTIFY_CLIENT_ID=.*/SPOTIFY_CLIENT_ID=${SPOTIFY_CLIENT_ID:-your_spotify_client_id}/" .env
-    - sed -i "s/SPOTIFY_CLIENT_SECRET=.*/SPOTIFY_CLIENT_SECRET=${SPOTIFY_CLIENT_SECRET:-your_spotify_client_secret}/" .env
-    - cd ..
+    - chmod +x ./scripts/setup_backend_env.sh
+    - ./scripts/setup_backend_env.sh
     - |
       if [ "$CI_COMMIT_BRANCH" = "dev" ]; then
         BRANCH_TAG="dev"
