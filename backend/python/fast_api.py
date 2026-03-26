@@ -818,29 +818,6 @@ async def search_tracks(
     return {"provider": "spotify", "query": q, "tracks": tracks}
 
 
-@app.post("/rooms/{room_id}/queue/{queue_entry_id}/vote")
-async def vote_queue_entry(room_id: str, queue_entry_id: str, vote_data: VoteRequest):
-    room_state = await _vote_queue_entry(
-        room_id=room_id,
-        queue_entry_id=queue_entry_id,
-        user_id=vote_data.user_id,
-        vote_type=vote_data.vote_type,
-    )
-    await send_room_state(room_id)
-    return {"success": True, "room": room_state}
-
-
-@app.post("/rooms/{room_id}/playback")
-async def control_playback(room_id: str, playback_data: PlaybackRequest):
-    room_state = await _set_playback_state(
-        room_id=room_id,
-        user_id=playback_data.user_id,
-        action=playback_data.action,
-    )
-    await send_room_state(room_id)
-    return {"success": True, "room": room_state}
-
-
 @app.post("/add_music_provider", response_model=AddMusicProviderResponse)
 async def add_music_provider(provider_data: AddMusicProviderRequest):
     user = await db_get_user(provider_data.user_id)
