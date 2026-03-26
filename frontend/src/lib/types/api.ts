@@ -107,6 +107,11 @@ export interface RoomStateDto {
 	};
 }
 
+export interface VoteRequest {
+	user_id: string;
+	vote_type: 'upvote' | 'downvote' | 'neutral';
+}
+
 export interface SearchResponseDto {
 	provider: string;
 	query: string;
