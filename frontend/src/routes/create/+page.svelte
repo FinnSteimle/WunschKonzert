@@ -1,0 +1,41 @@
+<script lang="ts">
+	import { goto } from '$app/navigation';
+	import { resolve } from '$app/paths';
+	import {
+		Card,
+		CardContent,
+		CardDescription,
+		CardHeader,
+		CardTitle
+	} from '$lib/components/ui/card';
+	import CreateRoomForm from '$lib/components/mvp/CreateRoomForm.svelte';
+
+	function onsuccess(payload: { roomId: string; joinCode: string }) {
+		void goto(resolve('/room/[roomId]', { roomId: payload.joinCode }));
+	}
+</script>
+
+<svelte:head>
+	<title>Create room — WunschKonzert</title>
+</svelte:head>
+
+<div class="bg-background min-h-[100dvh]">
+	<div class="mx-auto flex w-full max-w-lg min-w-0 flex-col gap-8 px-4 py-8 sm:max-w-xl sm:py-12">
+		<header class="flex flex-col gap-2">
+			<h1 class="text-2xl font-semibold tracking-tight sm:text-3xl">Create a room</h1>
+			<p class="text-muted-foreground text-sm">
+				Name your session and pick Spotify. You can invite guests from the room.
+			</p>
+		</header>
+
+		<Card class="min-w-0 shadow-sm">
+			<CardHeader>
+				<CardTitle>Room details</CardTitle>
+				<CardDescription>We generate a short join code for you.</CardDescription>
+			</CardHeader>
+			<CardContent>
+				<CreateRoomForm {onsuccess} />
+			</CardContent>
+		</Card>
+	</div>
+</div>

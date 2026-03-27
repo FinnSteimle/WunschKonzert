@@ -16,12 +16,8 @@ credentials
 secrets.yml
 secrets.yaml
 
-# Python
-__pycache__/
-*.py[cod]
-*$py.class
-*.so
-.Python
+# Environments
+.venv/
 env/
 venv/
 ENV/
@@ -61,23 +57,10 @@ documentation/
 .readthedocs.yml
 mkdocs.yml
 
-# Tests & Coverage
-test/
-tests/
-__tests__/
-*.test.js
-*.test.ts
-*.spec.js
-*.spec.ts
-*.test.py
-*_test.go
-coverage/
-.coverage
-htmlcov/
-.pytest_cache/
-.tox/
-jest.config.js
-vitest.config.js
+# (Test files allowed for multi-stage test targets)
+# coverage/
+# .coverage
+# htmlcov/
 
 # CI/CD
 .github/

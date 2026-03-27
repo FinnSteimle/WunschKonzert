@@ -1,45 +1,37 @@
-# 1) Build stage
-FROM node:21-alpine AS build
-
+# 1) Base dependencies stage (for shared cache)
+FROM node:22-alpine AS base
 WORKDIR /app
-ENV DOCKER_BUILD=true
-# Install full dependencies for build
 COPY package.json package-lock.json ./
-RUN npm ci
+# Install dependencies without running scripts (avoids svelte-kit sync which needs source)
+RUN npm ci --no-scripts
 
-# Copy source
+# 2) Test stage
+FROM base AS test
 COPY . .
+# Now that we have all source, run prepare manually to generate .svelte-kit
+RUN npm run prepare
+# This stage is for running tests in an isolated container
+# Usage: docker build --target test -t frontend-test . && docker run --network none frontend-test npm test
 
-# Build the app
-RUN npm run build
+# 3) Build stage
+FROM base AS build
+ENV DOCKER_BUILD=true
+COPY . .
+RUN npm run prepare && npm run build
 
-
-# 2) Production dependencies stage
-FROM node:21-alpine AS deps
-
+# 4) Production dependencies stage
+FROM node:22-alpine AS deps
 WORKDIR /app
-
 COPY package.json package-lock.json ./
-RUN npm ci --omit=dev
+RUN npm ci --omit=dev --no-scripts
 
-
-# 3) Runtime stage
-FROM node:21-alpine AS runner
-
+# 5) Runtime stage
+FROM node:22-alpine AS runner
 WORKDIR /app
-
 ENV NODE_ENV=production
-
-# Copy production dependencies
 COPY --from=deps /app/node_modules ./node_modules
-
-# Copy build output and package metadata
 COPY --from=build /app/build ./build
 COPY --from=build /app/package.json ./package.json
-
-# Use non root user
 USER node
-
 EXPOSE 3000
-
 CMD ["node", "build/index.js"]

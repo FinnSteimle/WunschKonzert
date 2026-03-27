@@ -13,14 +13,15 @@ class RoomRequest(BaseModel):
 
     room_id: str
     user_id: str
+    display_name: str
 
 
 class CreateRoomRequest(BaseModel):
     """Request model for creating a room"""
 
-    room_id: str
     name: str
     user_id: str
+    display_name: str
     supported_provider_id: str
 
 
@@ -38,6 +39,7 @@ class RoomResponse(BaseModel):
     success: bool
     message: str
     room_id: str | None = None
+    join_code: str | None = None
 
 
 class Track(BaseModel):
@@ -155,3 +157,17 @@ class AddMusicProviderResponse(BaseModel):
     success: bool
     message: str
     provider_account_id: str | None = None
+
+
+class LeaveRoomRequest(BaseModel):
+    """Request model for leaving a room (identity only; no display name)."""
+
+    room_id: str
+    user_id: str
+
+
+class DeleteRoomRequest(BaseModel):
+    """Request model for deleting a room"""
+
+    room_id: str
+    user_id: str

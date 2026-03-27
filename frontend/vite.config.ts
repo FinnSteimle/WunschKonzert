@@ -4,11 +4,30 @@ import { defineConfig } from 'vitest/config';
 
 export default defineConfig({
 	plugins: [tailwindcss(), sveltekit()],
+	ssr: {
+		noExternal: ['html-encoding-sniffer', '@exodus/bytes', 'jsdom']
+	},
 	test: {
 		globals: true,
 		environment: 'jsdom',
-		root: 'src',
-		include: ['**/*.{test,spec}.{ts,js}'],
-		setupFiles: []
+		include: ['src/**/*.{test,spec}.{ts,js}'],
+		setupFiles: [],
+		server: {
+			deps: {
+				inline: ['html-encoding-sniffer', '@exodus/bytes', 'jsdom']
+			}
+		},
+		coverage: {
+			provider: 'v8',
+			reporter: ['text', 'cobertura'],
+			/*
+			thresholds: {
+				lines: 80,
+				functions: 80,
+				branches: 80,
+				statements: 80
+			}
+			*/
+		}
 	}
 });

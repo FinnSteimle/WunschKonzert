@@ -1,0 +1,39 @@
+---
+description: Run check and lint before marking work complete
+alwaysApply: true
+---
+
+# Pre-finish verification
+
+## Coding guidelines Frontend (./frontend/src)
+Make sure all your code in the frontend follows these conventions:
+  - **Naming Convention Frontend:** For SvelteKit and TypeScript, the following conventions are used:
+  - **Route Files:** SvelteKit conventions such as `+page.svelte`, `+layout.svelte`, `+page.ts`, `+server.ts`
+  - **Components:** `PascalCase` — e.g. `UserCard.svelte`, `NavigationBar.svelte`
+  - **Other Files:** `camelCase` — e.g. `dateUtils.ts`
+  - **Variables and Functions:** `camelCase` — e.g. `userName`, `fetchData()`
+  - **Types and Interfaces:** `PascalCase` — e.g. `User`, `ApiResponse`
+  - **Constants:** `UPPER_CASE` for global constants — e.g. `API_BASE_URL`
+  - **Stores:** descriptive `camelCase` — e.g. `auth`, `currentUser`
+  - **CSS Classes:** `kebab-case` — e.g. `user-card`, `primary-button`
+
+## Coding guidelines Backend (./backend/python)
+Make sure all your code in the backend follows these conventions:
+  - **Naming Convention Backend:** PEP 8 naming conventions are followed:
+  - **Files / Modules:** `snake_case` — e.g. `my_module.py`, `data_parser.py`
+  - **Packages:** lowercase, no underscores if avoidable — e.g. `mypackage`
+  - **Variables:** `snake_case` — e.g. `user_name`, `total_count`
+  - **Constants:** `ALL_CAPS` — e.g. `MAX_SIZE`, `DEFAULT_TIMEOUT`
+  - **Functions / Methods:** `snake_case` — e.g. `get_user()`, `parse_input()`
+  - **Classes:** `PascalCase` — e.g. `UserProfile`, `DataParser`
+  - **Private / Internal:** single underscore prefix — e.g. `_helper()`, `_cache`
+
+## Checks and linting Frontend (./frontend)
+Before considering a coding task **finished** (or handing off to the user), run the frontend quality checks from the `frontend` directory:
+
+1. `npm run check` — SvelteKit sync + `svelte-check` (TypeScript)
+2. `npm run lint` — ESLint
+
+**Working directory:** `frontend/` (this repo’s `package.json` with these scripts lives there).
+
+If either command fails, fix the reported issues or explain what is blocked before treating the task as done.

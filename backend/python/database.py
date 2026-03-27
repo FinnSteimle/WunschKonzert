@@ -16,6 +16,15 @@ from sqlalchemy.orm import declarative_base, relationship
 Base = declarative_base()
 
 
+def _db_enum(enum_cls: type[PyEnum], name: str) -> Enum:
+    """Map Python enums to PostgreSQL enum values (not member names)."""
+    return Enum(
+        enum_cls,
+        name=name,
+        values_callable=lambda enum_values: [item.value for item in enum_values],
+    )
+
+
 # Enums for status fields
 class AuthType(PyEnum):
     EMAIL = "email"
@@ -93,7 +102,7 @@ class Account(Base):
 
     accountId = Column(String, primary_key=True, index=True)
     username = Column(String, unique=True, nullable=False)
-    authType = Column(Enum(AuthType), nullable=False)
+    authType = Column(_db_enum(AuthType, "authtype"), nullable=False)
     userId = Column(String, ForeignKey("users.userId"), unique=True, nullable=False)
 
     # Relationships
@@ -121,7 +130,7 @@ class ProviderAccount(Base):
         String, ForeignKey("music_providers.providerId"), nullable=False
     )
     linkedAt = Column(DateTime, default=datetime.utcnow)
-    status = Column(Enum(AccountStatus), default=AccountStatus.ACTIVE)
+    status = Column(_db_enum(AccountStatus, "accountstatus"), default=AccountStatus.ACTIVE)
 
     # Relationships
     user = relationship("User", back_populates="provider_accounts")
@@ -135,7 +144,7 @@ class Room(Base):
     roomId = Column(String, primary_key=True, index=True)
     joinCode = Column(String, unique=True, nullable=False)
     name = Column(String, nullable=False)
-    status = Column(Enum(RoomStatus), default=RoomStatus.ACTIVE)
+    status = Column(_db_enum(RoomStatus, "roomstatus"), default=RoomStatus.ACTIVE)
     createdAt = Column(DateTime, default=datetime.utcnow)
     hostedBy = Column(String, ForeignKey("users.userId"), nullable=False)
     supportedProviderId = Column(
@@ -160,7 +169,10 @@ class RoomMembership(Base):
     roomId = Column(String, ForeignKey("rooms.roomId"), nullable=False)
     joinedAt = Column(DateTime, default=datetime.utcnow)
     leftAt = Column(DateTime, nullable=True)
-    membershipStatus = Column(Enum(MembershipStatus), default=MembershipStatus.ACTIVE)
+    membershipStatus = Column(
+        _db_enum(MembershipStatus, "membershipstatus"),
+        default=MembershipStatus.ACTIVE,
+    )
 
     # Relationships
     user = relationship("User", back_populates="room_memberships")
@@ -194,7 +206,10 @@ class QueueEntry(Base):
     addedBy = Column(String, ForeignKey("users.userId"), nullable=False)
     queuedAt = Column(DateTime, default=datetime.utcnow)
     position = Column(Integer, nullable=False)
-    status = Column(Enum(QueueEntryStatus), default=QueueEntryStatus.QUEUED)
+    status = Column(
+        _db_enum(QueueEntryStatus, "queueentrystatus"),
+        default=QueueEntryStatus.QUEUED,
+    )
     voteScore = Column(Integer, default=0)
     orderRank = Column(Float, default=0.0)
     isCurrent = Column(Boolean, default=False)
@@ -225,7 +240,7 @@ class PlaybackSession(Base):
     startedAt = Column(DateTime, default=datetime.utcnow)
     pausedAt = Column(DateTime, nullable=True)
     elapsedTime = Column(Integer, default=0)  # in seconds
-    state = Column(Enum(PlaybackState), default=PlaybackState.STOPPED)
+    state = Column(_db_enum(PlaybackState, "playbackstate"), default=PlaybackState.STOPPED)
 
     # Relationships
     room = relationship("Room", back_populates="playback_sessions")
@@ -276,7 +291,7 @@ class SongFeedback(Base):
     )
     userId = Column(String, ForeignKey("users.userId"), nullable=False)
     votedAt = Column(DateTime, default=datetime.utcnow)
-    type = Column(Enum(FeedbackType), nullable=False)
+    type = Column(_db_enum(FeedbackType, "feedbacktype"), nullable=False)
 
     # Relationships
     queue_entry = relationship("QueueEntry", back_populates="song_feedback")
@@ -292,7 +307,7 @@ class ProposalVoteSession(Base):
     createdAt = Column(DateTime, default=datetime.utcnow)
     expiresAt = Column(DateTime, nullable=False)
     threshold = Column(Float, default=0.5)  # Percentage needed to pass
-    status = Column(Enum(ProposalStatus), default=ProposalStatus.OPEN)
+    status = Column(_db_enum(ProposalStatus, "proposalstatus"), default=ProposalStatus.OPEN)
 
     # Discriminator for inheritance
     type = Column(String(50))

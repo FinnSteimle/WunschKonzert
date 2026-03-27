@@ -7,11 +7,15 @@ WunschKonzert is a collaborative music room application that allows users to joi
 The easiest way to get the entire project running is using Docker and the provided Makefile.
 
 1. Clone the repository:
-   git clone https://gitlab.ost.ch/SEProj/2026-FS/g15-wunschkonzert/wunschkonzert.git
-   cd wunschkonzert
+```bash
+git clone https://gitlab.ost.ch/SEProj/2026-FS/g15-wunschkonzert/wunschkonzert.git
+cd wunschkonzert
+```
 
 2. Start everything (Backend, Frontend, and Database):
-   make run
+```bash
+make run
+```
 
 The application will be available at:
 - Frontend: http://localhost:5173
@@ -28,6 +32,7 @@ WunschKonzert follows a modern full-stack architecture:
 
 ## Project Structure
 
+```text
 .
 ├── backend/            # Python FastAPI service
 │   ├── python/         # Source code, models, and migrations
@@ -38,6 +43,7 @@ WunschKonzert follows a modern full-stack architecture:
 ├── scripts/            # Utility scripts (e.g., CI/CD checks)
 ├── Makefile            # Root automation for dev workflows
 └── compose.yaml        # Docker orchestration
+```
 
 ## Development Commands
 
@@ -45,20 +51,68 @@ The root Makefile provides several commands to manage the project:
 
 | Command | Description |
 |---------|-------------|
-| make run | Build and start all services (API + Frontend + DB) |
-| make install | Build and start containers in the background |
-| make test | Run backend unit tests |
-| make lint | Run backend linter (Ruff) |
-| make format | Format backend code |
-| make migrate | Apply database migrations |
-| make clean | Stop containers and remove build artifacts |
+| `make run` | Build and start all services (API + Frontend + DB) |
+| `make install` | Build and start containers in the background |
+| `make test` | Run backend unit tests |
+| `make lint` | Run backend linter (Ruff) |
+| `make format` | Format backend code |
+| `make migrate` | Apply database migrations |
+| `make clean` | Stop containers and remove build artifacts |
+
+## Frontend MVP Setup
+
+The frontend MVP is built with SvelteKit + TypeScript + shadcn-svelte and talks directly to the backend API/WebSocket.
+
+1. Configure frontend environment:
+
+```bash
+cd frontend
+cp .env.example .env
+```
+
+2. Configure backend Spotify credentials (required for song search):
+
+```bash
+cd backend
+cp .env.example .env
+# set SPOTIFY_CLIENT_ID and SPOTIFY_CLIENT_SECRET
+```
+
+3. Start services (recommended):
+
+```bash
+make run
+```
+
+4. MVP routes:
+
+- Landing: `http://localhost:5173/`
+- Create room: `http://localhost:5173/create`
+- Join by link: `http://localhost:5173/join/{ROOM_CODE}`
+- Room page: `http://localhost:5173/room/{ROOM_CODE}`
+
+## Minimal backend adjustments made
+
+The backend was extended minimally to support required frontend MVP flows while preserving existing routes and payloads:
+
+- Added room lifecycle/state endpoints:
+  - `POST /delete_room` (host-only room deletion)
+  - `GET /rooms/{room_id}/state` (authoritative room snapshot, DB-backed recovery)
+- Added queue/vote/playback/search support for MVP:
+  - `POST /rooms/{room_id}/queue` (add song to queue)
+  - `POST /rooms/{room_id}/queue/{queue_entry_id}/vote` (upvote/downvote/neutral)
+  - `POST /rooms/{room_id}/playback` (host pause/resume)
+  - `GET /rooms/{room_id}/search?q=` (Spotify track search)
+- Extended `/ws/{room_id}` handling for MVP events (`addqueue`, `vote`, `playback`, `leave`) and broadcasts updated room state.
+- Added DB-backed room-state rehydration logic so rooms/queue/votes/playback state can be rebuilt from PostgreSQL after restart.
+- Kept existing endpoints (`/create_room`, `/join_room`, `/leave_room`, `/add_music_provider`, `/ws/{room_id}`) intact and backward-compatible.
 
 ## Testing
 
 We prioritize code quality through automated testing:
 
-- Backend: Run "make test" to execute the Python test suite.
-- Frontend: Navigate to frontend/ and run "npm test" or "npm run test:unit".
+- Backend: Run `make test` to execute the Python test suite.
+- Frontend: Navigate to `frontend/` and run `npm test` or `npm run test:unit`.
 - Integration: Automated checks ensure services can run independently and together.
 
 ## License
