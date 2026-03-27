@@ -250,8 +250,6 @@ docker:push_backend:
       changes:
         - backend/**/*
   script:
-    - chmod +x ./scripts/setup_backend_env.sh
-    - ./scripts/setup_backend_env.sh
     - |
       if [ "$CI_COMMIT_BRANCH" = "dev" ]; then
         BRANCH_TAG="dev"
