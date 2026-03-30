@@ -177,7 +177,7 @@ frontend:unit:
         docker run --rm --network none -v $(pwd)/coverage:/usr/src/app/coverage frontend-unit npm test -- --coverage
       fi
     - |
-      COVERAGE_FILE="$(find "$(pwd)/coverage" -type f -name "cobertura-coverage.xml" | head -n 1)"
+      COVERAGE_FILE="$(find "$(pwd)/../../" -type f -name "cobertura-coverage.xml" | head -n 1)"
       if [ -z "$COVERAGE_FILE" ]; then
         echo "Coverage file not found in $(pwd)/coverage"
         ls -la "$(pwd)/coverage" || true
