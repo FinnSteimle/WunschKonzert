@@ -169,6 +169,7 @@ frontend:unit:
     - docker build --target test -t frontend-unit .
     - mkdir -p coverage
     - |
+      echo "Running npm script 'test:unit' in working directory $(pwd)..."
       if grep -q "test:unit" package.json; then
         docker run --rm --network none -v $(pwd)/coverage:/usr/src/app/coverage frontend-unit npm run test:unit -- --coverage
       else
