@@ -258,7 +258,7 @@ docker:push_backend:
     - if: '$CI_COMMIT_BRANCH == "dev" || $CI_COMMIT_BRANCH == "main"'
       changes:
         - backend/**/*
-        # or changes to gitlab ci
+        # or changes to gitlab ci file
         - .gitlab-ci.yml
   script:
     - |
@@ -279,7 +279,7 @@ docker:push_frontend:
     - if: '$CI_COMMIT_BRANCH == "dev" || $CI_COMMIT_BRANCH == "main"'
       changes:
         - frontend/**/*
-        # or changes to gitlab ci
+        # or changes to gitlab ci file
         - .gitlab-ci.yml
   script:
     - |
