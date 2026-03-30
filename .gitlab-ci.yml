@@ -176,13 +176,8 @@ frontend:unit:
         echo "No npm script 'test:unit' found, running 'npm test' instead."
         docker run --rm --network none -v $(pwd)/coverage:/usr/src/app/coverage frontend-unit npm test -- --coverage
       fi
-      echo "Coverage report path: $(pwd)/coverage/cobertura-coverage.xml"
-    - |
-      if [ -f "$(pwd)/coverage/cobertura-coverage.xml" ]; then
-        echo "Coverage report found."
-      else
-        echo "Coverage report not found."
-      fi
+    - COVERAGE_FILE=$(find $(pwd)/coverage -name "cobertura-coverage.xml")
+    - echo "Coverage file: $COVERAGE_FILE"
 
   coverage: '/Statements\s+:\s+(\d+.\d+\%)/'
   artifacts:
@@ -258,7 +253,7 @@ docker:push_backend:
     - if: '$CI_COMMIT_BRANCH == "dev" || $CI_COMMIT_BRANCH == "main"'
       changes:
         - backend/**/*
-        # or changes to gitlab ci file
+        # or changes to gitlab ci
         - .gitlab-ci.yml
   script:
     - |
@@ -279,7 +274,7 @@ docker:push_frontend:
     - if: '$CI_COMMIT_BRANCH == "dev" || $CI_COMMIT_BRANCH == "main"'
       changes:
         - frontend/**/*
-        # or changes to gitlab ci file
+        # or changes to gitlab ci
         - .gitlab-ci.yml
   script:
     - |
