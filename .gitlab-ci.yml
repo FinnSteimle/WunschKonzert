@@ -90,6 +90,11 @@ backend:lint:
 backend:unit:
   stage: unit_test
   image: python:3.14
+  services:
+    - name: docker:24-dind
+  variables:
+    DOCKER_HOST: tcp://docker:2375
+    DOCKER_TLS_CERTDIR: ""
   <<: *cache_uv
   <<: *rules_backend_changes
   before_script:
@@ -98,8 +103,8 @@ backend:unit:
     - cp ../.env.example .env
     - uv sync --frozen
   script:
-    # Convention: integration tests are marked with "integration"
-    - uv run --with pytest pytest --disable-socket --allow-unix-socket -m "not integration" -q --junit-xml=junit-unit.xml
+    # Use --allow-hosts to whitelist docker and localhost while blocking the internet
+    - uv run --with pytest pytest --allow-hosts=docker,localhost,127.0.0.1 --allow-unix-socket -m "not integration" -q --junit-xml=junit-unit.xml
   coverage: '/TOTAL.*\s+(\d+\%)/'
   artifacts:
     when: always
