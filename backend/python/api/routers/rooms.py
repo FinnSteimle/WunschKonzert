@@ -16,7 +16,9 @@ router = APIRouter()
 
 @router.post("/create_room", response_model=RoomResponse)
 async def create_room_endpoint(room_data: CreateRoomRequest):
-    await room_service.ensure_user_display_name(room_data.user_id, room_data.display_name)
+    await room_service.ensure_user_display_name(
+        room_data.user_id, room_data.display_name
+    )
     await room_service.ensure_provider_exists(room_data.supported_provider_id)
 
     try:
@@ -45,7 +47,9 @@ async def create_room_endpoint(room_data: CreateRoomRequest):
 async def join_room(room_data: RoomRequest):
     if room_data.display_name is None or not room_data.display_name.strip():
         raise HTTPException(status_code=400, detail="Display name is required")
-    await room_service.ensure_user_display_name(room_data.user_id, room_data.display_name)
+    await room_service.ensure_user_display_name(
+        room_data.user_id, room_data.display_name
+    )
 
     room = await crud.get_room_by_join_code(room_data.room_id.upper())
     if not room:

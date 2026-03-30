@@ -1,7 +1,7 @@
 import pytest
 import uuid
 from repositories import crud
-from models.domain import User
+
 
 @pytest.mark.asyncio
 async def test_create_and_get_user(db_session):
@@ -20,6 +20,7 @@ async def test_create_and_get_user(db_session):
     assert fetched_user.userId == user_id
     assert fetched_user.displayName == display_name
 
+
 @pytest.mark.asyncio
 async def test_create_duplicate_user(db_session):
     # Arrange
@@ -31,6 +32,7 @@ async def test_create_duplicate_user(db_session):
     with pytest.raises(ValueError, match="User already exists"):
         await crud.create_user(user_id, "Another Name")
 
+
 @pytest.mark.asyncio
 async def test_get_nonexistent_user(db_session):
     # Act
@@ -38,6 +40,7 @@ async def test_get_nonexistent_user(db_session):
 
     # Assert
     assert user is None
+
 
 @pytest.mark.asyncio
 async def test_update_user_display_name(db_session):
@@ -50,4 +53,5 @@ async def test_update_user_display_name(db_session):
     user = await crud.get_user(user_id)
 
     # Assert
+    assert user is not None
     assert user.displayName == "New Name"

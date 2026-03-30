@@ -58,15 +58,20 @@ async def search_tracks(
     room = await crud.get_room(room_id)
     if not room:
         raise HTTPException(status_code=404, detail="Room not found")
-    if room.status.value != "active" if hasattr(room.status, "value") else room.status != "active":
+    if (
+        room.status.value != "active"
+        if hasattr(room.status, "value")
+        else room.status != "active"
+    ):
         # Handle enum vs string
         pass
-    
+
     # Using crud might return enum, let's just check the property
     from models.domain import RoomStatus
+
     if room.status != RoomStatus.ACTIVE:
         raise HTTPException(status_code=400, detail="Room is not active")
-        
+
     if str(room.supportedProviderId).lower() != "spotify":
         raise HTTPException(status_code=400, detail="Only spotify is supported in MVP")
 

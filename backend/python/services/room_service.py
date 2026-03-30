@@ -13,6 +13,7 @@ import repositories.crud as crud
 # Shared state moved to service (or could be in core if needed by multiple services)
 room_state_cache: dict[str, dict] = {}
 
+
 def _now_iso() -> str:
     return datetime.now(UTC).isoformat()
 
@@ -407,6 +408,7 @@ async def delete_room_service(room_id: str, user_id: str) -> dict:
     # Update all memberships
     memberships = await crud.get_room_memberships(room_id)
     from core.database import get_session_factory
+
     session_factory = get_session_factory()
     async with session_factory() as session:
         for membership in memberships:
@@ -426,7 +428,7 @@ async def ensure_user_display_name(user_id: str, display_name: str) -> None:
         raise HTTPException(status_code=400, detail="Display name is required")
     if len(trimmed) > 60:
         raise HTTPException(status_code=400, detail="Display name is too long")
-    
+
     user = await crud.get_user(user_id)
     if user is None:
         try:
@@ -439,6 +441,7 @@ async def ensure_user_display_name(user_id: str, display_name: str) -> None:
         await crud.update_user_display_name(user_id, trimmed)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
+
 
 async def ensure_provider_exists(provider_id: str) -> None:
     provider = await crud.get_music_provider(provider_id)

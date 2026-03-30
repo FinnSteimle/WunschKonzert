@@ -3,7 +3,6 @@ from enum import Enum as PyEnum
 
 from sqlalchemy import (
     Boolean,
-    Column,
     DateTime,
     Enum,
     Float,
@@ -174,29 +173,49 @@ class Room(Base):
     roomId: Mapped[str] = mapped_column(String, primary_key=True, index=True)
     joinCode: Mapped[str] = mapped_column(String, unique=True, nullable=False)
     name: Mapped[str] = mapped_column(String, nullable=False)
-    status: Mapped[RoomStatus] = mapped_column(_db_enum(RoomStatus, "roomstatus"), default=RoomStatus.ACTIVE)
+    status: Mapped[RoomStatus] = mapped_column(
+        _db_enum(RoomStatus, "roomstatus"), default=RoomStatus.ACTIVE
+    )
     createdAt: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
-    hostedBy: Mapped[str] = mapped_column(String, ForeignKey("users.userId"), nullable=False)
+    hostedBy: Mapped[str] = mapped_column(
+        String, ForeignKey("users.userId"), nullable=False
+    )
     supportedProviderId: Mapped[str] = mapped_column(
         String, ForeignKey("music_providers.providerId"), nullable=False
     )
 
     # Relationships
     host: Mapped["User"] = relationship("User")
-    supported_provider: Mapped["MusicProvider"] = relationship("MusicProvider", back_populates="rooms")
-    memberships: Mapped[list["RoomMembership"]] = relationship("RoomMembership", back_populates="room")
-    queue_entries: Mapped[list["QueueEntry"]] = relationship("QueueEntry", back_populates="room")
-    playback_sessions: Mapped[list["PlaybackSession"]] = relationship("PlaybackSession", back_populates="room")
-    playback_history: Mapped[list["PlaybackHistoryEntry"]] = relationship("PlaybackHistoryEntry", back_populates="room")
-    proposal_sessions: Mapped[list["ProposalVoteSession"]] = relationship("ProposalVoteSession", back_populates="room")
+    supported_provider: Mapped["MusicProvider"] = relationship(
+        "MusicProvider", back_populates="rooms"
+    )
+    memberships: Mapped[list["RoomMembership"]] = relationship(
+        "RoomMembership", back_populates="room"
+    )
+    queue_entries: Mapped[list["QueueEntry"]] = relationship(
+        "QueueEntry", back_populates="room"
+    )
+    playback_sessions: Mapped[list["PlaybackSession"]] = relationship(
+        "PlaybackSession", back_populates="room"
+    )
+    playback_history: Mapped[list["PlaybackHistoryEntry"]] = relationship(
+        "PlaybackHistoryEntry", back_populates="room"
+    )
+    proposal_sessions: Mapped[list["ProposalVoteSession"]] = relationship(
+        "ProposalVoteSession", back_populates="room"
+    )
 
 
 class RoomMembership(Base):
     __tablename__ = "room_memberships"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    userId: Mapped[str] = mapped_column(String, ForeignKey("users.userId"), nullable=False)
-    roomId: Mapped[str] = mapped_column(String, ForeignKey("rooms.roomId"), nullable=False)
+    userId: Mapped[str] = mapped_column(
+        String, ForeignKey("users.userId"), nullable=False
+    )
+    roomId: Mapped[str] = mapped_column(
+        String, ForeignKey("rooms.roomId"), nullable=False
+    )
     joinedAt: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     leftAt: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     membershipStatus: Mapped[MembershipStatus] = mapped_column(
@@ -207,7 +226,9 @@ class RoomMembership(Base):
     # Relationships
     user: Mapped["User"] = relationship("User", back_populates="room_memberships")
     room: Mapped["Room"] = relationship("Room", back_populates="memberships")
-    kick_proposals: Mapped[list["KickUserProposal"]] = relationship("KickUserProposal", back_populates="membership")
+    kick_proposals: Mapped[list["KickUserProposal"]] = relationship(
+        "KickUserProposal", back_populates="membership"
+    )
 
 
 # Queue and Playback Package
@@ -224,16 +245,24 @@ class Track(Base):
     deepLink: Mapped[str | None] = mapped_column(String)
 
     # Relationships
-    queue_entries: Mapped[list["QueueEntry"]] = relationship("QueueEntry", back_populates="track")
+    queue_entries: Mapped[list["QueueEntry"]] = relationship(
+        "QueueEntry", back_populates="track"
+    )
 
 
 class QueueEntry(Base):
     __tablename__ = "queue_entries"
 
     queueEntryId: Mapped[str] = mapped_column(String, primary_key=True)
-    roomId: Mapped[str] = mapped_column(String, ForeignKey("rooms.roomId"), nullable=False)
-    trackId: Mapped[str] = mapped_column(String, ForeignKey("tracks.trackId"), nullable=False)
-    addedBy: Mapped[str] = mapped_column(String, ForeignKey("users.userId"), nullable=False)
+    roomId: Mapped[str] = mapped_column(
+        String, ForeignKey("rooms.roomId"), nullable=False
+    )
+    trackId: Mapped[str] = mapped_column(
+        String, ForeignKey("tracks.trackId"), nullable=False
+    )
+    addedBy: Mapped[str] = mapped_column(
+        String, ForeignKey("users.userId"), nullable=False
+    )
     queuedAt: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     position: Mapped[int] = mapped_column(Integer, nullable=False)
     status: Mapped[QueueEntryStatus] = mapped_column(
@@ -248,9 +277,15 @@ class QueueEntry(Base):
     room: Mapped["Room"] = relationship("Room", back_populates="queue_entries")
     track: Mapped["Track"] = relationship("Track", back_populates="queue_entries")
     added_by: Mapped["User"] = relationship("User", back_populates="queue_entries")
-    comments: Mapped[list["Comment"]] = relationship("Comment", back_populates="queue_entry")
-    song_feedback: Mapped[list["SongFeedback"]] = relationship("SongFeedback", back_populates="queue_entry")
-    playback_sessions: Mapped[list["PlaybackSession"]] = relationship("PlaybackSession", back_populates="queue_entry")
+    comments: Mapped[list["Comment"]] = relationship(
+        "Comment", back_populates="queue_entry"
+    )
+    song_feedback: Mapped[list["SongFeedback"]] = relationship(
+        "SongFeedback", back_populates="queue_entry"
+    )
+    playback_sessions: Mapped[list["PlaybackSession"]] = relationship(
+        "PlaybackSession", back_populates="queue_entry"
+    )
     playback_history: Mapped[list["PlaybackHistoryEntry"]] = relationship(
         "PlaybackHistoryEntry", back_populates="queue_entry"
     )
@@ -263,27 +298,36 @@ class PlaybackSession(Base):
     __tablename__ = "playback_sessions"
 
     playbackSessionId: Mapped[str] = mapped_column(String, primary_key=True)
-    roomId: Mapped[str] = mapped_column(String, ForeignKey("rooms.roomId"), nullable=False)
+    roomId: Mapped[str] = mapped_column(
+        String, ForeignKey("rooms.roomId"), nullable=False
+    )
     queueEntryId: Mapped[str] = mapped_column(
         String, ForeignKey("queue_entries.queueEntryId"), nullable=False
     )
     startedAt: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     pausedAt: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     elapsedTime: Mapped[int] = mapped_column(Integer, default=0)  # in seconds
-    state: Mapped[PlaybackState] = mapped_column(_db_enum(PlaybackState, "playbackstate"), default=PlaybackState.STOPPED)
+    state: Mapped[PlaybackState] = mapped_column(
+        _db_enum(PlaybackState, "playbackstate"), default=PlaybackState.STOPPED
+    )
 
     # Relationships
     room: Mapped["Room"] = relationship("Room", back_populates="playback_sessions")
-    queue_entry: Mapped["QueueEntry"] = relationship("QueueEntry", back_populates="playback_sessions")
-    skip_proposals: Mapped[list["SkipProposal"]] = relationship("SkipProposal", back_populates="playback_session")
-
+    queue_entry: Mapped["QueueEntry"] = relationship(
+        "QueueEntry", back_populates="playback_sessions"
+    )
+    skip_proposals: Mapped[list["SkipProposal"]] = relationship(
+        "SkipProposal", back_populates="playback_session"
+    )
 
 
 class PlaybackHistoryEntry(Base):
     __tablename__ = "playback_history"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    roomId: Mapped[str] = mapped_column(String, ForeignKey("rooms.roomId"), nullable=False)
+    roomId: Mapped[str] = mapped_column(
+        String, ForeignKey("rooms.roomId"), nullable=False
+    )
     queueEntryId: Mapped[str] = mapped_column(
         String, ForeignKey("queue_entries.queueEntryId"), nullable=False
     )
@@ -292,8 +336,12 @@ class PlaybackHistoryEntry(Base):
 
     # Relationships
     room: Mapped["Room"] = relationship("Room", back_populates="playback_history")
-    queue_entry: Mapped["QueueEntry"] = relationship("QueueEntry", back_populates="playback_history")
-    replay_proposals: Mapped[list["ReplayProposal"]] = relationship("ReplayProposal", back_populates="history_entry")
+    queue_entry: Mapped["QueueEntry"] = relationship(
+        "QueueEntry", back_populates="playback_history"
+    )
+    replay_proposals: Mapped[list["ReplayProposal"]] = relationship(
+        "ReplayProposal", back_populates="history_entry"
+    )
 
 
 # Interaction Package
@@ -304,12 +352,16 @@ class Comment(Base):
     queueEntryId: Mapped[str] = mapped_column(
         String, ForeignKey("queue_entries.queueEntryId"), nullable=False
     )
-    userId: Mapped[str] = mapped_column(String, ForeignKey("users.userId"), nullable=False)
+    userId: Mapped[str] = mapped_column(
+        String, ForeignKey("users.userId"), nullable=False
+    )
     text: Mapped[str] = mapped_column(String, nullable=False)
     createdAt: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
     # Relationships
-    queue_entry: Mapped["QueueEntry"] = relationship("QueueEntry", back_populates="comments")
+    queue_entry: Mapped["QueueEntry"] = relationship(
+        "QueueEntry", back_populates="comments"
+    )
     user: Mapped["User"] = relationship("User", back_populates="comments")
 
 
@@ -320,12 +372,18 @@ class SongFeedback(Base):
     queueEntryId: Mapped[str] = mapped_column(
         String, ForeignKey("queue_entries.queueEntryId"), nullable=False
     )
-    userId: Mapped[str] = mapped_column(String, ForeignKey("users.userId"), nullable=False)
+    userId: Mapped[str] = mapped_column(
+        String, ForeignKey("users.userId"), nullable=False
+    )
     votedAt: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
-    type: Mapped[FeedbackType] = mapped_column(_db_enum(FeedbackType, "feedbacktype"), nullable=False)
+    type: Mapped[FeedbackType] = mapped_column(
+        _db_enum(FeedbackType, "feedbacktype"), nullable=False
+    )
 
     # Relationships
-    queue_entry: Mapped["QueueEntry"] = relationship("QueueEntry", back_populates="song_feedback")
+    queue_entry: Mapped["QueueEntry"] = relationship(
+        "QueueEntry", back_populates="song_feedback"
+    )
     user: Mapped["User"] = relationship("User", back_populates="song_feedback")
 
 
@@ -334,10 +392,14 @@ class ProposalVoteSession(Base):
     __tablename__ = "proposal_vote_sessions"
 
     proposalId: Mapped[str] = mapped_column(String, primary_key=True)
-    roomId: Mapped[str] = mapped_column(String, ForeignKey("rooms.roomId"), nullable=False)
+    roomId: Mapped[str] = mapped_column(
+        String, ForeignKey("rooms.roomId"), nullable=False
+    )
     createdAt: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     expiresAt: Mapped[datetime] = mapped_column(DateTime, nullable=False)
-    threshold: Mapped[float] = mapped_column(Float, default=0.5)  # Percentage needed to pass
+    threshold: Mapped[float] = mapped_column(
+        Float, default=0.5
+    )  # Percentage needed to pass
     status: Mapped[ProposalStatus] = mapped_column(
         _db_enum(ProposalStatus, "proposalstatus"), default=ProposalStatus.OPEN
     )
@@ -352,7 +414,9 @@ class ProposalVoteSession(Base):
 
     # Relationships
     room: Mapped["Room"] = relationship("Room", back_populates="proposal_sessions")
-    votes: Mapped[list["ProposalVote"]] = relationship("ProposalVote", back_populates="proposal_session")
+    votes: Mapped[list["ProposalVote"]] = relationship(
+        "ProposalVote", back_populates="proposal_session"
+    )
 
 
 class SkipProposal(ProposalVoteSession):
@@ -370,7 +434,9 @@ class SkipProposal(ProposalVoteSession):
     }
 
     # Relationships
-    playback_session: Mapped["PlaybackSession"] = relationship("PlaybackSession", back_populates="skip_proposals")
+    playback_session: Mapped["PlaybackSession"] = relationship(
+        "PlaybackSession", back_populates="skip_proposals"
+    )
 
 
 class ReplayProposal(ProposalVoteSession):
@@ -379,7 +445,9 @@ class ReplayProposal(ProposalVoteSession):
     proposalId: Mapped[str] = mapped_column(
         String, ForeignKey("proposal_vote_sessions.proposalId"), primary_key=True
     )
-    historyEntryId: Mapped[int] = mapped_column(Integer, ForeignKey("playback_history.id"), nullable=False)
+    historyEntryId: Mapped[int] = mapped_column(
+        Integer, ForeignKey("playback_history.id"), nullable=False
+    )
 
     __mapper_args__ = {
         "polymorphic_identity": "replay_proposal",
@@ -406,7 +474,9 @@ class DeleteQueueEntryProposal(ProposalVoteSession):
     }
 
     # Relationships
-    queue_entry: Mapped["QueueEntry"] = relationship("QueueEntry", back_populates="delete_proposals")
+    queue_entry: Mapped["QueueEntry"] = relationship(
+        "QueueEntry", back_populates="delete_proposals"
+    )
 
 
 class KickUserProposal(ProposalVoteSession):
@@ -415,14 +485,18 @@ class KickUserProposal(ProposalVoteSession):
     proposalId: Mapped[str] = mapped_column(
         String, ForeignKey("proposal_vote_sessions.proposalId"), primary_key=True
     )
-    membershipId: Mapped[int] = mapped_column(Integer, ForeignKey("room_memberships.id"), nullable=False)
+    membershipId: Mapped[int] = mapped_column(
+        Integer, ForeignKey("room_memberships.id"), nullable=False
+    )
 
     __mapper_args__ = {
         "polymorphic_identity": "kick_user_proposal",
     }
 
     # Relationships
-    membership: Mapped["RoomMembership"] = relationship("RoomMembership", back_populates="kick_proposals")
+    membership: Mapped["RoomMembership"] = relationship(
+        "RoomMembership", back_populates="kick_proposals"
+    )
 
 
 class ProposalVote(Base):
@@ -432,9 +506,13 @@ class ProposalVote(Base):
     proposalId: Mapped[str] = mapped_column(
         String, ForeignKey("proposal_vote_sessions.proposalId"), nullable=False
     )
-    userId: Mapped[str] = mapped_column(String, ForeignKey("users.userId"), nullable=False)
+    userId: Mapped[str] = mapped_column(
+        String, ForeignKey("users.userId"), nullable=False
+    )
     votedAt: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
     # Relationships
-    proposal_session: Mapped["ProposalVoteSession"] = relationship("ProposalVoteSession", back_populates="votes")
+    proposal_session: Mapped["ProposalVoteSession"] = relationship(
+        "ProposalVoteSession", back_populates="votes"
+    )
     user: Mapped["User"] = relationship("User", back_populates="proposal_votes")
