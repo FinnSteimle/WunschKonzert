@@ -81,7 +81,7 @@
 			aria-invalid={code.length > 0 && !JOIN_ALPHABET_RE.test(normalize(code))}
 		/>
 		<p class="text-muted-foreground text-xs">
-			Six characters, letters and numbers (no I, O, 0, 1).
+			Six characters, letters and numbers.
 		</p>
 	</div>
 	<Button type="submit" class="w-full min-[400px]:w-auto" disabled={busy}>
