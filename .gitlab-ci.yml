@@ -176,12 +176,12 @@ frontend:unit:
         echo "No npm script 'test:unit' found, running 'npm test' instead."
         docker run --rm --network none -v $(pwd)/coverage:/usr/src/app/coverage frontend-unit npm test -- --coverage
       fi
-    # Test if coverage file is there
-    - echo "Coverage report path: $(pwd)/coverage/cobertura-coverage.xml"
-    - if [ -f "$(pwd)/coverage/cobertura-coverage.xml" ]; then
-      echo "Coverage report found."
+      echo "Coverage report path: $(pwd)/coverage/cobertura-coverage.xml"
+    - |
+      if [ -f "$(pwd)/coverage/cobertura-coverage.xml" ]; then
+        echo "Coverage report found."
       else
-      echo "Coverage report not found."
+        echo "Coverage report not found."
       fi
 
   coverage: '/Statements\s+:\s+(\d+.\d+\%)/'
