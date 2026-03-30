@@ -1,5 +1,5 @@
 from httpx import ASGITransport, AsyncClient
-from fast_api import app
+from main import app
 
 
 # Test that .allowMethods actually rejects other methods

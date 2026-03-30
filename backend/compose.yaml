@@ -12,7 +12,7 @@ services:
       - ./python:/app # hot reload in dev
       - venv:/app/.venv # keep container's venv, don't override with host
       - ./.env:/.env # mount .env file
-    command: uv run --env-file /.env uvicorn fast_api:app --reload --host 0.0.0.0 --port 8000
+    command: uv run --env-file /.env uvicorn main:app --reload --host 0.0.0.0 --port 8000
     depends_on:
       db:
         condition: service_healthy
