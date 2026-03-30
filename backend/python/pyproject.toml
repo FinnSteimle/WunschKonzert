@@ -19,6 +19,7 @@ dependencies = [
 [tool.pytest.ini_options]
 pythonpath = ["."]
 asyncio_mode = "auto"
+asyncio_default_test_loop_scope = "session"
 # addopts = "--cov=. --cov-report=term-missing --cov-report=xml:cobertura.xml --cov-fail-under=80"
 addopts = "--cov=. --cov-report=term-missing --cov-report=xml:cobertura.xml"
 markers = [
@@ -32,4 +33,5 @@ dev = [
     "pytest-cov>=7.1.0",
     "pytest-mock>=3.15.1",
     "pytest-socket>=0.7.0",
+    "testcontainers[postgres]>=4.14.2",
 ]
