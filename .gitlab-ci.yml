@@ -169,13 +169,21 @@ frontend:unit:
     - docker build --target test -t frontend-unit .
     - mkdir -p coverage
     - |
-      echo "Running npm script 'test:unit' in working directory $(pwd)..."
+      echo "Running npm script 'test:unit' in working directory $(pwd)"
       if grep -q "test:unit" package.json; then
         docker run --rm --network none -v $(pwd)/coverage:/usr/src/app/coverage frontend-unit npm run test:unit -- --coverage
       else
         echo "No npm script 'test:unit' found, running 'npm test' instead."
         docker run --rm --network none -v $(pwd)/coverage:/usr/src/app/coverage frontend-unit npm test -- --coverage
       fi
+    # Test if coverage file is there
+    - echo "Coverage report path: $(pwd)/coverage/cobertura-coverage.xml"
+    - if [ -f "$(pwd)/coverage/cobertura-coverage.xml" ]; then
+      echo "Coverage report found."
+      else
+      echo "Coverage report not found."
+      fi
+
   coverage: '/Statements\s+:\s+(\d+.\d+\%)/'
   artifacts:
     when: always
@@ -183,7 +191,7 @@ frontend:unit:
     reports:
       coverage_report:
         coverage_format: cobertura
-        path: frontend/coverage/cobertura-coverage.xml
+        path: ./frontend/coverage/cobertura-coverage.xml
 
 frontend:integration:
   stage: integration_test
