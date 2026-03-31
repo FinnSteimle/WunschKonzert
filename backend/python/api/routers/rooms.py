@@ -1,15 +1,16 @@
 from fastapi import APIRouter, HTTPException
-from models.schemas import (
-    CreateRoomRequest,
-    RoomRequest,
-    RoomResponse,
-    LeaveRoomRequest,
-    DeleteRoomRequest,
-)
-from models.domain import RoomStatus
+
+import api.websockets as websockets
 import repositories.crud as crud
 import services.room_service as room_service
-import api.websockets as websockets
+from models.domain import RoomStatus
+from models.schemas import (
+    CreateRoomRequest,
+    DeleteRoomRequest,
+    LeaveRoomRequest,
+    RoomRequest,
+    RoomResponse,
+)
 
 router = APIRouter()
 
@@ -106,18 +107,3 @@ async def delete_room(room_data: DeleteRoomRequest):
         "message": f"Successfully deleted room {room_data.room_id}",
         "room_id": room_data.room_id,
     }
-
-
-@router.get("/rooms/{room_id}/state")
-async def get_room_state(room_id: str):
-    room_state = await room_service.refresh_room_state(room_id)
-    return room_state
-
-
-@router.post("/rooms/{room_id}/queue")
-async def add_queue_entry(room_id: str, event: dict):
-    track_data = event.get("track")
-    user_id = event.get("user_id")
-    room_state = await room_service.add_to_queue(room_id, track_data, user_id)
-    await websockets.send_room_state(room_id)
-    return {"success": True, "room": room_state}

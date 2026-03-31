@@ -55,7 +55,10 @@
 	let linkJoinDisplayName = $state('');
 	let linkJoinBusy = $state(false);
 	let linkJoinError = $state<string | null>(null);
-	const linkJoinLifecycle = { cancelled: false, endSession: undefined as (() => void) | undefined };
+	const linkJoinLifecycle = {
+		cancelled: false,
+		endSession: undefined as (() => void) | undefined
+	};
 
 	function queueWithoutCurrent(state: RoomStateDto | null): QueueEntryDto[] {
 		if (!state) return [];
@@ -152,19 +155,6 @@
 				void goto(resolve('/'));
 			}
 		});
-
-		void apiClient
-			.getRoomState(roomId)
-			.then((state) => roomStore.setRoomState(state))
-			.catch((err: unknown) => {
-				roomStore.setLoading(false);
-				const msg = err instanceof Error ? err.message : '';
-				const code = opts?.joinCodeForRecents;
-				if (code && isJoinFailureForRemovedRoom(msg)) {
-					removeRecentRoom(code);
-				}
-				roomStore.setError(msg || 'Could not load room');
-			});
 
 		const socket = new RoomSocketClient(roomId, {
 			onState: (s) => roomStore.setRoomState(s),
@@ -348,7 +338,9 @@
 						>
 							{linkJoinBusy ? 'Joining…' : 'Join room'}
 						</Button>
-						<Button variant="outline" href="/" class="w-full min-[400px]:w-auto">Back home</Button>
+						<Button variant="outline" href="/" class="w-full min-[400px]:w-auto"
+							>Back home</Button
+						>
 					</div>
 				</CardContent>
 			</Card>
@@ -382,13 +374,18 @@
 						<Badge variant="outline">Reconnecting…</Badge>
 					{/if}
 					{#if $roomStore.error}
-						<Badge variant="destructive" class="max-w-[12rem] truncate">{$roomStore.error}</Badge>
+						<Badge variant="destructive" class="max-w-[12rem] truncate"
+							>{$roomStore.error}</Badge
+						>
 					{/if}
 				</div>
 			</header>
 
 			<main class="grid grid-cols-1 gap-6 lg:grid-cols-12 lg:gap-8">
-				<section class="flex min-w-0 flex-col gap-3 lg:col-span-4" aria-labelledby="wk-now-playing">
+				<section
+					class="flex min-w-0 flex-col gap-3 lg:col-span-4"
+					aria-labelledby="wk-now-playing"
+				>
 					<h2 id="wk-now-playing" class="text-sm font-medium">Now playing</h2>
 					<CurrentSongCard entry={current} />
 					{#if current && durationMs > 0}
@@ -403,7 +400,10 @@
 					{/if}
 				</section>
 
-				<section class="flex min-w-0 flex-col gap-3 lg:col-span-8" aria-labelledby="wk-queue">
+				<section
+					class="flex min-w-0 flex-col gap-3 lg:col-span-8"
+					aria-labelledby="wk-queue"
+				>
 					<h2 id="wk-queue" class="text-sm font-medium">Queue</h2>
 					<QueueList
 						entries={queueWithoutCurrent(rs)}
@@ -413,12 +413,17 @@
 					/>
 				</section>
 
-				<section class="flex min-w-0 flex-col gap-3 lg:col-span-8" aria-labelledby="wk-search">
+				<section
+					class="flex min-w-0 flex-col gap-3 lg:col-span-8"
+					aria-labelledby="wk-search"
+				>
 					<h2 id="wk-search" class="text-sm font-medium">Add a song</h2>
 					<Card>
 						<CardHeader class="pb-2">
 							<CardTitle class="text-base">Search</CardTitle>
-							<CardDescription>Results come from the room provider (Spotify).</CardDescription>
+							<CardDescription
+								>Results come from the room provider (Spotify).</CardDescription
+							>
 						</CardHeader>
 						<CardContent>
 							<SongSearchPanel
