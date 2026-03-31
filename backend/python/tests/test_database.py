@@ -52,8 +52,9 @@ def test_get_database_url_raises_error_if_no_environment_variable_set():
     core.database._session_factory = None
     core.database._engine = None
 
-    with pytest.raises(RuntimeError):
-        get_session_factory()
+    with patch.dict(os.environ, {}, clear=True):
+        with pytest.raises(RuntimeError):
+            get_session_factory()
 
 
 def test_get_session_factory_is_singleton():
