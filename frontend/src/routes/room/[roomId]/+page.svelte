@@ -141,7 +141,7 @@
 		}
 	}
 
-	function beginRoomSession(roomId: string, opts?: { joinCodeForRecents?: string }): () => void {
+	function beginRoomSession(roomId: string): () => void {
 		roomStore.reset();
 		roomStore.setLoading(true);
 
