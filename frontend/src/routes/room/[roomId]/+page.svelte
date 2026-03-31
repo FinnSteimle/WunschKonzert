@@ -201,9 +201,7 @@
 				throw new Error(msg);
 			}
 			if (linkJoinLifecycle.cancelled) return;
-			linkJoinLifecycle.endSession = beginRoomSession(res.room_id, {
-				joinCodeForRecents: code
-			});
+			linkJoinLifecycle.endSession = beginRoomSession(res.room_id);
 			linkJoinCode = null;
 			sessionUser = getOrCreateSessionUser();
 		} catch (err: unknown) {
@@ -260,9 +258,7 @@
 							throw new Error(msg);
 						}
 						if (linkJoinLifecycle.cancelled) return;
-						linkJoinLifecycle.endSession = beginRoomSession(res.room_id, {
-							joinCodeForRecents: parsed.joinCode
-						});
+						linkJoinLifecycle.endSession = beginRoomSession(res.room_id);
 						sessionUser = getOrCreateSessionUser();
 					} catch (err: unknown) {
 						if (linkJoinLifecycle.cancelled) return;
@@ -338,9 +334,7 @@
 						>
 							{linkJoinBusy ? 'Joining…' : 'Join room'}
 						</Button>
-						<Button variant="outline" href="/" class="w-full min-[400px]:w-auto"
-							>Back home</Button
-						>
+						<Button variant="outline" href="/" class="w-full min-[400px]:w-auto">Back home</Button>
 					</div>
 				</CardContent>
 			</Card>
@@ -374,18 +368,13 @@
 						<Badge variant="outline">Reconnecting…</Badge>
 					{/if}
 					{#if $roomStore.error}
-						<Badge variant="destructive" class="max-w-[12rem] truncate"
-							>{$roomStore.error}</Badge
-						>
+						<Badge variant="destructive" class="max-w-[12rem] truncate">{$roomStore.error}</Badge>
 					{/if}
 				</div>
 			</header>
 
 			<main class="grid grid-cols-1 gap-6 lg:grid-cols-12 lg:gap-8">
-				<section
-					class="flex min-w-0 flex-col gap-3 lg:col-span-4"
-					aria-labelledby="wk-now-playing"
-				>
+				<section class="flex min-w-0 flex-col gap-3 lg:col-span-4" aria-labelledby="wk-now-playing">
 					<h2 id="wk-now-playing" class="text-sm font-medium">Now playing</h2>
 					<CurrentSongCard entry={current} />
 					{#if current && durationMs > 0}
@@ -400,10 +389,7 @@
 					{/if}
 				</section>
 
-				<section
-					class="flex min-w-0 flex-col gap-3 lg:col-span-8"
-					aria-labelledby="wk-queue"
-				>
+				<section class="flex min-w-0 flex-col gap-3 lg:col-span-8" aria-labelledby="wk-queue">
 					<h2 id="wk-queue" class="text-sm font-medium">Queue</h2>
 					<QueueList
 						entries={queueWithoutCurrent(rs)}
@@ -413,17 +399,12 @@
 					/>
 				</section>
 
-				<section
-					class="flex min-w-0 flex-col gap-3 lg:col-span-8"
-					aria-labelledby="wk-search"
-				>
+				<section class="flex min-w-0 flex-col gap-3 lg:col-span-8" aria-labelledby="wk-search">
 					<h2 id="wk-search" class="text-sm font-medium">Add a song</h2>
 					<Card>
 						<CardHeader class="pb-2">
 							<CardTitle class="text-base">Search</CardTitle>
-							<CardDescription
-								>Results come from the room provider (Spotify).</CardDescription
-							>
+							<CardDescription>Results come from the room provider (Spotify).</CardDescription>
 						</CardHeader>
 						<CardContent>
 							<SongSearchPanel
