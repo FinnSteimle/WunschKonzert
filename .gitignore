@@ -211,3 +211,5 @@ pyrightconfig.json
 # Files created by junie-cli
 .junie/
 # End of https://www.toptal.com/developers/gitignore/api/macos,python
+
+*INI.md
