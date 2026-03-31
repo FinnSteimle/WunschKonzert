@@ -7,7 +7,7 @@ from sqlalchemy.ext.asyncio import (
 )
 
 # Create async engine and session factory lazily
-# This allows tests to run without DATABASE_URL environment variable
+# Private but needed so we don't create a new sessionfactory or engine every time.
 _engine: AsyncEngine | None = None
 _session_factory: async_sessionmaker[AsyncSession] | None = None
 
@@ -21,11 +21,13 @@ def _get_database_url() -> str:
             "Please set it in your .env file or environment."
         )
 
-    if not database_url.startswith("postgresql+asyncpg"):
-        if database_url.startswith("postgresql:"):
-            database_url = database_url.replace("postgresql:", "postgresql+asyncpg:", 1)
+    # if prefix is not set or set wrong, force the correct one
+    if not database_url.startswith("postgresql+asyncpg://"):
+        if "://" in database_url:
+            _, base_url = database_url.split("://", 1)
+            database_url = "postgresql+asyncpg://" + base_url
         else:
-            database_url = "postgresql+asyncpg:" + database_url
+            database_url = "postgresql+asyncpg://" + database_url
 
     return database_url
 
