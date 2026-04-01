@@ -1,11 +1,12 @@
 import uuid
 from datetime import UTC, datetime
-
-from sqlalchemy import select, text, func
-
 from typing import Sequence
-from sqlalchemy import Row
+from sqlalchemy import select, text, func, Row
 
+from core.exceptions import (
+    ResourceExistsError,
+    ResourceNotFoundError,
+)
 from core.database import get_session_factory
 from models.domain import (
     AccountStatus,
@@ -25,11 +26,12 @@ from models.domain import (
 
 
 async def create_user(user_id: str, display_name: str) -> User:
-    """Create a new user"""
     # Check if user already exists
-    existing = await get_user(user_id)
-    if existing:
-        raise ValueError("User already exists")
+    try:
+        await get_user(user_id)
+        raise ResourceExistsError("User already exists in database.")
+    except ResourceNotFoundError:
+        pass
 
     session_factory = get_session_factory()
     async with session_factory() as session:
@@ -40,11 +42,38 @@ async def create_user(user_id: str, display_name: str) -> User:
         return user
 
 
-async def get_user(user_id: str) -> User | None:
-    """Get user by ID or return None if not found"""
+async def get_user(user_id: str) -> User:
     session_factory = get_session_factory()
     async with session_factory() as session:
-        return await session.get(User, user_id)
+        user: User | None = await session.get(User, user_id)
+        if user is None:
+            raise ResourceNotFoundError("User not found in database.")
+        return user
+
+
+async def create_music_provider(provider_id: str, name: str) -> MusicProvider:
+    try:
+        await get_music_provider(provider_id)
+        raise ResourceExistsError("Provider already exists in database.")
+    except ResourceNotFoundError:
+        pass
+
+    session_factory = get_session_factory()
+    async with session_factory() as session:
+        provider = MusicProvider(providerId=provider_id, name=name)
+        session.add(provider)
+        await session.commit()
+        await session.refresh(provider)
+        return provider
+
+
+async def get_music_provider(provider_id: str) -> MusicProvider:
+    session_factory = get_session_factory()
+    async with session_factory() as session:
+        provider: MusicProvider | None = await session.get(MusicProvider, provider_id)
+        if provider is None:
+            raise ResourceNotFoundError("Provider not found in database.")
+        return provider
 
 
 async def get_room(room_id: str) -> Room | None:
@@ -198,29 +227,6 @@ async def create_provider_account(
         await session.commit()
         await session.refresh(provider_account)
         return provider_account
-
-
-async def get_music_provider(provider_id: str) -> MusicProvider | None:
-    """Get music provider by ID or return None if not found"""
-    session_factory = get_session_factory()
-    async with session_factory() as session:
-        return await session.get(MusicProvider, provider_id)
-
-
-async def create_music_provider(provider_id: str, name: str) -> MusicProvider:
-    """Create a new music provider"""
-    session_factory = get_session_factory()
-    async with session_factory() as session:
-        # Check if provider already exists
-        existing = await get_music_provider(provider_id)
-        if existing:
-            return existing
-
-        provider = MusicProvider(providerId=provider_id, name=name)
-        session.add(provider)
-        await session.commit()
-        await session.refresh(provider)
-        return provider
 
 
 async def update_membership_status(
