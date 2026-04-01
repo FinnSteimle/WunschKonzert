@@ -3,15 +3,21 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      args:
+        DEV: "true"
     ports:
       - "8000:8000"
     environment:
       DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD:-changeme}@db:5432/${POSTGRES_DB:-wunschkonzert}
       ENVIRONMENT: ${ENVIRONMENT:-development}
+      TESTCONTAINERS_RYUK_DISABLED: "true"
+      DOCKER_HOST: unix:///var/run/docker.sock
+      TESTCONTAINERS_HOST_OVERRIDE: host.docker.internal
     volumes:
       - ./python:/app # hot reload in dev
       - venv:/app/.venv # keep container's venv, don't override with host
       - ./.env:/.env # mount .env file
+      - /var/run/docker.sock:/var/run/docker.sock # allow DooD for testcontainers
     command: uv run --env-file /.env uvicorn main:app --reload --host 0.0.0.0 --port 8000
     depends_on:
       db:

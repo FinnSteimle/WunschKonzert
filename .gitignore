@@ -212,4 +212,4 @@ pyrightconfig.json
 .junie/
 # End of https://www.toptal.com/developers/gitignore/api/macos,python
 
-*INI.md
+.gemini/

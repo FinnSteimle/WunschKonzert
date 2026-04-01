@@ -9,8 +9,9 @@ WORKDIR /app
 # Copy dependency files
 COPY python/pyproject.toml python/uv.lock ./
 
-# Install production dependencies
-RUN uv sync --frozen --no-dev
+# Decide whether to install dev dependencies
+ARG DEV=false
+RUN if [ "$DEV" = "true" ] ; then uv sync --frozen ; else uv sync --frozen --no-dev ; fi
 
 
 # --- Test Stage ---

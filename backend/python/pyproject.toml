@@ -34,4 +34,23 @@ dev = [
     "pytest-mock>=3.15.1",
     "pytest-socket>=0.7.0",
     "testcontainers[postgres]>=4.14.2",
+    "mypy>=1.15.0",
 ]
+
+[tool.mypy]
+python_version = "3.14"
+strict = true
+ignore_missing_imports = true
+exclude = ["tests/", "migrations/"]
+
+[[tool.mypy.overrides]]
+module = "testcontainers.*"
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = "sqlalchemy.*"
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = "alembic.*"
+ignore_missing_imports = true

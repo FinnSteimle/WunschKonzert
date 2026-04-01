@@ -3,6 +3,9 @@ from datetime import datetime
 
 from sqlalchemy import select, text, func
 
+from typing import Sequence
+from sqlalchemy import Row
+
 from core.database import get_session_factory
 from models.domain import (
     AccountStatus,
@@ -19,6 +22,22 @@ from models.domain import (
     Track,
     User,
 )
+
+
+async def create_user(user_id: str, display_name: str) -> User:
+    """Create a new user"""
+    # Check if user already exists
+    existing = await get_user(user_id)
+    if existing:
+        raise ValueError("User already exists")
+
+    session_factory = get_session_factory()
+    async with session_factory() as session:
+        user = User(userId=user_id, displayName=display_name)
+        session.add(user)
+        await session.commit()
+        await session.refresh(user)
+        return user
 
 
 async def get_user(user_id: str) -> User | None:
@@ -69,22 +88,6 @@ async def create_room_membership(user_id: str, room_id: str) -> RoomMembership:
         await session.commit()
         await session.refresh(membership)
         return membership
-
-
-async def create_user(user_id: str, display_name: str) -> User:
-    """Create a new user"""
-    # Check if user already exists
-    existing = await get_user(user_id)
-    if existing:
-        raise ValueError("User already exists")
-
-    session_factory = get_session_factory()
-    async with session_factory() as session:
-        user = User(userId=user_id, displayName=display_name)
-        session.add(user)
-        await session.commit()
-        await session.refresh(user)
-        return user
 
 
 async def update_user_display_name(user_id: str, display_name: str) -> None:
@@ -246,7 +249,7 @@ async def update_membership_status(
         return membership
 
 
-async def get_room_members(room_id: str) -> list[tuple[RoomMembership, User]]:
+async def get_room_members(room_id: str) -> Sequence[Row[tuple[RoomMembership, User]]]:
     """Get all active members of a room with their user data"""
     session_factory = get_session_factory()
     async with session_factory() as session:
@@ -261,7 +264,7 @@ async def get_room_members(room_id: str) -> list[tuple[RoomMembership, User]]:
         return result.all()
 
 
-async def get_queue_entries(room_id: str) -> list[QueueEntry]:
+async def get_queue_entries(room_id: str) -> Sequence[QueueEntry]:
     """Get all queue entries for a room, ordered by position"""
     session_factory = get_session_factory()
     async with session_factory() as session:
@@ -379,7 +382,9 @@ async def update_playback_session(
         return playback_session
 
 
-async def get_song_feedback_by_queue_entry(queue_entry_id: str) -> list[SongFeedback]:
+async def get_song_feedback_by_queue_entry(
+    queue_entry_id: str,
+) -> Sequence[SongFeedback]:
     """Get all song feedback for a queue entry"""
     session_factory = get_session_factory()
     async with session_factory() as session:
@@ -476,7 +481,7 @@ async def get_first_queued_entry(room_id: str) -> QueueEntry | None:
         return result.scalar_one_or_none()
 
 
-async def get_room_memberships(room_id: str) -> list[RoomMembership]:
+async def get_room_memberships(room_id: str) -> Sequence[RoomMembership]:
     """Get all memberships for a room"""
     session_factory = get_session_factory()
     async with session_factory() as session:
