@@ -1,5 +1,5 @@
 import uuid
-from datetime import datetime
+from datetime import UTC, datetime
 
 from sqlalchemy import select, text, func
 
@@ -116,7 +116,7 @@ async def leave_room(user_id: str, room_id: str) -> RoomMembership:
         if not membership:
             raise ValueError("User is not a member of this room")
 
-        membership.leftAt = datetime.utcnow()
+        membership.leftAt = datetime.now(UTC)
         membership.membershipStatus = MembershipStatus.INACTIVE
         await session.commit()
         await session.refresh(membership)
