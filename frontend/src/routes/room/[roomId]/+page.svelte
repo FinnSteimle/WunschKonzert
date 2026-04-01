@@ -151,7 +151,10 @@
 			if (ui.roomState?.room.status === 'deleted') {
 				roomDeletedRedirectDone = true;
 				removeRecentRoom(ui.roomState.room.joinCode);
-				toast.message('Room ended by host');
+				// Only show message if current user is not the host
+				if (sessionUser && ui.roomState.host.userId !== sessionUser.userId) {
+					toast.message('Room ended by host');
+				}
 				void goto(resolve('/'));
 			}
 		});
@@ -346,22 +349,24 @@
 			</EmptyState>
 		{:else if $roomStore.roomState && sessionUser}
 			{@const rs = $roomStore.roomState}
-			{@const isHost = rs.host.userId === sessionUser.userId}
+			{@const isHost = rs.host?.userId === sessionUser.userId}
 			{@const current = getCurrentSong(rs)}
 			{@const durationMs = current ? Math.max(0, current.track.duration) * 1000 : 0}
 			{@const positionMs = rs.playback?.positionMs ?? 0}
-			{@const inviteUrl = `${page.url.origin}/room/${rs.room.joinCode}`}
+			{@const inviteUrl = rs.room ? `${page.url.origin}/room/${rs.room.joinCode}` : ''}
 			{@const queuedTrackIds = new Set(rs.queue.map((e) => e.track.trackId))}
 
 			<header class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
 				<div class="min-w-0">
-					<h1 class="truncate text-2xl font-semibold tracking-tight">{rs.room.name}</h1>
+					<h1 class="truncate text-2xl font-semibold tracking-tight">
+						{rs.room?.name || 'Room'}
+					</h1>
 					<p class="text-muted-foreground font-mono text-sm tracking-wide">
-						Code {rs.room.joinCode}
+						Code {rs.room?.joinCode || 'N/A'}
 					</p>
 				</div>
 				<div class="flex flex-wrap items-center gap-2">
-					<InvitePanelDialog joinCode={rs.room.joinCode} {inviteUrl} class="shrink-0" />
+					<InvitePanelDialog joinCode={rs.room?.joinCode || ''} {inviteUrl} class="shrink-0" />
 					{#if $roomStore.connected}
 						<Badge variant="success">Live</Badge>
 					{:else}
@@ -408,7 +413,7 @@
 						</CardHeader>
 						<CardContent>
 							<SongSearchPanel
-								roomId={rs.room.roomId}
+								roomId={rs.room?.roomId || ''}
 								{queuedTrackIds}
 								onAddTrack={handleAddTrack}
 							/>
@@ -430,13 +435,9 @@
 				class="border-border flex flex-col gap-2 border-t pt-6 min-[400px]:flex-row min-[400px]:flex-wrap"
 			>
 				{#if isHost}
-					<DeleteRoomButton
-						roomId={rs.room.roomId}
-						joinCode={rs.room.joinCode}
-						userId={sessionUser.userId}
-					/>
+					<DeleteRoomButton roomId={rs.room?.roomId || ''} userId={sessionUser.userId} />
 				{:else}
-					<LeaveRoomButton roomId={rs.room.roomId} userId={sessionUser.userId} />
+					<LeaveRoomButton roomId={rs.room?.roomId || ''} userId={sessionUser.userId} />
 					<Button variant="ghost" href="/" class="w-full min-[400px]:w-auto">Home</Button>
 				{/if}
 			</footer>
