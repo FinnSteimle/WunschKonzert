@@ -89,7 +89,9 @@ class User(Base):
     # Use SQLAlchemy 2.0 Style, for better typechecks. (Removes confusing red squiggly lines)
     userId: Mapped[str] = mapped_column(String, primary_key=True, index=True)
     displayName: Mapped[str] = mapped_column(String, nullable=False)
-    createdAt: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(UTC))
+    createdAt: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=lambda: datetime.now(UTC)
+    )
 
     # Relationships
     account: Mapped["Account"] = relationship(
@@ -158,7 +160,9 @@ class ProviderAccount(Base):
     providerId: Mapped[str] = mapped_column(
         String, ForeignKey("music_providers.providerId"), nullable=False
     )
-    linkedAt: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(UTC))
+    linkedAt: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=lambda: datetime.now(UTC)
+    )
     status: Mapped[AccountStatus] = mapped_column(
         _db_enum(AccountStatus, "accountstatus"), default=AccountStatus.ACTIVE
     )
@@ -180,7 +184,9 @@ class Room(Base):
     status: Mapped[RoomStatus] = mapped_column(
         _db_enum(RoomStatus, "roomstatus"), default=RoomStatus.ACTIVE
     )
-    createdAt: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(UTC))
+    createdAt: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=lambda: datetime.now(UTC)
+    )
     hostedBy: Mapped[str] = mapped_column(
         String, ForeignKey("users.userId"), nullable=False
     )
@@ -220,8 +226,12 @@ class RoomMembership(Base):
     roomId: Mapped[str] = mapped_column(
         String, ForeignKey("rooms.roomId"), nullable=False
     )
-    joinedAt: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(UTC))
-    leftAt: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    joinedAt: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=lambda: datetime.now(UTC)
+    )
+    leftAt: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
     membershipStatus: Mapped[MembershipStatus] = mapped_column(
         _db_enum(MembershipStatus, "membershipstatus"),
         default=MembershipStatus.ACTIVE,
@@ -267,7 +277,9 @@ class QueueEntry(Base):
     addedBy: Mapped[str] = mapped_column(
         String, ForeignKey("users.userId"), nullable=False
     )
-    queuedAt: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(UTC))
+    queuedAt: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=lambda: datetime.now(UTC)
+    )
     position: Mapped[int] = mapped_column(Integer, nullable=False)
     status: Mapped[QueueEntryStatus] = mapped_column(
         _db_enum(QueueEntryStatus, "queueentrystatus"),
@@ -308,8 +320,12 @@ class PlaybackSession(Base):
     queueEntryId: Mapped[str] = mapped_column(
         String, ForeignKey("queue_entries.queueEntryId"), nullable=False
     )
-    startedAt: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(UTC))
-    pausedAt: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    startedAt: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=lambda: datetime.now(UTC)
+    )
+    pausedAt: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
     elapsedTime: Mapped[int] = mapped_column(Integer, default=0)  # in seconds
     state: Mapped[PlaybackState] = mapped_column(
         _db_enum(PlaybackState, "playbackstate"), default=PlaybackState.STOPPED
@@ -335,7 +351,9 @@ class PlaybackHistoryEntry(Base):
     queueEntryId: Mapped[str] = mapped_column(
         String, ForeignKey("queue_entries.queueEntryId"), nullable=False
     )
-    playedAt: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(UTC))
+    playedAt: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=lambda: datetime.now(UTC)
+    )
     replayCount: Mapped[int] = mapped_column(Integer, default=1)
 
     # Relationships
@@ -360,7 +378,9 @@ class Comment(Base):
         String, ForeignKey("users.userId"), nullable=False
     )
     text: Mapped[str] = mapped_column(String, nullable=False)
-    createdAt: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(UTC))
+    createdAt: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=lambda: datetime.now(UTC)
+    )
 
     # Relationships
     queue_entry: Mapped["QueueEntry"] = relationship(
@@ -379,7 +399,9 @@ class SongFeedback(Base):
     userId: Mapped[str] = mapped_column(
         String, ForeignKey("users.userId"), nullable=False
     )
-    votedAt: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(UTC))
+    votedAt: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=lambda: datetime.now(UTC)
+    )
     type: Mapped[FeedbackType] = mapped_column(
         _db_enum(FeedbackType, "feedbacktype"), nullable=False
     )
@@ -399,7 +421,9 @@ class ProposalVoteSession(Base):
     roomId: Mapped[str] = mapped_column(
         String, ForeignKey("rooms.roomId"), nullable=False
     )
-    createdAt: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(UTC))
+    createdAt: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=lambda: datetime.now(UTC)
+    )
     expiresAt: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     threshold: Mapped[float] = mapped_column(
         Float, default=0.5
@@ -515,7 +539,9 @@ class ProposalVote(Base):
     userId: Mapped[str] = mapped_column(
         String, ForeignKey("users.userId"), nullable=False
     )
-    votedAt: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(UTC))
+    votedAt: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=lambda: datetime.now(UTC)
+    )
 
     # Relationships
     proposal_session: Mapped["ProposalVoteSession"] = relationship(
