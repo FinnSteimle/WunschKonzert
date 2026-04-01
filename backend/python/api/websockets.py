@@ -1,7 +1,9 @@
 import json
 from collections import defaultdict
-from fastapi import WebSocket, APIRouter
+
+from fastapi import APIRouter, WebSocket
 from starlette.websockets import WebSocketDisconnect
+
 import services.room_service as room_service
 
 router = APIRouter()
@@ -14,10 +16,14 @@ async def send_room_state(room_id: str) -> None:
     if room_id not in room_service.room_state_cache:
         try:
             await room_service.refresh_room_state(room_id)
-        except Exception:
+        except Exception as e:
+            print(f"Error refreshing room state for {room_id}: {e}")
             return
 
-    state = room_service.room_state_cache.get(room_id, {})
+    state = room_service.room_state_cache.get(room_id, None)
+    if state is None:
+        return
+
     if room_id in active_room_connections:
         for websocket in list(active_room_connections[room_id]):
             try:
