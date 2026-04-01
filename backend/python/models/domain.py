@@ -82,17 +82,21 @@ class FeedbackType(PyEnum):
 
 # Identity Package
 class User(Base):
+    # we use __tablename__ since we will maybe change the class name in the future and
+    # we want the option open to do that without a migration
     __tablename__ = "users"
 
     # Use SQLAlchemy 2.0 Style, for better typechecks. (Removes confusing red squiggly lines)
-    #
     userId: Mapped[str] = mapped_column(String, primary_key=True, index=True)
     displayName: Mapped[str] = mapped_column(String, nullable=False)
     createdAt: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
     # Relationships
     account: Mapped["Account"] = relationship(
-        "Account", back_populates="user", uselist=False
+        # uselist is used, since realationship by default returns a list, if a relationship is 1-1, set it to false
+        "Account",
+        back_populates="user",
+        uselist=False,
     )
     provider_accounts: Mapped[list["ProviderAccount"]] = relationship(
         "ProviderAccount", back_populates="user"
@@ -407,6 +411,8 @@ class ProposalVoteSession(Base):
     # Discriminator for inheritance
     type: Mapped[str | None] = mapped_column(String(50))
 
+    # we use single table inheritance
+    # sqlalchemy uses __mapper_args__ to make sure the correct type when querying things from database
     __mapper_args__ = {
         "polymorphic_identity": "proposal_vote_session",
         "polymorphic_on": type,

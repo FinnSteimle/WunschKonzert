@@ -5,6 +5,11 @@ from testcontainers.postgres import PostgresContainer
 from models.domain import Base
 import core.database
 
+"""
+This file makes sure we dont use the acutal database for our unit tests.
+It creates a brand new psql-container, creates an engine and session to use for our tests.
+"""
+
 
 @pytest.fixture(scope="session")
 def postgres_container():
