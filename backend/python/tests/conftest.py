@@ -10,7 +10,6 @@ This file makes sure we dont use the acutal database for our unit tests.
 It creates a brand new psql-container, creates an engine and session to use for our tests.
 """
 
-
 @pytest.fixture(scope="session")
 def postgres_container():
     """Spin up a Postgres container for the whole test session."""
