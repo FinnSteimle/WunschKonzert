@@ -32,7 +32,6 @@ help:
 	@echo "Utilities (via Docker):"
 	@echo "  shell         - Open Python shell in container"
 	@echo "  check-health  - Check API health endpoint"
-	@echo "  db-health     - Check API database health endpoint"
 	@echo "  check-modular - Automatically verify that backend and frontend can run independently"
 	@echo ""
 	@echo "Independent Services:"
@@ -122,7 +121,3 @@ shell:
 .PHONY: check-health
 check-health:
 	curl -s http://localhost:8000/health | python -m json.tool
-
-.PHONY: db-health
-db-health:
-	curl -s http://localhost:8000/db-health | python -m json.tool
