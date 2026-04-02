@@ -1,8 +1,10 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from api.routers import rooms, auth, spotify, playback
-from api import websockets
+from fastapi.responses import JSONResponse
+
 import repositories.crud as crud
+from api import websockets
+from api.routers import auth, playback, rooms, spotify
 
 app = FastAPI()
 
@@ -24,18 +26,15 @@ app.include_router(websockets.router)
 
 @app.get("/health")
 async def health():
-    return {"status": "ok"}
+    result = await crud.check_db_health()
+    if result["status"] != "ok":
+        return JSONResponse({"status": "error", "db": result}, status_code=503)
+    return {"status": "ok", "db": result}
 
 
 @app.get("/hello")
 async def root():
     return {"message": "Hello World"}
-
-
-@app.get("/db-health")
-async def db_health():
-    result = await crud.check_db_health()
-    return {"db-status": result.get("status"), **result}
 
 
 if __name__ == "__main__":
