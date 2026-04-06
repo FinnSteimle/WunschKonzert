@@ -21,6 +21,7 @@ export default defineConfig({
 			provider: 'v8',
 			reporter: ['text', 'cobertura'],
 			include: ['src/**/*.ts'],
+			exclude: ['src/lib/components/ui/*'],
 			clean: false
 			/*
 			thresholds: {
