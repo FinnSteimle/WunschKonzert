@@ -9,11 +9,32 @@
 
 	let { inviteUrl }: { inviteUrl: string } = $props();
 
-	const qrSrc = $derived(
-		inviteUrl
-			? `https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(inviteUrl)}`
-			: ''
-	);
+	let qrDataUrl = $state('');
+
+	$effect(() => {
+		const url = inviteUrl;
+		if (!url) {
+			qrDataUrl = '';
+			return;
+		}
+
+		qrDataUrl = '';
+		let cancelled = false;
+
+		void (async () => {
+			try {
+				const { default: QRCode } = await import('qrcode');
+				const dataUrl = await QRCode.toDataURL(url, { width: 220, margin: 1 });
+				if (!cancelled) qrDataUrl = dataUrl;
+			} catch {
+				if (!cancelled) qrDataUrl = '';
+			}
+		})();
+
+		return () => {
+			cancelled = true;
+		};
+	});
 </script>
 
 <Card class="min-w-0">
@@ -23,13 +44,22 @@
 	</CardHeader>
 	<CardContent class="flex justify-center pt-0">
 		{#if inviteUrl}
-			<img
-				src={qrSrc}
-				width="220"
-				height="220"
-				class="bg-background rounded-md"
-				alt="QR code for room invite"
-			/>
+			{#if qrDataUrl}
+				<img
+					src={qrDataUrl}
+					width="220"
+					height="220"
+					class="bg-background"
+					alt="QR code for room invite"
+				/>
+			{:else}
+				<div
+					class="bg-background h-[220px] w-[220px] shrink-0 rounded-md"
+					role="status"
+					aria-live="polite"
+					aria-label="Generating QR code"
+				></div>
+			{/if}
 		{:else}
 			<p class="text-muted-foreground text-sm">Invite link not ready yet.</p>
 		{/if}
