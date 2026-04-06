@@ -8,7 +8,10 @@
 	let { children } = $props();
 </script>
 
-<svelte:head><link rel="icon" href={favicon} /></svelte:head>
+<svelte:head>
+	<link rel="icon" href={favicon} />
+	<link rel="apple-touch-icon" href="/logo.svg" />
+</svelte:head>
 <ModeWatcher />
 <Toaster position="top-center" richColors closeButton />
 <div class="pointer-events-none fixed top-4 right-4 z-50">

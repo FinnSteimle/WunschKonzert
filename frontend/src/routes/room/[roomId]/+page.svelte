@@ -293,48 +293,48 @@
 
 		if (parsed.kind === 'joinCode') {
 			roomStore.reset();
-		const storedDisplayName = getOrCreateSessionUser().displayName.trim();
-		if (storedDisplayName) {
-			roomStore.setLoading(true);
-			linkJoinCode = null;
-			void (async () => {
-				try {
-					const { userId } = getOrCreateSessionUser();
-					const res = await apiClient.joinRoom({
-						join_code: parsed.joinCode,
-						user_id: userId,
-						display_name: storedDisplayName
-					});
-					if (!res.success || !res.room_id) {
-						const msg = res.message || 'Could not join this room.';
+			const storedDisplayName = getOrCreateSessionUser().displayName.trim();
+			if (storedDisplayName) {
+				roomStore.setLoading(true);
+				linkJoinCode = null;
+				void (async () => {
+					try {
+						const { userId } = getOrCreateSessionUser();
+						const res = await apiClient.joinRoom({
+							join_code: parsed.joinCode,
+							user_id: userId,
+							display_name: storedDisplayName
+						});
+						if (!res.success || !res.room_id) {
+							const msg = res.message || 'Could not join this room.';
+							if (isJoinFailureForRemovedRoom(msg)) {
+								removeRecentRoom(parsed.joinCode);
+							}
+							throw new Error(msg);
+						}
+						if (linkJoinLifecycle.cancelled) return;
+						linkJoinLifecycle.endSession = beginRoomSession(res.room_id);
+						sessionUser = getOrCreateSessionUser();
+					} catch (err: unknown) {
+						if (linkJoinLifecycle.cancelled) return;
+						const msg = err instanceof Error ? err.message : '';
 						if (isJoinFailureForRemovedRoom(msg)) {
 							removeRecentRoom(parsed.joinCode);
 						}
-						throw new Error(msg);
+						roomStore.setLoading(false);
+						roomStore.setError(msg || 'Could not join this room.');
 					}
-					if (linkJoinLifecycle.cancelled) return;
-					linkJoinLifecycle.endSession = beginRoomSession(res.room_id);
-					sessionUser = getOrCreateSessionUser();
-				} catch (err: unknown) {
-					if (linkJoinLifecycle.cancelled) return;
-					const msg = err instanceof Error ? err.message : '';
-					if (isJoinFailureForRemovedRoom(msg)) {
-						removeRecentRoom(parsed.joinCode);
-					}
-					roomStore.setLoading(false);
-					roomStore.setError(msg || 'Could not join this room.');
-				}
-			})();
-			return () => {
-				linkJoinLifecycle.cancelled = true;
-				linkJoinLifecycle.endSession?.();
-				linkJoinLifecycle.endSession = undefined;
-			};
-		}
+				})();
+				return () => {
+					linkJoinLifecycle.cancelled = true;
+					linkJoinLifecycle.endSession?.();
+					linkJoinLifecycle.endSession = undefined;
+				};
+			}
 
 			roomStore.setLoading(false);
 			linkJoinCode = parsed.joinCode;
-		linkJoinDisplayName = '';
+			linkJoinDisplayName = '';
 			linkJoinError = null;
 			return () => {
 				linkJoinLifecycle.cancelled = true;
@@ -402,14 +402,19 @@
 			{@const inviteUrl = rs.room ? `${page.url.origin}/room/${rs.room.joinCode}` : ''}
 			{@const queuedTrackIds = new Set(rs.queue.map((e) => e.track.trackId))}
 
-			<header class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-				<div class="min-w-0">
-					<h1 class="truncate text-2xl font-semibold tracking-tight">
-						{rs.room?.name || 'Room'}
-					</h1>
-					<p class="text-muted-foreground font-mono text-sm tracking-wide">
-						Code {rs.room?.joinCode || 'N/A'}
-					</p>
+			<header
+				class="flex flex-row flex-wrap gap-3 sm:items-center sm:justify-between w-[calc(100%-40px)]"
+			>
+				<div class="flex min-w-0 items-center gap-3">
+					<img src="/logo.svg" alt="WunschKonzert logo" class="h-8 w-8 shrink-0 sm:h-10 sm:w-10" />
+					<div class="min-w-0">
+						<h1 class="truncate text-2xl font-semibold tracking-tight">
+							{rs.room?.name || 'Room'}
+						</h1>
+						<p class="text-muted-foreground font-mono text-sm tracking-wide">
+							Code {rs.room?.joinCode || 'N/A'}
+						</p>
+					</div>
 				</div>
 				<div class="flex flex-wrap items-center gap-2">
 					<InvitePanelDialog joinCode={rs.room?.joinCode || ''} {inviteUrl} class="shrink-0" />
