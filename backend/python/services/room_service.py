@@ -391,6 +391,20 @@ async def set_playback_state(room_id: str, user_id: str, action: str) -> dict:
 
 
 async def leave_room_service(room_id: str, user_id: str) -> dict:
+    user = await crud.get_user(user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    room = await crud.get_room(room_id)
+    if not room:
+        raise HTTPException(status_code=404, detail="Room not found")
+
+    if room.hostedBy == user_id:
+        raise HTTPException(
+            status_code=403,
+            detail="Hosts cannot leave the room. Please delete the room instead."
+        )
+
     await crud.leave_room(user_id, room_id)
     return await refresh_room_state(room_id, "participant_left")
 

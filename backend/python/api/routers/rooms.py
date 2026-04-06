@@ -91,14 +91,6 @@ async def join_room(room_data: RoomRequest):
 
 @router.post("/leave_room", response_model=RoomResponse)
 async def leave_room(room_data: LeaveRoomRequest):
-    user = await crud.get_user(room_data.user_id)
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found")
-
-    room = await crud.get_room(room_data.room_id)
-    if not room:
-        raise HTTPException(status_code=404, detail="Room not found")
-
     try:
         await room_service.leave_room_service(room_data.room_id, room_data.user_id)
         await websockets.send_room_state(room_data.room_id)
@@ -107,6 +99,8 @@ async def leave_room(room_data: LeaveRoomRequest):
             "message": f"Successfully left room {room_data.room_id}",
             "room_id": room_data.room_id,
         }
+    except HTTPException:
+        raise
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
