@@ -21,7 +21,7 @@ export interface CreateRoomRequest {
 }
 
 export interface RoomRequest {
-	room_id: string;
+	join_code: string;
 	user_id: string;
 	display_name: string;
 }

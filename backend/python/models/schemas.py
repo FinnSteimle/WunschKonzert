@@ -9,9 +9,9 @@ class AuthRequest(BaseModel):
 
 
 class RoomRequest(BaseModel):
-    """Request model for room management endpoints"""
+    """Request model for joining a room via its 6-character join code."""
 
-    room_id: str
+    join_code: str
     user_id: str
     display_name: str
 

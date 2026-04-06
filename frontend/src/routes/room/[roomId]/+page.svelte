@@ -192,7 +192,7 @@
 			saveSessionDisplayName(trimmed);
 			const { userId } = getOrCreateSessionUser();
 			const res = await apiClient.joinRoom({
-				room_id: code,
+				join_code: code,
 				user_id: userId,
 				display_name: trimmed
 			});
@@ -249,7 +249,7 @@
 					try {
 						const { userId, displayName } = getOrCreateSessionUser();
 						const res = await apiClient.joinRoom({
-							room_id: parsed.joinCode,
+							join_code: parsed.joinCode,
 							user_id: userId,
 							display_name: displayName
 						});
