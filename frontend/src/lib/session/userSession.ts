@@ -1,4 +1,3 @@
-import { generateRandomDisplayName } from './nameGenerator';
 export { generateRandomDisplayName } from './nameGenerator';
 
 const USER_ID_KEY = 'wk_user_id';
