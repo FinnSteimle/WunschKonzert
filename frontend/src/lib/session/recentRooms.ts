@@ -1,5 +1,5 @@
 const STORAGE_KEY = 'wk_recent_rooms';
-const MAX_ENTRIES = 15;
+const MAX_ENTRIES = 5;
 
 export interface RecentRoomEntry {
 	joinCode: string;
