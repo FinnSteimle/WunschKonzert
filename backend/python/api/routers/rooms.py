@@ -109,10 +109,15 @@ async def leave_room(room_data: LeaveRoomRequest):
 
 @router.post("/delete_room", response_model=RoomResponse)
 async def delete_room(room_data: DeleteRoomRequest):
-    await room_service.delete_room_service(room_data.room_id, room_data.user_id)
-    await websockets.send_room_state(room_data.room_id)
-    return {
-        "success": True,
-        "message": f"Successfully deleted room {room_data.room_id}",
-        "room_id": room_data.room_id,
-    }
+    try:
+        await room_service.delete_room_service(room_data.room_id, room_data.user_id)
+        await websockets.send_room_state(room_data.room_id)
+        return {
+            "success": True,
+            "message": f"Successfully deleted room {room_data.room_id}",
+            "room_id": room_data.room_id,
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to delete room: {str(e)}")
