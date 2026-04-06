@@ -24,7 +24,14 @@ const ADJECTIVES = [
     'Tiny',
     'Loud',
     'Shiny',
-    'Naughty'
+    'Naughty',
+    'Small',
+    'Huge',
+    'Clever',
+    'Fluffy',
+    'Beautiful',
+    'Magical',
+    'Majestic',
 ];
 
 const COLORS = [
@@ -42,7 +49,11 @@ const COLORS = [
     'Crimson',
     'Scarlet',
     'Bronze',
-    'Copper'
+    'Copper',
+    'Indigo',
+    'Magenta',
+    'Turquoise',
+    'Lime',
 ];
 
 const ANIMALS = [
@@ -70,7 +81,20 @@ const ANIMALS = [
     'Viper',
     'Wombat',
     'Jaguar',
-    'Doggo'
+    'Doggo',
+    'Shrek',
+    'Giraffe',
+    'Zebra',
+    'Sloth',
+    'Hedgehog',
+    'Raccoon',
+    'Squirrel',
+    'Beaver',
+    'Chameleon',
+    'Llama',
+    'Donkey',
+    'Unicorn',
+    'Dragon',
 ];
 
 function pick<T>(arr: readonly T[]): T {
