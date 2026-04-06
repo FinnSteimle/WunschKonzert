@@ -33,7 +33,9 @@
 	import InvitePanelDialog from '$lib/components/room/invite/InvitePanelDialog.svelte';
 	import LoadingState from '$lib/components/room/states/LoadingState.svelte';
 	import EmptyState from '$lib/components/room/states/EmptyState.svelte';
+	import * as Dialog from '$lib/components/ui/dialog';
 	import { Button } from '$lib/components/ui/button';
+	import { Input } from '$lib/components/ui/input';
 	import DisplayNameInput from '$lib/components/room/forms/DisplayNameInput.svelte';
 	import { toast } from 'svelte-sonner';
 	import { parseRoomSlug } from '$lib/room/slug';
@@ -44,6 +46,9 @@
 	let socketClient = $state<RoomSocketClient | null>(null);
 	let voteBusyId = $state<string | null>(null);
 	let playbackBusy = $state(false);
+	let renameDisplayName = $state('');
+	let renameBusy = $state(false);
+	let renameDialogOpen = $state(false);
 
 	/** Direct link /room/{code}: ask for name before calling join API. */
 	let linkJoinCode = $state<string | null>(null);
@@ -99,6 +104,62 @@
 		} finally {
 			playbackBusy = false;
 		}
+	}
+
+	function saveDisplayNameChange(): boolean {
+		const uid = sessionUser?.userId;
+		const trimmed = renameDisplayName.trim();
+		if (!uid || !socketClient || !socketClient.isConnected()) {
+			toast.error('Not connected to room');
+			return false;
+		}
+		if (!trimmed) {
+			toast.error('Please enter your display name.');
+			return false;
+		}
+		if (trimmed.length > 60) {
+			toast.error('Display name must be 60 characters or fewer.');
+			return false;
+		}
+		if (trimmed === sessionUser?.displayName) {
+			return true;
+		}
+
+		renameBusy = true;
+		try {
+			const sent = socketClient.renameDisplayName(uid, trimmed);
+			if (!sent) {
+				throw new Error('Rename failed');
+			}
+			saveSessionDisplayName(trimmed);
+			if (sessionUser) {
+				sessionUser = { ...sessionUser, displayName: trimmed };
+			}
+			toast.success('Display name updated');
+			return true;
+		} catch (err) {
+			toast.error(err instanceof Error ? err.message : 'Rename failed');
+			return false;
+		} finally {
+			renameBusy = false;
+		}
+	}
+
+	function openRenameDialog() {
+		renameDisplayName = sessionUser?.displayName ?? '';
+		renameDialogOpen = true;
+	}
+
+	function handleRenameSave() {
+		const saved = saveDisplayNameChange();
+		if (saved) {
+			renameDialogOpen = false;
+		}
+	}
+
+	function handleRenameSubmit(event: Event) {
+		event.preventDefault();
+		handleRenameSave();
 	}
 
 	$effect(() => {
@@ -221,6 +282,7 @@
 		const parsed = parseRoomSlug(segment);
 
 		sessionUser = getOrCreateSessionUser();
+		renameDisplayName = sessionUser.displayName;
 
 		if (parsed.kind === 'invalid') {
 			roomStore.reset();
@@ -411,6 +473,7 @@
 						users={rs.users}
 						hostUserId={rs.host.userId}
 						currentUserId={sessionUser.userId}
+						onEditSelf={openRenameDialog}
 					/>
 				</section>
 			</main>
@@ -425,6 +488,40 @@
 					<Button variant="ghost" href="/" class="w-full min-[400px]:w-auto">Home</Button>
 				{/if}
 			</footer>
+
+			<Dialog.Root bind:open={renameDialogOpen}>
+				<Dialog.Content class="max-w-md">
+					<Dialog.Header>
+						<Dialog.Title>Edit display name</Dialog.Title>
+						<Dialog.Description>
+							Choose how your name appears to everyone in this room.
+						</Dialog.Description>
+					</Dialog.Header>
+					<form class="flex flex-col gap-4" onsubmit={handleRenameSubmit}>
+						<Input
+							type="text"
+							maxlength={60}
+							placeholder="How others see you"
+							bind:value={renameDisplayName}
+							disabled={renameBusy}
+							autocomplete="nickname"
+						/>
+						<div class="flex justify-end gap-2">
+							<Button
+								type="button"
+								variant="outline"
+								disabled={renameBusy}
+								onclick={() => (renameDialogOpen = false)}
+							>
+								Cancel
+							</Button>
+							<Button type="submit" disabled={renameBusy}>
+								{renameBusy ? 'Saving…' : 'Save'}
+							</Button>
+						</div>
+					</form>
+				</Dialog.Content>
+			</Dialog.Root>
 		{:else}
 			<LoadingState message="Preparing room…" />
 		{/if}

@@ -59,6 +59,12 @@ async def handle_room_events(room_id: str, data: str) -> None:
                 user_id=event.get("user_id"),
                 action=event.get("action"),
             )
+        elif event_type == "rename":
+            await room_service.rename_participant(
+                room_id=room_id,
+                user_id=event.get("user_id"),
+                display_name=event.get("display_name", ""),
+            )
         elif event_type == "leave":
             await room_service.leave_room_service(room_id, event.get("user_id"))
     except Exception as e:

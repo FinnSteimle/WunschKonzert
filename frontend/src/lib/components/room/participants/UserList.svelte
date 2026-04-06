@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { Badge } from '$lib/components/ui/badge';
+	import { Button } from '$lib/components/ui/button';
 	import {
 		Card,
 		CardContent,
@@ -7,17 +8,20 @@
 		CardHeader,
 		CardTitle
 	} from '$lib/components/ui/card';
+	import PencilIcon from '@lucide/svelte/icons/pencil';
 	import type { RoomStateDto } from '$lib/types/api';
 	import EmptyState from '$lib/components/room/states/EmptyState.svelte';
 
 	let {
 		users,
 		hostUserId,
-		currentUserId
+		currentUserId,
+		onEditSelf
 	}: {
 		users: RoomStateDto['users'];
 		hostUserId: string;
 		currentUserId: string;
+		onEditSelf?: () => void;
 	} = $props();
 
 	const active = $derived(users.filter((u) => u.membership.leftAt == null));
@@ -41,7 +45,21 @@
 							: 'border-border'}"
 						aria-current={isSelf ? 'true' : undefined}
 					>
-						<span class="truncate text-sm font-medium">{row.user.displayName}</span>
+						<div class="flex min-w-0 items-center gap-1">
+							<span class="truncate text-sm font-medium">{row.user.displayName}</span>
+							{#if isSelf}
+								<Button
+									type="button"
+									variant="ghost"
+									size="icon"
+									class="size-7 shrink-0"
+									onclick={() => onEditSelf?.()}
+									aria-label="Edit display name"
+								>
+									<PencilIcon class="size-4" />
+								</Button>
+							{/if}
+						</div>
 						<div class="flex shrink-0 flex-wrap items-center justify-end gap-1">
 							{#if isSelf}
 								<Badge variant="default" class="text-[10px] font-semibold">You</Badge>

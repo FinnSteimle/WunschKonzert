@@ -463,3 +463,18 @@ async def ensure_active_membership(user_id: str, room_id: str) -> None:
     except ValueError:
         # Membership doesn't exist, create it
         await crud.create_room_membership(user_id, room_id)
+
+
+async def rename_participant(room_id: str, user_id: str, display_name: str) -> dict:
+    room = await crud.get_room(room_id)
+    if not room:
+        raise HTTPException(status_code=404, detail="Room not found")
+
+    membership = await crud.get_room_membership(user_id, room_id)
+    if not membership or membership.membershipStatus != MembershipStatus.ACTIVE:
+        raise HTTPException(
+            status_code=403, detail="Only active room participants can rename"
+        )
+
+    await ensure_user_display_name(user_id, display_name)
+    return await refresh_room_state(room_id, "participant_renamed")
