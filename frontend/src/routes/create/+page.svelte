@@ -8,7 +8,7 @@
 		CardHeader,
 		CardTitle
 	} from '$lib/components/ui/card';
-	import CreateRoomForm from '$lib/components/mvp/CreateRoomForm.svelte';
+	import CreateRoomForm from '$lib/components/room/forms/CreateRoomForm.svelte';
 
 	function onsuccess(payload: { roomId: string; joinCode: string }) {
 		void goto(resolve('/room/[roomId]', { roomId: payload.joinCode }));

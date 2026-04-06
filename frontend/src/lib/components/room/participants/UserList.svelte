@@ -8,7 +8,7 @@
 		CardTitle
 	} from '$lib/components/ui/card';
 	import type { RoomStateDto } from '$lib/types/api';
-	import EmptyState from './EmptyState.svelte';
+	import EmptyState from '$lib/components/room/states/EmptyState.svelte';
 
 	let {
 		users,

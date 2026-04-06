@@ -9,7 +9,7 @@
 	import { Badge } from '$lib/components/ui/badge';
 	import { Button } from '$lib/components/ui/button';
 	import type { QueueEntryDto } from '$lib/types/api';
-	import EmptyState from './EmptyState.svelte';
+	import EmptyState from '$lib/components/room/states/EmptyState.svelte';
 
 	let { entry }: { entry: QueueEntryDto | null } = $props();
 

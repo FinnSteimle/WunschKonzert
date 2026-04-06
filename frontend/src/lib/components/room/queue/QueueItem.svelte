@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { Badge } from '$lib/components/ui/badge';
 	import type { QueueEntryDto, VoteRequest } from '$lib/types/api';
-	import VoteButtons from './VoteButtons.svelte';
+	import VoteButtons from '$lib/components/room/queue/VoteButtons.svelte';
 
 	let {
 		entry,

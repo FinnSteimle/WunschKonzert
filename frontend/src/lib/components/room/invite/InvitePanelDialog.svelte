@@ -1,7 +1,7 @@
 <script lang="ts">
 	import * as Dialog from '$lib/components/ui/dialog';
 	import { buttonVariants } from '$lib/components/ui/button';
-	import InvitePanel from './InvitePanel.svelte';
+	import InvitePanel from '$lib/components/room/invite/InvitePanel.svelte';
 	import { cn } from '$lib/utils.js';
 
 	let {

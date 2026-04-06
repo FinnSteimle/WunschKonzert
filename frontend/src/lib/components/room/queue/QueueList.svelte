@@ -1,8 +1,8 @@
 <script lang="ts">
 	import { getPersonalVoteState } from '$lib/stores/room';
 	import type { QueueEntryDto, VoteRequest } from '$lib/types/api';
-	import QueueItem from './QueueItem.svelte';
-	import EmptyState from './EmptyState.svelte';
+	import QueueItem from '$lib/components/room/queue/QueueItem.svelte';
+	import EmptyState from '$lib/components/room/states/EmptyState.svelte';
 	import { flip } from 'svelte/animate';
 
 	let {

@@ -3,7 +3,7 @@
 	import { Button } from '$lib/components/ui/button';
 	import { Badge } from '$lib/components/ui/badge';
 	import type { TrackDto } from '$lib/types/api';
-	import EmptyState from './EmptyState.svelte';
+	import EmptyState from '$lib/components/room/states/EmptyState.svelte';
 
 	let {
 		tracks,

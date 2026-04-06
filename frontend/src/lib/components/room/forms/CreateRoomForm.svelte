@@ -7,7 +7,7 @@
 		NativeSelect,
 		NativeSelectOption
 	} from '$lib/components/ui/native-select';
-	import DisplayNameInput from '$lib/components/mvp/DisplayNameInput.svelte';
+	import DisplayNameInput from '$lib/components/room/forms/DisplayNameInput.svelte';
 	import { apiClient } from '$lib/api/client';
 	import { getOrCreateSessionUser, saveSessionDisplayName } from '$lib/session/userSession';
 	import { recordRecentRoom } from '$lib/session/recentRooms';

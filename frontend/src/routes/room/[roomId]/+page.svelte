@@ -26,19 +26,19 @@
 		CardHeader,
 		CardTitle
 	} from '$lib/components/ui/card';
-	import CurrentSongCard from '$lib/components/mvp/CurrentSongCard.svelte';
-	import PlaybackProgress from '$lib/components/mvp/PlaybackProgress.svelte';
-	import PlaybackControls from '$lib/components/mvp/PlaybackControls.svelte';
-	import QueueList from '$lib/components/mvp/QueueList.svelte';
-	import SongSearchPanel from '$lib/components/mvp/SongSearchPanel.svelte';
-	import UserList from '$lib/components/mvp/UserList.svelte';
-	import LeaveRoomButton from '$lib/components/mvp/LeaveRoomButton.svelte';
-	import DeleteRoomButton from '$lib/components/mvp/DeleteRoomButton.svelte';
-	import InvitePanelDialog from '$lib/components/mvp/InvitePanelDialog.svelte';
-	import LoadingState from '$lib/components/mvp/LoadingState.svelte';
-	import EmptyState from '$lib/components/mvp/EmptyState.svelte';
+	import CurrentSongCard from '$lib/components/room/playback/CurrentSongCard.svelte';
+	import PlaybackProgress from '$lib/components/room/playback/PlaybackProgress.svelte';
+	import PlaybackControls from '$lib/components/room/playback/PlaybackControls.svelte';
+	import QueueList from '$lib/components/room/queue/QueueList.svelte';
+	import SongSearchPanel from '$lib/components/room/queue/SongSearchPanel.svelte';
+	import UserList from '$lib/components/room/participants/UserList.svelte';
+	import LeaveRoomButton from '$lib/components/room/actions/LeaveRoomButton.svelte';
+	import DeleteRoomButton from '$lib/components/room/actions/DeleteRoomButton.svelte';
+	import InvitePanelDialog from '$lib/components/room/invite/InvitePanelDialog.svelte';
+	import LoadingState from '$lib/components/room/states/LoadingState.svelte';
+	import EmptyState from '$lib/components/room/states/EmptyState.svelte';
 	import { Button } from '$lib/components/ui/button';
-	import DisplayNameInput from '$lib/components/mvp/DisplayNameInput.svelte';
+	import DisplayNameInput from '$lib/components/room/forms/DisplayNameInput.svelte';
 	import { toast } from 'svelte-sonner';
 	import { parseRoomSlug } from '$lib/room/slug';
 	import { get } from 'svelte/store';

@@ -4,9 +4,9 @@
 	import { Button } from '$lib/components/ui/button';
 	import { apiClient } from '$lib/api/client';
 	import type { TrackDto } from '$lib/types/api';
-	import SearchResultList from './SearchResultList.svelte';
-	import LoadingState from './LoadingState.svelte';
-	import EmptyState from './EmptyState.svelte';
+	import SearchResultList from '$lib/components/room/queue/SearchResultList.svelte';
+	import LoadingState from '$lib/components/room/states/LoadingState.svelte';
+	import EmptyState from '$lib/components/room/states/EmptyState.svelte';
 	import { toast } from 'svelte-sonner';
 
 	let {

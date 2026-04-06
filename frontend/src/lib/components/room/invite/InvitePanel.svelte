@@ -8,8 +8,8 @@
 	} from '$lib/components/ui/card';
 	import { Input } from '$lib/components/ui/input';
 	import { Badge } from '$lib/components/ui/badge';
-	import CopyToClipboardButton from './CopyToClipboardButton.svelte';
-	import QRCodeCard from './QRCodeCard.svelte';
+	import CopyToClipboardButton from '$lib/components/room/invite/CopyToClipboardButton.svelte';
+	import QRCodeCard from '$lib/components/room/invite/QRCodeCard.svelte';
 
 	let {
 		joinCode,

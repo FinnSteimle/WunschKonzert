@@ -6,7 +6,7 @@
 	import { Button } from '$lib/components/ui/button';
 	import { Input } from '$lib/components/ui/input';
 	import { Label } from '$lib/components/ui/label';
-	import DisplayNameInput from '$lib/components/mvp/DisplayNameInput.svelte';
+	import DisplayNameInput from '$lib/components/room/forms/DisplayNameInput.svelte';
 	import { getOrCreateSessionUser, saveSessionDisplayName } from '$lib/session/userSession';
 	import { toast } from 'svelte-sonner';
 

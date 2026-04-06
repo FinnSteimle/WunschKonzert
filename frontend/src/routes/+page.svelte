@@ -7,8 +7,8 @@
 		CardHeader,
 		CardTitle
 	} from '$lib/components/ui/card';
-	import RoomCodeJoinForm from '$lib/components/mvp/RoomCodeJoinForm.svelte';
-	import RecentRoomsPanel from '$lib/components/mvp/RecentRoomsPanel.svelte';
+	import RoomCodeJoinForm from '$lib/components/room/forms/RoomCodeJoinForm.svelte';
+	import RecentRoomsPanel from '$lib/components/home/RecentRoomsPanel.svelte';
 </script>
 
 <svelte:head>
