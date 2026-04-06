@@ -1,6 +1,9 @@
 import uuid
 from datetime import UTC, datetime
+
 from fastapi import HTTPException
+
+import repositories.crud as crud
 from core.exceptions import ResourceNotFoundError
 from models.domain import (
     FeedbackType,
@@ -9,7 +12,6 @@ from models.domain import (
     QueueEntryStatus,
     RoomStatus,
 )
-import repositories.crud as crud
 
 # Shared state moved to service (or could be in core if needed by multiple services)
 room_state_cache: dict[str, dict] = {}
@@ -402,7 +404,7 @@ async def leave_room_service(room_id: str, user_id: str) -> dict:
     if room.hostedBy == user_id:
         raise HTTPException(
             status_code=403,
-            detail="Hosts cannot leave the room. Please delete the room instead."
+            detail="Hosts cannot leave the room. Please delete the room instead.",
         )
 
     await crud.leave_room(user_id, room_id)
@@ -464,11 +466,14 @@ async def ensure_user_display_name(user_id: str, display_name: str) -> None:
 
 
 async def ensure_provider_exists(provider_id: str) -> None:
-    provider = await crud.get_music_provider(provider_id)
-    if provider:
-        return
+    from core.exceptions import ResourceNotFoundError
 
-    await crud.create_music_provider(provider_id, provider_id.capitalize())
+    try:
+        await crud.get_music_provider(provider_id)
+    except ResourceNotFoundError:
+        raise HTTPException(
+            status_code=400, detail=f"Unsupported music provider: {provider_id}. "
+        )
 
 
 async def ensure_active_membership(user_id: str, room_id: str) -> None:

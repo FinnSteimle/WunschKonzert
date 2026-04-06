@@ -1,3 +1,5 @@
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
@@ -5,8 +7,33 @@ from fastapi.responses import JSONResponse
 import repositories.crud as crud
 from api import websockets
 from api.routers import auth, playback, rooms, spotify
+from core.exceptions import ResourceNotFoundError
 
-app = FastAPI()
+
+async def initialize_music_providers():
+    """Seed default music providers on startup"""
+    default_providers = [
+        ("spotify", "Spotify"),
+    ]
+    
+    for provider_id, name in default_providers:
+        try:
+            await crud.get_music_provider(provider_id)
+            # Provider already exists
+        except ResourceNotFoundError:
+            # Provider doesn't exist, create it
+            await crud.create_music_provider(provider_id, name)
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Startup
+    await initialize_music_providers()
+    yield
+    # Shutdown (if needed)
+
+
+app = FastAPI(lifespan=lifespan)
 
 # Permissive CORS
 app.add_middleware(
