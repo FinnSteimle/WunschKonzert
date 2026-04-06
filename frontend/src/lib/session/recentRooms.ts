@@ -61,6 +61,7 @@ export function isJoinFailureForRemovedRoom(message: string): boolean {
 	if (!m) return false;
 	if (m.includes('room not found')) return true;
 	if (m.includes('room is not active')) return true;
+	if (m.includes('session has ended')) return true;
 	if (m.startsWith('request failed: 404')) return true;
 	return false;
 }

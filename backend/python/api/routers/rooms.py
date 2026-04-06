@@ -1,3 +1,5 @@
+import re
+
 from fastapi import APIRouter, HTTPException
 
 import api.websockets as websockets
@@ -11,6 +13,8 @@ from models.schemas import (
     RoomRequest,
     RoomResponse,
 )
+
+JOIN_CODE_RE = re.compile(r"^[A-HJ-NP-Z2-9]{6}$")
 
 router = APIRouter()
 
@@ -48,15 +52,26 @@ async def create_room_endpoint(room_data: CreateRoomRequest):
 async def join_room(room_data: RoomRequest):
     if room_data.display_name is None or not room_data.display_name.strip():
         raise HTTPException(status_code=400, detail="Display name is required")
+
+    normalized_code = room_data.join_code.strip().upper()
+    if not JOIN_CODE_RE.match(normalized_code):
+        raise HTTPException(
+            status_code=422,
+            detail="Join code must be exactly 6 characters (A-Z, 2-9, no I/O/0/1).",
+        )
+
     await room_service.ensure_user_display_name(
         room_data.user_id, room_data.display_name
     )
 
-    room = await crud.get_room_by_join_code(room_data.room_id.upper())
+    room = await crud.get_room_by_join_code(normalized_code)
     if not room:
         raise HTTPException(status_code=404, detail="Room not found")
     if room.status != RoomStatus.ACTIVE:
-        raise HTTPException(status_code=400, detail="Room is not active")
+        raise HTTPException(
+            status_code=410,
+            detail="This session has ended and is no longer available.",
+        )
 
     try:
         await room_service.ensure_active_membership(room_data.user_id, room.roomId)
