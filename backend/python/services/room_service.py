@@ -1,6 +1,7 @@
 import uuid
 from datetime import UTC, datetime
 from fastapi import HTTPException
+from core.exceptions import ResourceNotFoundError
 from models.domain import (
     FeedbackType,
     MembershipStatus,
@@ -429,8 +430,13 @@ async def ensure_user_display_name(user_id: str, display_name: str) -> None:
     if len(trimmed) > 60:
         raise HTTPException(status_code=400, detail="Display name is too long")
 
-    user = await crud.get_user(user_id)
-    if user is None:
+    user_exists = True
+    try:
+        await crud.get_user(user_id)
+    except ResourceNotFoundError:
+        user_exists = False
+
+    if not user_exists:
         try:
             await crud.create_user(user_id, trimmed)
             return

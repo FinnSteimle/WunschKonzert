@@ -1,17 +1,13 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
+	import { browser } from '$app/environment';
 	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
 	import { apiClient } from '$lib/api/client';
 	import { roomStore, getCurrentSong } from '$lib/stores/room';
 	import { RoomSocketClient } from '$lib/realtime/roomSocket';
-	import { browser } from '$app/environment';
-	import {
-		getOrCreateSessionUser,
-		saveSessionDisplayName,
-		shouldPromptJoinLinkDisplayName
-	} from '$lib/session/userSession';
+	import { getOrCreateSessionUser, saveSessionDisplayName } from '$lib/session/userSession';
 	import {
 		isJoinFailureForRemovedRoom,
 		recordRecentRoom,
@@ -44,7 +40,7 @@
 	import { get } from 'svelte/store';
 
 	let sessionUser = $state<{ userId: string; displayName: string } | null>(null);
-	let recordedRecentThisMount = $state(false);
+	let recordedRecentThisMount = false;
 	let socketClient = $state<RoomSocketClient | null>(null);
 	let voteBusyId = $state<string | null>(null);
 	let playbackBusy = $state(false);
@@ -235,53 +231,48 @@
 
 		if (parsed.kind === 'joinCode') {
 			roomStore.reset();
-			const fromHomeForm =
-				browser && sessionStorage.getItem('wk_prefilled_join_code') === parsed.joinCode;
-			if (fromHomeForm) {
-				sessionStorage.removeItem('wk_prefilled_join_code');
-			}
-			const skipNamePrompt = fromHomeForm || (browser && !shouldPromptJoinLinkDisplayName());
-			if (skipNamePrompt) {
-				roomStore.setLoading(true);
-				linkJoinCode = null;
-				void (async () => {
-					try {
-						const { userId, displayName } = getOrCreateSessionUser();
-						const res = await apiClient.joinRoom({
-							join_code: parsed.joinCode,
-							user_id: userId,
-							display_name: displayName
-						});
-						if (!res.success || !res.room_id) {
-							const msg = res.message || 'Could not join this room.';
-							if (isJoinFailureForRemovedRoom(msg)) {
-								removeRecentRoom(parsed.joinCode);
-							}
-							throw new Error(msg);
-						}
-						if (linkJoinLifecycle.cancelled) return;
-						linkJoinLifecycle.endSession = beginRoomSession(res.room_id);
-						sessionUser = getOrCreateSessionUser();
-					} catch (err: unknown) {
-						if (linkJoinLifecycle.cancelled) return;
-						const msg = err instanceof Error ? err.message : '';
+		const storedDisplayName = getOrCreateSessionUser().displayName.trim();
+		if (storedDisplayName) {
+			roomStore.setLoading(true);
+			linkJoinCode = null;
+			void (async () => {
+				try {
+					const { userId } = getOrCreateSessionUser();
+					const res = await apiClient.joinRoom({
+						join_code: parsed.joinCode,
+						user_id: userId,
+						display_name: storedDisplayName
+					});
+					if (!res.success || !res.room_id) {
+						const msg = res.message || 'Could not join this room.';
 						if (isJoinFailureForRemovedRoom(msg)) {
 							removeRecentRoom(parsed.joinCode);
 						}
-						roomStore.setLoading(false);
-						roomStore.setError(msg || 'Could not join this room.');
+						throw new Error(msg);
 					}
-				})();
-				return () => {
-					linkJoinLifecycle.cancelled = true;
-					linkJoinLifecycle.endSession?.();
-					linkJoinLifecycle.endSession = undefined;
-				};
-			}
+					if (linkJoinLifecycle.cancelled) return;
+					linkJoinLifecycle.endSession = beginRoomSession(res.room_id);
+					sessionUser = getOrCreateSessionUser();
+				} catch (err: unknown) {
+					if (linkJoinLifecycle.cancelled) return;
+					const msg = err instanceof Error ? err.message : '';
+					if (isJoinFailureForRemovedRoom(msg)) {
+						removeRecentRoom(parsed.joinCode);
+					}
+					roomStore.setLoading(false);
+					roomStore.setError(msg || 'Could not join this room.');
+				}
+			})();
+			return () => {
+				linkJoinLifecycle.cancelled = true;
+				linkJoinLifecycle.endSession?.();
+				linkJoinLifecycle.endSession = undefined;
+			};
+		}
 
 			roomStore.setLoading(false);
 			linkJoinCode = parsed.joinCode;
-			linkJoinDisplayName = getOrCreateSessionUser().displayName;
+		linkJoinDisplayName = '';
 			linkJoinError = null;
 			return () => {
 				linkJoinLifecycle.cancelled = true;

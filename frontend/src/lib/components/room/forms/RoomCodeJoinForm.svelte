@@ -1,6 +1,5 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { browser } from '$app/environment';
 	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import { Button } from '$lib/components/ui/button';
@@ -38,9 +37,6 @@
 		}
 		saveSessionDisplayName(trimmedDisplay);
 		getOrCreateSessionUser();
-		if (browser) {
-			sessionStorage.setItem('wk_prefilled_join_code', normalized);
-		}
 		busy = true;
 		try {
 			await goto(resolve('/room/[roomId]', { roomId: normalized }));
