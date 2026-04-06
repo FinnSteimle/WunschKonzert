@@ -1,3 +1,5 @@
+import { apiClient } from '$lib/api/client';
+
 const STORAGE_KEY = 'wk_recent_rooms';
 const MAX_ENTRIES = 5;
 
@@ -26,7 +28,7 @@ export function recordRecentRoom(
 		isHost: entry.isHost,
 		visitedAt: Date.now()
 	};
-	localStorage.setItem(STORAGE_KEY, JSON.stringify([next, ...list].slice(0, MAX_ENTRIES)));
+	saveRecentRooms([next, ...list]);
 }
 
 export function getRecentRooms(): RecentRoomEntry[] {
@@ -55,6 +57,33 @@ export function getRecentRooms(): RecentRoomEntry[] {
 	}
 }
 
+function saveRecentRooms(list: RecentRoomEntry[]): void {
+	if (typeof window === 'undefined') return;
+	localStorage.setItem(STORAGE_KEY, JSON.stringify(list.slice(0, MAX_ENTRIES)));
+}
+
+/**
+ * Verifies stored recent rooms against backend room availability.
+ * Invalid/deleted rooms are removed from local storage.
+ */
+export async function syncRecentRoomsAvailability(): Promise<RecentRoomEntry[]> {
+	const localEntries = getRecentRooms();
+	if (!localEntries.length) return localEntries;
+
+	try {
+		const { available_join_codes: available } = await apiClient.getRoomsAvailability({
+			join_codes: localEntries.map((entry) => entry.joinCode)
+		});
+		const availableSet = new Set(available);
+		const filtered = localEntries.filter((entry) => availableSet.has(entry.joinCode));
+		saveRecentRooms(filtered);
+		return filtered;
+	} catch {
+		// Keep local entries when the availability check fails.
+		return localEntries;
+	}
+}
+
 /** True when the room no longer exists or is not joinable (backend join/state errors). */
 export function isJoinFailureForRemovedRoom(message: string): boolean {
 	const m = message.trim().toLowerCase();
@@ -71,5 +100,5 @@ export function removeRecentRoom(joinCode: string): void {
 	const code = normalizeJoinCode(joinCode);
 	if (!code) return;
 	const list = getRecentRooms().filter((e) => e.joinCode !== code);
-	localStorage.setItem(STORAGE_KEY, JSON.stringify(list));
+	saveRecentRooms(list);
 }

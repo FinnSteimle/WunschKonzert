@@ -10,13 +10,20 @@
 		CardHeader,
 		CardTitle
 	} from '$lib/components/ui/card';
-	import { getRecentRooms, type RecentRoomEntry } from '$lib/session/recentRooms';
+	import {
+		getRecentRooms,
+		syncRecentRoomsAvailability,
+		type RecentRoomEntry
+	} from '$lib/session/recentRooms';
 
 	let entries = $state<RecentRoomEntry[]>([]);
 
 	onMount(() => {
 		if (browser) {
 			entries = getRecentRooms();
+			void syncRecentRoomsAvailability().then((nextEntries) => {
+				entries = nextEntries;
+			});
 		}
 	});
 </script>

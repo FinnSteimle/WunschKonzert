@@ -10,6 +10,8 @@ from models.schemas import (
     CreateRoomRequest,
     DeleteRoomRequest,
     LeaveRoomRequest,
+    RoomAvailabilityRequest,
+    RoomAvailabilityResponse,
     RoomRequest,
     RoomResponse,
 )
@@ -121,3 +123,32 @@ async def delete_room(room_data: DeleteRoomRequest):
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to delete room: {str(e)}")
+
+
+@router.post("/rooms/availability", response_model=RoomAvailabilityResponse)
+async def rooms_availability(payload: RoomAvailabilityRequest):
+    unique_codes: list[str] = []
+    seen_codes: set[str] = set()
+    invalid_or_duplicate_codes: list[str] = []
+
+    for raw_code in payload.join_codes:
+        normalized_code = raw_code.strip().upper()
+        if not JOIN_CODE_RE.match(normalized_code):
+            invalid_or_duplicate_codes.append(normalized_code)
+            continue
+        if normalized_code in seen_codes:
+            invalid_or_duplicate_codes.append(normalized_code)
+            continue
+        seen_codes.add(normalized_code)
+        unique_codes.append(normalized_code)
+
+    available = await crud.get_active_join_codes(unique_codes)
+    available_set = set(available)
+    unavailable = [
+        code for code in unique_codes if code not in available_set
+    ] + invalid_or_duplicate_codes
+
+    return RoomAvailabilityResponse(
+        available_join_codes=available,
+        unavailable_join_codes=unavailable,
+    )

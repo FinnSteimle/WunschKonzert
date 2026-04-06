@@ -3,12 +3,14 @@ import {
 	getRecentRooms,
 	isJoinFailureForRemovedRoom,
 	recordRecentRoom,
-	removeRecentRoom
+	removeRecentRoom,
+	syncRecentRoomsAvailability
 } from './recentRooms';
 
 describe('recentRooms', () => {
 	beforeEach(() => {
 		localStorage.clear();
+		vi.restoreAllMocks();
 	});
 
 	it('records and normalizes a recent room entry', () => {
@@ -90,6 +92,47 @@ describe('recentRooms', () => {
 		removeRecentRoom(' ab2 cd3 ');
 
 		expect(getRecentRooms()).toEqual([{ joinCode: 'ZX9WV8', name: 'B', isHost: false, visitedAt: 2 }]);
+	});
+
+	it('keeps only available recent rooms after backend sync', async () => {
+		localStorage.setItem(
+			'wk_recent_rooms',
+			JSON.stringify([
+				{ joinCode: 'AB2CD3', name: 'A', isHost: true, visitedAt: 1 },
+				{ joinCode: 'ZX9WV8', name: 'B', isHost: false, visitedAt: 2 }
+			])
+		);
+
+		const fetchMock = vi.fn().mockResolvedValue({
+			ok: true,
+			json: async () => ({
+				available_join_codes: ['ZX9WV8'],
+				unavailable_join_codes: ['AB2CD3']
+			})
+		});
+		vi.stubGlobal('fetch', fetchMock);
+
+		const synced = await syncRecentRoomsAvailability();
+
+		expect(fetchMock).toHaveBeenCalledOnce();
+		expect(synced).toEqual([{ joinCode: 'ZX9WV8', name: 'B', isHost: false, visitedAt: 2 }]);
+		expect(getRecentRooms()).toEqual([{ joinCode: 'ZX9WV8', name: 'B', isHost: false, visitedAt: 2 }]);
+	});
+
+	it('keeps local recent rooms when availability request fails', async () => {
+		localStorage.setItem(
+			'wk_recent_rooms',
+			JSON.stringify([{ joinCode: 'AB2CD3', name: 'A', isHost: true, visitedAt: 1 }])
+		);
+
+		const fetchMock = vi.fn().mockRejectedValue(new Error('network down'));
+		vi.stubGlobal('fetch', fetchMock);
+
+		const synced = await syncRecentRoomsAvailability();
+
+		expect(fetchMock).toHaveBeenCalledOnce();
+		expect(synced).toEqual([{ joinCode: 'AB2CD3', name: 'A', isHost: true, visitedAt: 1 }]);
+		expect(getRecentRooms()).toEqual([{ joinCode: 'AB2CD3', name: 'A', isHost: true, visitedAt: 1 }]);
 	});
 });
 

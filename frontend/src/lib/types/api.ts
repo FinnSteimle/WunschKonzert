@@ -36,6 +36,15 @@ export interface DeleteRoomRequest {
 	user_id: string;
 }
 
+export interface RoomAvailabilityRequest {
+	join_codes: string[];
+}
+
+export interface RoomAvailabilityResponse {
+	available_join_codes: string[];
+	unavailable_join_codes: string[];
+}
+
 export interface TrackDto {
 	trackId: string;
 	providerTrackId: string;

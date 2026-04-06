@@ -171,3 +171,16 @@ class DeleteRoomRequest(BaseModel):
 
     room_id: str
     user_id: str
+
+
+class RoomAvailabilityRequest(BaseModel):
+    """Request model for checking multiple room join codes."""
+
+    join_codes: list[str]
+
+
+class RoomAvailabilityResponse(BaseModel):
+    """Response model listing which join codes are still joinable."""
+
+    available_join_codes: list[str]
+    unavailable_join_codes: list[str]

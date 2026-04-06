@@ -118,6 +118,25 @@ async def get_room_by_join_code(join_code: str) -> Room | None:
         return result.scalar_one_or_none()
 
 
+async def get_active_join_codes(join_codes: Sequence[str]) -> list[str]:
+    """Return join codes that currently map to active rooms."""
+    normalized = [code.strip().upper() for code in join_codes if code.strip()]
+    if not normalized:
+        return []
+
+    session_factory = get_session_factory()
+    async with session_factory() as session:
+        result = await session.execute(
+            select(Room.joinCode).where(
+                Room.joinCode.in_(normalized),
+                Room.status == RoomStatus.ACTIVE,
+            )
+        )
+        # Keep order stable by preserving first appearance in input.
+        available = set(result.scalars().all())
+        return [code for code in normalized if code in available]
+
+
 async def get_room_membership(user_id: str, room_id: str) -> RoomMembership | None:
     """Get existing room membership or return None if not found"""
     session_factory = get_session_factory()
