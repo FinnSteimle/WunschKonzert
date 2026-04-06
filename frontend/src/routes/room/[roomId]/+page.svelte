@@ -38,8 +38,7 @@
 	import LoadingState from '$lib/components/mvp/LoadingState.svelte';
 	import EmptyState from '$lib/components/mvp/EmptyState.svelte';
 	import { Button } from '$lib/components/ui/button';
-	import { Input } from '$lib/components/ui/input';
-	import { Label } from '$lib/components/ui/label';
+	import DisplayNameInput from '$lib/components/mvp/DisplayNameInput.svelte';
 	import { toast } from 'svelte-sonner';
 	import { parseRoomSlug } from '$lib/room/slug';
 	import { get } from 'svelte/store';
@@ -313,18 +312,12 @@
 					</p>
 				</CardHeader>
 				<CardContent class="flex flex-col gap-4">
-					<div class="flex flex-col gap-2">
-						<Label for="wk-link-join-display">Your display name</Label>
-						<Input
-							id="wk-link-join-display"
-							type="text"
-							placeholder="How others see you"
-							bind:value={linkJoinDisplayName}
-							disabled={linkJoinBusy}
-							maxlength={60}
-							autocomplete="nickname"
-						/>
-					</div>
+					<DisplayNameInput
+						id="wk-link-join-display"
+						bind:value={linkJoinDisplayName}
+						disabled={linkJoinBusy}
+						maxlength={60}
+					/>
 					{#if linkJoinError}
 						<p class="text-destructive text-sm">{linkJoinError}</p>
 					{/if}

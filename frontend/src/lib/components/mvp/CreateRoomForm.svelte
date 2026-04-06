@@ -7,6 +7,7 @@
 		NativeSelect,
 		NativeSelectOption
 	} from '$lib/components/ui/native-select';
+	import DisplayNameInput from '$lib/components/mvp/DisplayNameInput.svelte';
 	import { apiClient } from '$lib/api/client';
 	import { getOrCreateSessionUser, saveSessionDisplayName } from '$lib/session/userSession';
 	import { recordRecentRoom } from '$lib/session/recentRooms';
@@ -69,19 +70,7 @@
 </script>
 
 <form class="flex w-full min-w-0 flex-col gap-4" onsubmit={submit}>
-	<div class="flex flex-col gap-2">
-		<Label for="wk-display-name-create">Your display name</Label>
-		<Input
-			id="wk-display-name-create"
-			name="displayName"
-			type="text"
-			placeholder="How others see you"
-			bind:value={displayName}
-			disabled={busy}
-			maxlength={120}
-			autocomplete="nickname"
-		/>
-	</div>
+	<DisplayNameInput id="wk-display-name-create" bind:value={displayName} disabled={busy} />
 	<div class="flex flex-col gap-2">
 		<Label for="wk-room-name">Room name</Label>
 		<Input

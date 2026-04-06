@@ -6,6 +6,7 @@
 	import { Button } from '$lib/components/ui/button';
 	import { Input } from '$lib/components/ui/input';
 	import { Label } from '$lib/components/ui/label';
+	import DisplayNameInput from '$lib/components/mvp/DisplayNameInput.svelte';
 	import { getOrCreateSessionUser, saveSessionDisplayName } from '$lib/session/userSession';
 	import { toast } from 'svelte-sonner';
 
@@ -50,19 +51,7 @@
 </script>
 
 <form class="flex w-full min-w-0 flex-col gap-4" onsubmit={submit}>
-	<div class="flex flex-col gap-2">
-		<Label for="wk-display-name-join">Your display name</Label>
-		<Input
-			id="wk-display-name-join"
-			name="displayName"
-			type="text"
-			placeholder="How others see you"
-			bind:value={displayName}
-			disabled={busy}
-			maxlength={120}
-			autocomplete="nickname"
-		/>
-	</div>
+<DisplayNameInput id="wk-display-name-join" bind:value={displayName} disabled={busy} />
 	<div class="flex flex-col gap-2">
 		<Label for="wk-join-code">Room code</Label>
 		<Input

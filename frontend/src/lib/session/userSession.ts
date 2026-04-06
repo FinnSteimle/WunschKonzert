@@ -1,9 +1,12 @@
+import { generateRandomDisplayName, AUTO_GENERATED_NAME_RE } from './nameGenerator';
+export { generateRandomDisplayName } from './nameGenerator';
+
 const USER_ID_KEY = 'wk_user_id';
 const DISPLAY_NAME_KEY = 'wk_display_name';
 /** Set when the user saves a name (create/join forms or link prompt). */
 const DISPLAY_NAME_EXPLICIT_KEY = 'wk_display_name_explicit';
 
-/** Matches auto-generated guest names from {@link randomId}('Guest-', 4). */
+/** Matches auto-generated guest names (legacy `Guest-XXXX` or new adjective+color+animal). */
 const AUTO_GUEST_DISPLAY_NAME_RE = /^Guest-[A-HJ-NP-Z2-9]{4}$/;
 
 function randomId(prefix: string, length: number): string {
@@ -24,7 +27,7 @@ export function getOrCreateSessionUser(): SessionUser {
 	if (typeof window === 'undefined') {
 		return {
 			userId: randomId('U_', 10),
-			displayName: randomId('Guest-', 4)
+			displayName: generateRandomDisplayName()
 		};
 	}
 
@@ -35,7 +38,7 @@ export function getOrCreateSessionUser(): SessionUser {
 		localStorage.setItem(USER_ID_KEY, userId);
 	}
 	if (!displayName) {
-		displayName = randomId('Guest-', 4);
+		displayName = generateRandomDisplayName();
 		localStorage.setItem(DISPLAY_NAME_KEY, displayName);
 	}
 
@@ -43,7 +46,8 @@ export function getOrCreateSessionUser(): SessionUser {
 }
 
 export function isAutoGuestDisplayName(displayName: string): boolean {
-	return AUTO_GUEST_DISPLAY_NAME_RE.test(displayName.trim());
+	const trimmed = displayName.trim();
+	return AUTO_GUEST_DISPLAY_NAME_RE.test(trimmed) || AUTO_GENERATED_NAME_RE.test(trimmed);
 }
 
 /**
