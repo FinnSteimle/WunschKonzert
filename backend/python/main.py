@@ -1,3 +1,5 @@
+import subprocess
+import sys
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
@@ -15,7 +17,7 @@ async def initialize_music_providers():
     default_providers = [
         ("spotify", "Spotify"),
     ]
-    
+
     for provider_id, name in default_providers:
         try:
             await crud.get_music_provider(provider_id)
@@ -25,9 +27,28 @@ async def initialize_music_providers():
             await crud.create_music_provider(provider_id, name)
 
 
+def run_migrations():
+    """Run database migrations using alembic"""
+    try:
+        result = subprocess.run(
+            ["uv", "run", "alembic", "upgrade", "head"],
+            capture_output=True,
+            text=True,
+            cwd="/app",
+        )
+        if result.returncode != 0:
+            print(f"Migration failed: {result.stderr}")
+            sys.exit(1)
+        print("Database migrations completed successfully")
+    except Exception as e:
+        print(f"Error running migrations: {e}")
+        sys.exit(1)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Startup
+    run_migrations()
     await initialize_music_providers()
     yield
     # Shutdown (if needed)
