@@ -57,14 +57,30 @@ variables:
     - if: '$CI_COMMIT_BRANCH == "dev" || $CI_COMMIT_BRANCH == "main"'
 
 .dockerhub_auth: &dockerhub_auth |
+  mkdir -p "$HOME/.docker"
+  AUTH_FILE="$HOME/.docker/config.json"
+  printf '{"auths":{' > "$AUTH_FILE"
+  SEP=""
+
   if [ -n "$DOCKERHUB_USERNAME" ] && [ -n "$DOCKERHUB_TOKEN" ]; then
-    mkdir -p "$HOME/.docker"
     AUTH_B64="$(printf '%s:%s' "$DOCKERHUB_USERNAME" "$DOCKERHUB_TOKEN" | base64 | tr -d '\n')"
-    printf '{"auths":{"https://index.docker.io/v1/":{"auth":"%s"}}}\n' "$AUTH_B64" > "$HOME/.docker/config.json"
+    printf '%s"https://index.docker.io/v1/":{"auth":"%s"}' "$SEP" "$AUTH_B64" >> "$AUTH_FILE"
+    SEP=","
     echo "Docker Hub auth configured."
   else
-    echo "DOCKERHUB_USERNAME/DOCKERHUB_TOKEN not set; continuing without Docker Hub auth."
+    echo "DOCKERHUB_USERNAME/DOCKERHUB_TOKEN not set; Docker Hub pulls may be rate-limited."
   fi
+
+  if [ -n "$CI_DEPENDENCY_PROXY_SERVER" ] && [ -n "$CI_DEPENDENCY_PROXY_USER" ] && [ -n "$CI_DEPENDENCY_PROXY_PASSWORD" ]; then
+    DEP_AUTH_B64="$(printf '%s:%s' "$CI_DEPENDENCY_PROXY_USER" "$CI_DEPENDENCY_PROXY_PASSWORD" | base64 | tr -d '\n')"
+    printf '%s"%s":{"auth":"%s"}' "$SEP" "$CI_DEPENDENCY_PROXY_SERVER" "$DEP_AUTH_B64" >> "$AUTH_FILE"
+    SEP=","
+    echo "GitLab Dependency Proxy auth configured."
+  else
+    echo "CI_DEPENDENCY_PROXY_* vars not set; Dependency Proxy auth not configured."
+  fi
+
+  printf '}}\n' >> "$AUTH_FILE"
 
 modularity:check:
   stage: modularity
