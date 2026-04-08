@@ -56,6 +56,16 @@ variables:
   rules:
     - if: '$CI_COMMIT_BRANCH == "dev" || $CI_COMMIT_BRANCH == "main"'
 
+.dockerhub_auth: &dockerhub_auth |
+  if [ -n "$DOCKERHUB_USERNAME" ] && [ -n "$DOCKERHUB_TOKEN" ]; then
+    mkdir -p "$HOME/.docker"
+    AUTH_B64="$(printf '%s:%s' "$DOCKERHUB_USERNAME" "$DOCKERHUB_TOKEN" | base64 | tr -d '\n')"
+    printf '{"auths":{"https://index.docker.io/v1/":{"auth":"%s"}}}\n' "$AUTH_B64" > "$HOME/.docker/config.json"
+    echo "Docker Hub auth configured."
+  else
+    echo "DOCKERHUB_USERNAME/DOCKERHUB_TOKEN not set; continuing without Docker Hub auth."
+  fi
+
 modularity:check:
   stage: modularity
   image: docker:24
@@ -63,6 +73,8 @@ modularity:check:
     - name: docker:24-dind
   variables:
     CHECK_HOST: "docker"
+  before_script:
+    - *dockerhub_auth
   script:
     - apk add --no-cache docker-compose curl bash
     - chmod +x ./scripts/check_independent.sh
@@ -132,6 +144,7 @@ backend:unit:
   <<: [*cache_uv, *rules_backend_changes]
   before_script:
     - pip install uv
+    - *dockerhub_auth
     - cd backend/python
     - cp ../.env.example .env
     - uv sync --frozen
@@ -155,6 +168,7 @@ backend:integration:
     - name: docker:24-dind
   <<: *rules_backend_changes
   before_script:
+    - *dockerhub_auth
     - apk add --no-cache docker-compose
   script:
     - cd backend
@@ -199,6 +213,7 @@ frontend:unit:
     - name: docker:24-dind
   <<: *rules_frontend_changes
   before_script:
+    - *dockerhub_auth
     - apk add --no-cache docker-compose
   script:
     - cd frontend
@@ -247,6 +262,7 @@ frontend:integration:
     - name: docker:24-dind
   <<: *rules_frontend_changes
   before_script:
+    - *dockerhub_auth
     - apk add --no-cache docker-compose
   script:
     - cd frontend
@@ -285,6 +301,7 @@ frontend:build:
   variables:
     DOCKER_TLS_CERTDIR: "/certs"
   before_script:
+    - *dockerhub_auth
     - docker version
     - echo "$CI_REGISTRY_PASSWORD" | docker login -u "$CI_REGISTRY_USER" --password-stdin "$CI_REGISTRY"
 
