@@ -27,6 +27,13 @@ markers = [
     "integration: mark a test as an integration test"
 ]
 
+[tool.coverage.run]
+omit = [
+    "*/asyncpg/*",
+    "*/.venv/*",
+    "*/tests/*"
+]
+
 [dependency-groups]
 dev = [
     "pytest>=9.0.2",

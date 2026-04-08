@@ -1,7 +1,10 @@
 import os
 import uuid
+from unittest.mock import patch
 
 import pytest
+import httpx
+from httpx import ASGITransport
 from sqlalchemy.pool import NullPool
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from testcontainers.postgres import PostgresContainer
@@ -89,12 +92,13 @@ async def db_session(session_factory):
 def init_room(db_session):
     async def _factory(
         provider_id=None,
-        provider_name="test_provider",
+        provider_name=None,
         room_name="test_room",
         user_id=None,
     ):
 
         provider_id = provider_id or str(uuid.uuid4())
+        provider_name = provider_name or f"provider_{str(uuid.uuid4())[:8]}"
         user_id = user_id or str(uuid.uuid4())
 
         await crud.create_user(user_id, "test_host", db_session)
@@ -108,3 +112,31 @@ def init_room(db_session):
         return room
 
     return _factory
+
+
+@pytest.fixture
+async def client(db_session):
+    """
+    Get a fresh FastAPI test client for each test.
+    We mock lifespan activities like migrations and seeding to avoid side effects.
+    """
+    from main import app
+
+    with patch("main.run_migrations"), patch("main.initialize_music_providers"):
+        async with httpx.AsyncClient(
+            transport=ASGITransport(app=app), base_url="http://testserver"
+        ) as ac:
+            yield ac
+
+
+@pytest.fixture
+def websocket_client(db_session):
+    """
+    Get a fresh FastAPI TestClient for websocket testing.
+    We mock lifespan activities like migrations and seeding to avoid side effects.
+    """
+    from main import app
+    from fastapi.testclient import TestClient
+
+    with patch("main.run_migrations"), patch("main.initialize_music_providers"):
+        return TestClient(app)
