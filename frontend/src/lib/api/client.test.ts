@@ -1,9 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { apiClient } from './client';
 
-<<<<<<< HEAD
-describe('apiClient.createRoom', () => {
-=======
 function mockJsonResponse<T>(ok: boolean, jsonValue: T, status = 200): Response {
 	return {
 		ok,
@@ -13,37 +10,15 @@ function mockJsonResponse<T>(ok: boolean, jsonValue: T, status = 200): Response 
 }
 
 describe('apiClient', () => {
->>>>>>> 2d68dce36acd789b1ae0ed6cebc632e40b71e82f
 	beforeEach(() => {
 		vi.restoreAllMocks();
 	});
 
-<<<<<<< HEAD
-	it('posts create-room payload to the expected endpoint', async () => {
-		const fetchMock = vi.fn().mockResolvedValue({
-			ok: true,
-			json: async () => ({
-				success: true,
-				message: 'ok',
-				room_id: 'room-1',
-				join_code: 'AB2CD3'
-			})
-		});
-		vi.stubGlobal('fetch', fetchMock);
-
-		const payload = {
-			name: 'Friday vibes',
-			user_id: 'U_TESTUSER1',
-			display_name: 'Alice',
-			supported_provider_id: 'spotify' as const
-		};
-
-		await apiClient.createRoom(payload);
-
-=======
 	it('posts create room payload and returns parsed response', async () => {
 		const fetchMock = vi.fn().mockResolvedValue(
 			mockJsonResponse(true, {
+				success: true,
+				message: 'ok',
 				room_id: 'room-1',
 				join_code: 'AB2CD3'
 			})
@@ -58,9 +33,13 @@ describe('apiClient', () => {
 		};
 		const result = await apiClient.createRoom(payload);
 
-		expect(result).toEqual({ room_id: 'room-1', join_code: 'AB2CD3' });
+		expect(result).toEqual({
+			success: true,
+			message: 'ok',
+			room_id: 'room-1',
+			join_code: 'AB2CD3'
+		});
 		expect(fetchMock).toHaveBeenCalledOnce();
->>>>>>> 2d68dce36acd789b1ae0ed6cebc632e40b71e82f
 		expect(fetchMock).toHaveBeenCalledWith('http://localhost:8000/create_room', {
 			method: 'POST',
 			headers: { 'Content-Type': 'application/json' },
@@ -68,7 +47,6 @@ describe('apiClient', () => {
 		});
 	});
 
-<<<<<<< HEAD
 	it('uses backend error detail/message when present', async () => {
 		const fetchMock = vi
 			.fn()
@@ -103,27 +81,7 @@ describe('apiClient', () => {
 		).rejects.toThrow('Duplicate room');
 	});
 
-	it('falls back to status text when error response is not parseable JSON', async () => {
-		const fetchMock = vi.fn().mockResolvedValue({
-			ok: false,
-			status: 503,
-			json: async () => {
-				throw new Error('not json');
-			}
-		});
-		vi.stubGlobal('fetch', fetchMock);
-
-		await expect(
-			apiClient.createRoom({
-				name: 'Friday vibes',
-				user_id: 'U_TESTUSER1',
-				display_name: 'Alice',
-				supported_provider_id: 'spotify'
-			})
-		).rejects.toThrow('Request failed: 503');
-	});
-=======
-	it('throws backend detail message for failed requests', async () => {
+	it('throws backend detail message for failed join requests', async () => {
 		const fetchMock = vi.fn().mockResolvedValue(
 			mockJsonResponse(false, { detail: 'Room already exists' }, 409)
 		);
@@ -135,15 +93,13 @@ describe('apiClient', () => {
 	});
 
 	it('falls back to status text when error body cannot be parsed', async () => {
-		const fetchMock = vi.fn().mockResolvedValue(
-			{
-				ok: false,
-				status: 503,
-				json: async () => {
-					throw new Error('invalid json');
-				}
-			} as unknown as Response
-		);
+		const fetchMock = vi.fn().mockResolvedValue({
+			ok: false,
+			status: 503,
+			json: async () => {
+				throw new Error('not json');
+			}
+		});
 		vi.stubGlobal('fetch', fetchMock);
 
 		await expect(
@@ -197,5 +153,4 @@ describe('apiClient', () => {
 			})
 		});
 	});
->>>>>>> 2d68dce36acd789b1ae0ed6cebc632e40b71e82f
 });
