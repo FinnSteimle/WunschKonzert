@@ -43,7 +43,12 @@ describe('LeaveRoomButton', () => {
 	});
 
 	it('leaves room and navigates home on success', async () => {
-		const request = deferred<void>();
+		const request = deferred<{
+			success: boolean;
+			message: string;
+			room_id: string | null;
+			join_code: string | null;
+		}>();
 		vi.mocked(apiClient.leaveRoom).mockReturnValue(request.promise);
 
 		render(LeaveRoomButton, {
@@ -56,7 +61,12 @@ describe('LeaveRoomButton', () => {
 		expect(apiClient.leaveRoom).toHaveBeenCalledWith({ room_id: 'room-1', user_id: 'user-1' });
 		expect(screen.getByRole('button', { name: 'Leaving…' })).toBeTruthy();
 
-		request.resolvePromise();
+		request.resolvePromise({
+			success: true,
+			message: 'ok',
+			room_id: 'room-1',
+			join_code: 'AB12CD'
+		});
 
 		await waitFor(() => expect(toast.success).toHaveBeenCalledWith('Left room'));
 		expect(resolve).toHaveBeenCalledWith('/');
