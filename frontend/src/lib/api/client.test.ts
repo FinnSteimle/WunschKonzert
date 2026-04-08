@@ -92,6 +92,38 @@ describe('apiClient', () => {
 		).rejects.toThrow('Room already exists');
 	});
 
+	it('posts join room payload and returns parsed response', async () => {
+		const fetchMock = vi.fn().mockResolvedValue(
+			mockJsonResponse(true, {
+				success: true,
+				message: 'joined',
+				room_id: 'room-1',
+				join_code: 'AB2CD3'
+			})
+		);
+		vi.stubGlobal('fetch', fetchMock);
+
+		const payload = {
+			join_code: 'AB2CD3',
+			user_id: 'U_123',
+			display_name: 'Alice'
+		};
+
+		const result = await apiClient.joinRoom(payload);
+
+		expect(result).toEqual({
+			success: true,
+			message: 'joined',
+			room_id: 'room-1',
+			join_code: 'AB2CD3'
+		});
+		expect(fetchMock).toHaveBeenCalledWith('http://localhost:8000/join_room', {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify(payload)
+		});
+	});
+
 	it('falls back to status text when error body cannot be parsed', async () => {
 		const fetchMock = vi.fn().mockResolvedValue({
 			ok: false,
