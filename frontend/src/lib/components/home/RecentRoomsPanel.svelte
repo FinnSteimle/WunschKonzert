@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { onMount } from 'svelte';
+	import { onMount, onDestroy } from 'svelte';
 	import { browser } from '$app/environment';
 	import { resolve } from '$app/paths';
 	import { Badge } from '$lib/components/ui/badge';
@@ -17,22 +17,40 @@
 	} from '$lib/session/recentRooms';
 
 	let entries = $state<RecentRoomEntry[]>([]);
+	let intervalId: number;
+
+	// Check availability every 5 minutes (300,000 ms)
+	const CHECK_INTERVAL = 300000;
 
 	onMount(() => {
 		if (browser) {
 			entries = getRecentRooms();
-			void syncRecentRoomsAvailability().then((nextEntries) => {
-				entries = nextEntries;
-			});
+			syncAvailability();
+
+			// Set up periodic checking
+			intervalId = window.setInterval(syncAvailability, CHECK_INTERVAL);
 		}
 	});
+
+	onDestroy(() => {
+		if (browser && intervalId) {
+			clearInterval(intervalId);
+		}
+	});
+
+	async function syncAvailability() {
+		const nextEntries = await syncRecentRoomsAvailability();
+		entries = nextEntries;
+	}
 </script>
 
 {#if entries.length > 0}
 	<Card class="min-w-0 shadow-sm">
 		<CardHeader>
 			<CardTitle>Recent rooms</CardTitle>
-			<CardDescription>Jump back to a room you hosted or joined on this device.</CardDescription>
+			<CardDescription
+				>Jump back to a room you hosted or joined on this device.</CardDescription
+			>
 		</CardHeader>
 		<CardContent class="flex flex-col gap-1">
 			{#each entries as r (r.joinCode)}
@@ -45,7 +63,9 @@
 						{#if r.isHost}
 							<Badge variant="secondary">Host</Badge>
 						{/if}
-						<span class="text-muted-foreground font-mono text-xs tracking-wide">{r.joinCode}</span>
+						<span class="text-muted-foreground font-mono text-xs tracking-wide"
+							>{r.joinCode}</span
+						>
 					</div>
 				</a>
 			{/each}
