@@ -1,3 +1,4 @@
+import re
 import uuid
 from datetime import UTC, datetime
 
@@ -15,6 +16,9 @@ from models.domain import (
 
 # Shared state moved to service (or could be in core if needed by multiple services)
 room_state_cache: dict[str, dict] = {}
+
+# Join code validation pattern
+JOIN_CODE_RE = re.compile(r"^[A-HJ-NP-Z2-9]{6}$")
 
 
 def _now_iso() -> str:
@@ -501,3 +505,36 @@ async def rename_participant(room_id: str, user_id: str, display_name: str) -> d
 
     await ensure_user_display_name(user_id, display_name)
     return await refresh_room_state(room_id, "participant_renamed")
+
+
+async def check_room_availability(
+    join_codes: list[str],
+) -> tuple[list[str], list[str]]:
+    """
+    Check availability of rooms by join codes.
+    
+    Returns a tuple of (available_codes, unavailable_codes).
+    Unavailable codes include invalid, duplicate, and non-existent/inactive rooms.
+    """
+    unique_codes: list[str] = []
+    seen_codes: set[str] = set()
+    invalid_or_duplicate_codes: list[str] = []
+
+    for raw_code in join_codes:
+        normalized_code = raw_code.strip().upper()
+        if not JOIN_CODE_RE.match(normalized_code):
+            invalid_or_duplicate_codes.append(normalized_code)
+            continue
+        if normalized_code in seen_codes:
+            invalid_or_duplicate_codes.append(normalized_code)
+            continue
+        seen_codes.add(normalized_code)
+        unique_codes.append(normalized_code)
+
+    available = await crud.get_active_join_codes(unique_codes)
+    available_set = set(available)
+    unavailable = [
+        code for code in unique_codes if code not in available_set
+    ] + invalid_or_duplicate_codes
+
+    return available, unavailable

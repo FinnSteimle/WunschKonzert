@@ -2,8 +2,20 @@ import tailwindcss from '@tailwindcss/vite';
 import { sveltekit } from '@sveltejs/kit/vite';
 import { defineConfig } from 'vitest/config';
 
+const isVitest =
+	typeof globalThis !== 'undefined' &&
+	'process' in globalThis &&
+	!!(globalThis as { process?: { env?: { VITEST?: string } } }).process?.env?.VITEST;
+
 export default defineConfig({
 	plugins: [tailwindcss(), sveltekit()],
+	...(isVitest
+		? {
+				resolve: {
+					conditions: ['browser', 'development', 'import', 'module', 'default']
+				}
+			}
+		: {}),
 	ssr: {
 		noExternal: ['html-encoding-sniffer', '@exodus/bytes', 'jsdom']
 	},
@@ -11,7 +23,7 @@ export default defineConfig({
 		globals: true,
 		environment: 'jsdom',
 		include: ['src/**/*.{test,spec}.{ts,js}'],
-		setupFiles: [],
+		setupFiles: ['src/test/setup.ts'],
 		server: {
 			deps: {
 				inline: ['html-encoding-sniffer', '@exodus/bytes', 'jsdom']
@@ -19,8 +31,8 @@ export default defineConfig({
 		},
 		coverage: {
 			provider: 'v8',
-			reporter: ['text', 'cobertura'],
-			include: ['src/**/*.ts'],
+			reporter: ['text', 'text-summary', 'cobertura'],
+			include: ['src/**/*.ts', 'src/**/*.svelte'],
 			exclude: ['src/lib/components/ui/*'],
 			clean: false
 			/*

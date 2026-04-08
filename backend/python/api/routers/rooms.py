@@ -1,5 +1,3 @@
-import re
-
 from fastapi import APIRouter, HTTPException
 
 import api.websockets as websockets
@@ -15,8 +13,6 @@ from models.schemas import (
     RoomRequest,
     RoomResponse,
 )
-
-JOIN_CODE_RE = re.compile(r"^[A-HJ-NP-Z2-9]{6}$")
 
 router = APIRouter()
 
@@ -56,7 +52,7 @@ async def join_room(room_data: RoomRequest):
         raise HTTPException(status_code=400, detail="Display name is required")
 
     normalized_code = room_data.join_code.strip().upper()
-    if not JOIN_CODE_RE.match(normalized_code):
+    if not room_service.JOIN_CODE_RE.match(normalized_code):
         raise HTTPException(
             status_code=422,
             detail="Join code must be exactly 6 characters (A-Z, 2-9, no I/O/0/1).",
@@ -127,27 +123,9 @@ async def delete_room(room_data: DeleteRoomRequest):
 
 @router.post("/rooms/availability", response_model=RoomAvailabilityResponse)
 async def rooms_availability(payload: RoomAvailabilityRequest):
-    unique_codes: list[str] = []
-    seen_codes: set[str] = set()
-    invalid_or_duplicate_codes: list[str] = []
-
-    for raw_code in payload.join_codes:
-        normalized_code = raw_code.strip().upper()
-        if not JOIN_CODE_RE.match(normalized_code):
-            invalid_or_duplicate_codes.append(normalized_code)
-            continue
-        if normalized_code in seen_codes:
-            invalid_or_duplicate_codes.append(normalized_code)
-            continue
-        seen_codes.add(normalized_code)
-        unique_codes.append(normalized_code)
-
-    available = await crud.get_active_join_codes(unique_codes)
-    available_set = set(available)
-    unavailable = [
-        code for code in unique_codes if code not in available_set
-    ] + invalid_or_duplicate_codes
-
+    available, unavailable = await room_service.check_room_availability(
+        payload.join_codes
+    )
     return RoomAvailabilityResponse(
         available_join_codes=available,
         unavailable_join_codes=unavailable,

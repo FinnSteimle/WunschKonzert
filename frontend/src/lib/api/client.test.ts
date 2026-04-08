@@ -17,6 +17,8 @@ describe('apiClient', () => {
 	it('posts create room payload and returns parsed response', async () => {
 		const fetchMock = vi.fn().mockResolvedValue(
 			mockJsonResponse(true, {
+				success: true,
+				message: 'ok',
 				room_id: 'room-1',
 				join_code: 'AB2CD3'
 			})
@@ -31,7 +33,12 @@ describe('apiClient', () => {
 		};
 		const result = await apiClient.createRoom(payload);
 
-		expect(result).toEqual({ room_id: 'room-1', join_code: 'AB2CD3' });
+		expect(result).toEqual({
+			success: true,
+			message: 'ok',
+			room_id: 'room-1',
+			join_code: 'AB2CD3'
+		});
 		expect(fetchMock).toHaveBeenCalledOnce();
 		expect(fetchMock).toHaveBeenCalledWith('http://localhost:8000/create_room', {
 			method: 'POST',
@@ -40,7 +47,41 @@ describe('apiClient', () => {
 		});
 	});
 
-	it('throws backend detail message for failed requests', async () => {
+	it('uses backend error detail/message when present', async () => {
+		const fetchMock = vi
+			.fn()
+			.mockResolvedValueOnce({
+				ok: false,
+				status: 400,
+				json: async () => ({ detail: 'Invalid room name' })
+			})
+			.mockResolvedValueOnce({
+				ok: false,
+				status: 409,
+				json: async () => ({ message: 'Duplicate room' })
+			});
+		vi.stubGlobal('fetch', fetchMock);
+
+		await expect(
+			apiClient.createRoom({
+				name: 'Friday vibes',
+				user_id: 'U_TESTUSER1',
+				display_name: 'Alice',
+				supported_provider_id: 'spotify'
+			})
+		).rejects.toThrow('Invalid room name');
+
+		await expect(
+			apiClient.createRoom({
+				name: 'Friday vibes',
+				user_id: 'U_TESTUSER1',
+				display_name: 'Alice',
+				supported_provider_id: 'spotify'
+			})
+		).rejects.toThrow('Duplicate room');
+	});
+
+	it('throws backend detail message for failed join requests', async () => {
 		const fetchMock = vi.fn().mockResolvedValue(
 			mockJsonResponse(false, { detail: 'Room already exists' }, 409)
 		);
@@ -52,15 +93,13 @@ describe('apiClient', () => {
 	});
 
 	it('falls back to status text when error body cannot be parsed', async () => {
-		const fetchMock = vi.fn().mockResolvedValue(
-			{
-				ok: false,
-				status: 503,
-				json: async () => {
-					throw new Error('invalid json');
-				}
-			} as unknown as Response
-		);
+		const fetchMock = vi.fn().mockResolvedValue({
+			ok: false,
+			status: 503,
+			json: async () => {
+				throw new Error('not json');
+			}
+		});
 		vi.stubGlobal('fetch', fetchMock);
 
 		await expect(
