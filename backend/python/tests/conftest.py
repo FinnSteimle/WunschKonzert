@@ -20,13 +20,7 @@ It creates a brand new psql-container, creates an engine and session to use for 
 @pytest.fixture(scope="session")
 def postgres_container():
     """Spin up a Postgres container for the whole test session."""
-    postgres_image = os.getenv("POSTGRES_TEST_IMAGE")
-    if not postgres_image:
-        dependency_proxy_prefix = os.getenv("CI_DEPENDENCY_PROXY_GROUP_IMAGE_PREFIX")
-        if dependency_proxy_prefix:
-            postgres_image = f"{dependency_proxy_prefix}/postgres:17-alpine"
-        else:
-            postgres_image = "postgres:17-alpine"
+    postgres_image = os.getenv("POSTGRES_TEST_IMAGE", "postgres:17-alpine")
     with PostgresContainer(postgres_image) as postgres:
         yield postgres
 
