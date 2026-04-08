@@ -1,12 +1,19 @@
 import os
+import uuid
+
 import pytest
-from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
+from sqlalchemy.pool import NullPool
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from testcontainers.postgres import PostgresContainer
-from models.domain import Base
+
 import core.database
+from models import domain
+from models.domain import Base
+from repositories import crud
+from services import room_service
 
 """
-This file makes sure we dont use the acutal database for our unit tests.
+This file contains helper fuctions and makes sure we dont use the acutal database for our unit tests.
 It creates a brand new psql-container, creates an engine and session to use for our tests.
 """
 
@@ -20,46 +27,83 @@ def postgres_container():
 @pytest.fixture(scope="session")
 async def db_engine(postgres_container):
     """Create a database engine for the test container."""
-    # Get the base URL from testcontainers
     url = postgres_container.get_connection_url()
 
     # Force the use of asyncpg driver
-    # We replace any postgres(ql):// prefix with postgresql+asyncpg://
     if "://" in url:
         _, address = url.split("://", 1)
         url = f"postgresql+asyncpg://{address}"
 
-    # Overwrite the environment variable so core.database uses it
     os.environ["DATABASE_URL"] = url
 
-    engine = create_async_engine(url)
+    # NullPool: no connection pooling — prevents deadlocks when db_session
+    # holds a connection while CRUD functions check out additional ones.
+    engine = create_async_engine(url, poolclass=NullPool)
 
-    # Create tables
     async with engine.begin() as conn:
-        # We need to make sure enums are created correctly for Postgres
-        # Base.metadata.create_all handles this if configured correctly
         await conn.run_sync(Base.metadata.create_all)
 
     yield engine
     await engine.dispose()
 
 
-@pytest.fixture
-async def db_session(db_engine):
-    """Get a fresh database session for each test."""
-    session_factory = async_sessionmaker(
-        db_engine, class_=AsyncSession, expire_on_commit=False
-    )
+@pytest.fixture(scope="session")
+def session_factory(db_engine):
+    """Single shared session factory for the whole test session."""
+    return async_sessionmaker(db_engine, class_=AsyncSession, expire_on_commit=False)
 
-    # Mock core.database.get_session_factory to return this session factory
-    # This allows crud.py functions to use our test database
+
+@pytest.fixture
+async def db_session(session_factory):
+    """Get a fresh database session for each test."""
     original_get_session_factory = core.database.get_session_factory
+    original_crud_get_session_factory = crud.get_session_factory
+    original_session_factory_singleton = core.database._session_factory
+    original_engine_singleton = core.database._engine
+
+    # Keep all DB access on the real test factory for this test case.
+    core.database._session_factory = session_factory
     core.database.get_session_factory = lambda: session_factory
+    crud.get_session_factory = lambda: session_factory
 
     async with session_factory() as session:
         yield session
-        # Rollback any changes after each test to keep tests isolated
+        # Truncate all tables after each test — rollback alone cannot undo
+        # commits made by CRUD functions that open their own sessions
         await session.rollback()
+        for table in reversed(Base.metadata.sorted_tables):
+            await session.execute(table.delete())
+        await session.commit()
 
-    # Restore original function
+    # Clear the room state cache to prevent memory accumulation across tests
+    room_service.room_state_cache.clear()
+
+    core.database._engine = original_engine_singleton
+    core.database._session_factory = original_session_factory_singleton
+    crud.get_session_factory = original_crud_get_session_factory
     core.database.get_session_factory = original_get_session_factory
+
+
+@pytest.fixture
+def init_room(db_session):
+    async def _factory(
+        provider_id=None,
+        provider_name="test_provider",
+        room_name="test_room",
+        user_id=None,
+    ):
+
+        provider_id = provider_id or str(uuid.uuid4())
+        user_id = user_id or str(uuid.uuid4())
+
+        await crud.create_user(user_id, "test_host", db_session)
+        await crud.create_music_provider(provider_id, provider_name, db_session)
+        await db_session.commit()
+
+        provider = await crud.get_music_provider(provider_id, db_session)
+
+        room = await crud.create_room(room_name, user_id, provider.providerId)
+        await crud.create_room_membership(user_id, room.roomId)
+        return room
+
+    return _factory
