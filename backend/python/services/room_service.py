@@ -426,19 +426,15 @@ async def delete_room_service(room_id: str, user_id: str) -> dict:
     # Update room status
     await crud.update_room_status(room_id, RoomStatus.DELETED)
 
-    # Update all memberships — use a single session to load and modify in place,
-    # avoiding session.merge() on detached objects which deadlocks in async.
+    # Update all memberships
+    memberships = await crud.get_room_memberships(room_id)
     from core.database import get_session_factory
-    from models.domain import RoomMembership
-    from sqlalchemy import select
 
     session_factory = get_session_factory()
     async with session_factory() as session:
-        result = await session.execute(
-            select(RoomMembership).where(RoomMembership.roomId == room_id)
-        )
-        memberships = result.scalars().all()
         for membership in memberships:
+            # Re-fetch or merge into session if needed, but here we can just update
+            membership = await session.merge(membership)
             membership.membershipStatus = MembershipStatus.INACTIVE
             if membership.leftAt is None:
                 membership.leftAt = datetime.now(UTC).replace(tzinfo=None)
