@@ -190,7 +190,7 @@ frontend:unit:
       fi
       echo "Coverage file: $COVERAGE_FILE"
 
-  coverage: '/All files\s+\|\s+([\d.]+)/'
+  coverage: '/Lines\s*:\s*([\d.]+)%/'
   artifacts:
     when: always
     expire_in: 7 days
