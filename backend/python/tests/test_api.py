@@ -1,6 +1,7 @@
 import pytest
 import uuid
 from repositories import crud
+from services.providers.base import ProviderTrack
 
 @pytest.mark.asyncio
 async def test_health_check(client):
@@ -132,3 +133,47 @@ async def test_rooms_availability(client, db_session, init_room):
     assert "ABCDEF" in data["unavailable_join_codes"]
     assert "GHIJKL" in data["unavailable_join_codes"]
 
+
+@pytest.mark.asyncio
+async def test_search_tracks_dispatches_provider(client, db_session, init_room, monkeypatch):
+    room = await init_room(provider_id="spotify", provider_name="Spotify")
+
+    class _FakeProvider:
+        provider_id = "spotify"
+
+        async def search_tracks(self, query: str) -> list[ProviderTrack]:
+            assert query == "fire"
+            return [
+                ProviderTrack(
+                    track_id="track1",
+                    provider_track_id="provider-track-1",
+                    title="Fire",
+                    artist="Artist",
+                    album="Album",
+                    duration=180,
+                    cover_url="https://cover",
+                    deep_link="https://link",
+                )
+            ]
+
+    monkeypatch.setattr(
+        "api.routers.provider_search.get_provider_client", lambda _: _FakeProvider()
+    )
+
+    response = await client.get(f"/rooms/{room.roomId}/search", params={"q": "fire"})
+    assert response.status_code == 200
+    data = response.json()
+    assert data["provider"] == "spotify"
+    assert data["query"] == "fire"
+    assert len(data["tracks"]) == 1
+    assert data["tracks"][0]["trackId"] == "track1"
+    assert data["tracks"][0]["providerTrackId"] == "provider-track-1"
+
+
+@pytest.mark.asyncio
+async def test_search_tracks_unsupported_provider_returns_400(client, db_session, init_room):
+    room = await init_room(provider_id="apple", provider_name="Apple Music")
+
+    response = await client.get(f"/rooms/{room.roomId}/search", params={"q": "fire"})
+    assert response.status_code == 400
+    assert "Unsupported music provider" in response.json()["detail"]
