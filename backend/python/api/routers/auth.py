@@ -12,7 +12,7 @@ router = APIRouter()
 
 
 @router.post("/auth/account", response_model=AuthResponse)
-async def auth_account(auth_data: AuthRequest):
+async def auth_account(auth_data: AuthRequest) -> dict[str, object]:
     return {
         "success": True,
         "message": "Account authentication successful",
@@ -21,7 +21,7 @@ async def auth_account(auth_data: AuthRequest):
 
 
 @router.post("/add_music_provider", response_model=AddMusicProviderResponse)
-async def add_music_provider(provider_data: AddMusicProviderRequest):
+async def add_music_provider(provider_data: AddMusicProviderRequest) -> dict[str, object]:
     user = await crud.get_user(provider_data.user_id)
     if not user:
         raise HTTPException(status_code=404, detail="User not found")

@@ -1,5 +1,6 @@
 import subprocess
 import sys
+from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
@@ -12,7 +13,7 @@ from api.routers import auth, playback, provider_search, rooms
 from core.exceptions import ResourceNotFoundError
 
 
-async def initialize_music_providers():
+async def initialize_music_providers() -> None:
     """Seed default music providers on startup"""
     default_providers = [
         ("spotify", "Spotify"),
@@ -27,7 +28,7 @@ async def initialize_music_providers():
             await crud.create_music_provider(provider_id, name)
 
 
-def run_migrations():
+def run_migrations() -> None:
     """Run database migrations using alembic"""
     try:
         result = subprocess.run(
@@ -46,7 +47,7 @@ def run_migrations():
 
 
 @asynccontextmanager
-async def lifespan(app: FastAPI):
+async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     # Startup
     run_migrations()
     await initialize_music_providers()
@@ -73,15 +74,15 @@ app.include_router(websockets.router)
 
 
 @app.get("/health")
-async def health():
+async def health() -> JSONResponse:
     result = await crud.check_db_health()
     if result["status"] != "ok":
         return JSONResponse({"status": "error", "db": result}, status_code=503)
-    return {"status": "ok", "db": result}
+    return JSONResponse({"status": "ok", "db": result})
 
 
 @app.get("/hello")
-async def root():
+async def root() -> dict[str, str]:
     return {"message": "Hello World"}
 
 

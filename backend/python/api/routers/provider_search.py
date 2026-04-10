@@ -1,4 +1,5 @@
 from fastapi import APIRouter, HTTPException, Query
+
 import repositories.crud as crud
 from models.domain import RoomStatus
 from services.providers.registry import get_provider_client
@@ -9,7 +10,7 @@ router = APIRouter()
 @router.get("/rooms/{room_id}/search")
 async def search_tracks(
     room_id: str, q: str = Query(..., min_length=1, max_length=120)
-):
+) -> dict[str, object]:
     room = await crud.get_room(room_id)
     if not room:
         raise HTTPException(status_code=404, detail="Room not found")

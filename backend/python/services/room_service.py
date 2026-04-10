@@ -12,10 +12,11 @@ from models.domain import (
     PlaybackState,
     QueueEntryStatus,
     RoomStatus,
+    SongFeedback,
 )
 
 # Shared state moved to service (or could be in core if needed by multiple services)
-room_state_cache: dict[str, dict] = {}
+room_state_cache: dict[str, dict[str, object]] = {}
 
 # Join code validation pattern
 JOIN_CODE_RE = re.compile(r"^[A-HJ-NP-Z2-9]{6}$")
@@ -43,7 +44,7 @@ def _ui_to_feedback(vote_type: str) -> FeedbackType | None:
     return None
 
 
-async def _build_room_state(room_id: str) -> dict | None:
+async def _build_room_state(room_id: str) -> dict[str, object] | None:
     # Get room and host
     room = await crud.get_room(room_id)
     if not room:
@@ -56,7 +57,7 @@ async def _build_room_state(room_id: str) -> dict | None:
     # Get room members
     memberships = await crud.get_room_members(room_id)
 
-    users: list[dict] = [
+    users: list[dict[str, object]] = [
         {
             "user": {
                 "userId": host.userId,
@@ -97,14 +98,14 @@ async def _build_room_state(room_id: str) -> dict | None:
     queue_entry_ids = [entry.queueEntryId for entry in queue_entries]
 
     # Build feedback map
-    feedback_map = {entry_id: [] for entry_id in queue_entry_ids}
+    feedback_map: dict[str, list[SongFeedback]] = {entry_id: [] for entry_id in queue_entry_ids}
 
     for entry_id in queue_entry_ids:
         feedback_list = await crud.get_song_feedback_by_queue_entry(entry_id)
         feedback_map[entry_id].extend(feedback_list)
 
     # Build queue
-    queue: list[dict] = []
+    queue: list[dict[str, object]] = []
     for queue_entry in queue_entries:
         track = await crud.get_track(queue_entry.trackId)
         added_by_user = await crud.get_user(queue_entry.addedBy)
@@ -157,7 +158,7 @@ async def _build_room_state(room_id: str) -> dict | None:
     queue.sort(
         key=lambda item: (
             0 if item["status"] == "playing" else 1,
-            -item["voteScore"],
+            -int(item["voteScore"]),  # type: ignore[call-overload]
             item["position"],
         )
     )
@@ -182,7 +183,7 @@ async def _build_room_state(room_id: str) -> dict | None:
             "positionMs": int(latest_playback.elapsedTime or 0) * 1000,
         }
 
-    state = {
+    state: dict[str, object] = {
         "room": {
             "roomId": room.roomId,
             "joinCode": room.joinCode,
@@ -204,7 +205,7 @@ async def _build_room_state(room_id: str) -> dict | None:
     return state
 
 
-async def refresh_room_state(room_id: str, event_type: str | None = None) -> dict:
+async def refresh_room_state(room_id: str, event_type: str | None = None) -> dict[str, object]:
     room_state = await _build_room_state(room_id)
     if room_state is None:
         raise HTTPException(status_code=404, detail="Room not found")
@@ -216,7 +217,7 @@ async def refresh_room_state(room_id: str, event_type: str | None = None) -> dic
     return room_state
 
 
-async def add_to_queue(room_id: str, track_data: dict, user_id: str) -> dict:
+async def add_to_queue(room_id: str, track_data: dict[str, object], user_id: str) -> dict[str, object]:
     if not track_data:
         raise HTTPException(status_code=400, detail="No track data provided")
 
@@ -233,7 +234,7 @@ async def add_to_queue(room_id: str, track_data: dict, user_id: str) -> dict:
         raise HTTPException(status_code=404, detail="User not found")
 
     # Get or create track
-    db_track = await crud.get_track(track_data["trackId"])
+    db_track = await crud.get_track(str(track_data["trackId"]))
     if not db_track:
         db_track = await crud.create_track(
             {
@@ -249,7 +250,7 @@ async def add_to_queue(room_id: str, track_data: dict, user_id: str) -> dict:
         )
 
     # Check if the song is already in the queue
-    existing_entry = await crud.get_queue_entry_by_track(room_id, track_data["trackId"])
+    existing_entry = await crud.get_queue_entry_by_track(room_id, str(track_data["trackId"]))
     if existing_entry:
         raise HTTPException(status_code=409, detail="Song is already in the queue")
 
@@ -292,7 +293,7 @@ async def add_to_queue(room_id: str, track_data: dict, user_id: str) -> dict:
 
 async def vote_queue_entry(
     room_id: str, queue_entry_id: str, user_id: str, vote_type: str
-) -> dict:
+) -> dict[str, object]:
     if vote_type not in {"upvote", "downvote", "neutral"}:
         raise HTTPException(status_code=400, detail="Invalid vote type")
 
@@ -339,7 +340,7 @@ async def vote_queue_entry(
     return await refresh_room_state(room_id, "vote_updated")
 
 
-async def set_playback_state(room_id: str, user_id: str, action: str) -> dict:
+async def set_playback_state(room_id: str, user_id: str, action: str) -> dict[str, object]:
     if action not in {"pause", "resume", "stop"}:
         raise HTTPException(status_code=400, detail="Invalid playback action")
 
@@ -379,7 +380,7 @@ async def set_playback_state(room_id: str, user_id: str, action: str) -> dict:
         )
 
     # Update playback session state
-    updates = {"state": PlaybackState.PLAYING, "pausedAt": None}
+    updates: dict[str, object] = {"state": PlaybackState.PLAYING, "pausedAt": None}
     if action == "pause":
         updates = {
             "state": PlaybackState.PAUSED,
@@ -396,7 +397,7 @@ async def set_playback_state(room_id: str, user_id: str, action: str) -> dict:
     return await refresh_room_state(room_id, "playback_updated")
 
 
-async def leave_room_service(room_id: str, user_id: str) -> dict:
+async def leave_room_service(room_id: str, user_id: str) -> dict[str, object]:
     user = await crud.get_user(user_id)
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
@@ -415,7 +416,7 @@ async def leave_room_service(room_id: str, user_id: str) -> dict:
     return await refresh_room_state(room_id, "participant_left")
 
 
-async def delete_room_service(room_id: str, user_id: str) -> dict:
+async def delete_room_service(room_id: str, user_id: str) -> dict[str, object]:
     # Get room and validate
     room = await crud.get_room(room_id)
     if not room:
@@ -488,7 +489,7 @@ async def ensure_active_membership(user_id: str, room_id: str) -> None:
         await crud.create_room_membership(user_id, room_id)
 
 
-async def rename_participant(room_id: str, user_id: str, display_name: str) -> dict:
+async def rename_participant(room_id: str, user_id: str, display_name: str) -> dict[str, object]:
     room = await crud.get_room(room_id)
     if not room:
         raise HTTPException(status_code=404, detail="Room not found")

@@ -349,7 +349,7 @@ async def get_track(track_id: str) -> Track | None:
         return await session.get(Track, track_id)
 
 
-async def create_track(track_data: dict) -> Track:
+async def create_track(track_data: dict[str, object]) -> Track:
     """Create a new track"""
     session_factory = get_session_factory()
     async with session_factory() as session:
@@ -360,7 +360,7 @@ async def create_track(track_data: dict) -> Track:
         return track
 
 
-async def create_queue_entry(queue_entry_data: dict) -> QueueEntry:
+async def create_queue_entry(queue_entry_data: dict[str, object]) -> QueueEntry:
     """Create a new queue entry"""
     session_factory = get_session_factory()
     async with session_factory() as session:
@@ -378,7 +378,7 @@ async def get_queue_entry(queue_entry_id: str) -> QueueEntry | None:
         return await session.get(QueueEntry, queue_entry_id)
 
 
-async def update_queue_entry(queue_entry_id: str, updates: dict) -> QueueEntry:
+async def update_queue_entry(queue_entry_id: str, updates: dict[str, object]) -> QueueEntry:
     """Update a queue entry"""
     session_factory = get_session_factory()
     async with session_factory() as session:
@@ -406,7 +406,7 @@ async def get_queue_entry_by_track(room_id: str, track_id: str) -> QueueEntry | 
         return result.scalar_one_or_none()
 
 
-async def create_playback_session(playback_data: dict) -> PlaybackSession:
+async def create_playback_session(playback_data: dict[str, object]) -> PlaybackSession:
     """Create a new playback session"""
     session_factory = get_session_factory()
     async with session_factory() as session:
@@ -418,7 +418,7 @@ async def create_playback_session(playback_data: dict) -> PlaybackSession:
 
 
 async def update_playback_session(
-    playback_session_id: str, updates: dict
+    playback_session_id: str, updates: dict[str, object]
 ) -> PlaybackSession:
     """Update a playback session"""
     session_factory = get_session_factory()
@@ -462,12 +462,12 @@ async def get_song_feedback(queue_entry_id: str, user_id: str) -> SongFeedback |
         return result.scalar_one_or_none()
 
 
-async def create_or_update_song_feedback(feedback_data: dict) -> SongFeedback:
+async def create_or_update_song_feedback(feedback_data: dict[str, object]) -> SongFeedback:
     """Create or update song feedback"""
     session_factory = get_session_factory()
     async with session_factory() as session:
         existing = await get_song_feedback(
-            feedback_data["queueEntryId"], feedback_data["userId"]
+            str(feedback_data["queueEntryId"]), str(feedback_data["userId"])
         )
 
         if existing:
@@ -558,7 +558,7 @@ async def update_room_status(room_id: str, status: RoomStatus) -> Room:
         return room
 
 
-async def check_db_health() -> dict:
+async def check_db_health() -> dict[str, object]:
     """Check if database is healthy by executing a simple query"""
     try:
         session_factory = get_session_factory()

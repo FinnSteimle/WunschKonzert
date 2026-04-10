@@ -18,7 +18,7 @@ router = APIRouter()
 
 
 @router.post("/create_room", response_model=RoomResponse)
-async def create_room_endpoint(room_data: CreateRoomRequest):
+async def create_room_endpoint(room_data: CreateRoomRequest) -> dict[str, object]:
     await room_service.ensure_user_display_name(
         room_data.user_id, room_data.display_name
     )
@@ -47,7 +47,7 @@ async def create_room_endpoint(room_data: CreateRoomRequest):
 
 
 @router.post("/join_room", response_model=RoomResponse)
-async def join_room(room_data: RoomRequest):
+async def join_room(room_data: RoomRequest) -> dict[str, object]:
     if room_data.display_name is None or not room_data.display_name.strip():
         raise HTTPException(status_code=400, detail="Display name is required")
 
@@ -88,7 +88,7 @@ async def join_room(room_data: RoomRequest):
 
 
 @router.post("/leave_room", response_model=RoomResponse)
-async def leave_room(room_data: LeaveRoomRequest):
+async def leave_room(room_data: LeaveRoomRequest) -> dict[str, object]:
     try:
         await room_service.leave_room_service(room_data.room_id, room_data.user_id)
         await websockets.send_room_state(room_data.room_id)
@@ -106,7 +106,7 @@ async def leave_room(room_data: LeaveRoomRequest):
 
 
 @router.post("/delete_room", response_model=RoomResponse)
-async def delete_room(room_data: DeleteRoomRequest):
+async def delete_room(room_data: DeleteRoomRequest) -> dict[str, object]:
     try:
         await room_service.delete_room_service(room_data.room_id, room_data.user_id)
         await websockets.send_room_state(room_data.room_id)
@@ -122,7 +122,7 @@ async def delete_room(room_data: DeleteRoomRequest):
 
 
 @router.post("/rooms/availability", response_model=RoomAvailabilityResponse)
-async def rooms_availability(payload: RoomAvailabilityRequest):
+async def rooms_availability(payload: RoomAvailabilityRequest) -> RoomAvailabilityResponse:
     available, unavailable = await room_service.check_room_availability(
         payload.join_codes
     )

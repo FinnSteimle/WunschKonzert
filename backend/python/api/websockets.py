@@ -72,7 +72,7 @@ async def handle_room_events(room_id: str, data: str) -> None:
 
 
 @router.websocket("/ws/{room_id}")
-async def websocket_endpoint_room(websocket: WebSocket, room_id: str):
+async def websocket_endpoint_room(websocket: WebSocket, room_id: str) -> None:
     await websocket.accept()
     active_room_connections[room_id].add(websocket)
     await send_room_state(room_id)
@@ -90,7 +90,7 @@ async def websocket_endpoint_room(websocket: WebSocket, room_id: str):
 
 
 @router.websocket("/ws")
-async def websocket_endpoint(websocket: WebSocket):
+async def websocket_endpoint(websocket: WebSocket) -> None:
     await websocket.accept()
     generic_connections.add(websocket)
     try:
