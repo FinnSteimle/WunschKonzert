@@ -67,6 +67,7 @@ ignore_missing_imports = true
 
 [tool.ruff.lint]
 select = ["E", "W", "F", "I", "C90"]  # pycodestyle, pyflakes, isort, mccabe
+ignore = ["E501"]  # line length is enforced by ruff format, not ruff check
 
 [tool.ruff.lint.mccabe]
 max-complexity = 10
