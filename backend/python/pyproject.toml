@@ -63,7 +63,7 @@ module = "alembic.*"
 ignore_missing_imports = true
 
 [tool.ruff]
-line-length = 125
+#line-length = 125
 
 [tool.ruff.lint]
 select = ["E", "W", "F", "I", "C90"]  # pycodestyle, pyflakes, isort, mccabe

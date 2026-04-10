@@ -42,10 +42,14 @@ class SpotifyProviderClient:
         token = payload.get("access_token")
         expires_in = int(payload.get("expires_in", 3600))
         if not isinstance(token, str) or not token:
-            raise HTTPException(status_code=502, detail="Spotify token response invalid")
+            raise HTTPException(
+                status_code=502, detail="Spotify token response invalid"
+            )
 
         self._token = token
-        self._expires_at = datetime.now(UTC).replace(microsecond=0) + timedelta(seconds=max(60, expires_in - 60))
+        self._expires_at = datetime.now(UTC).replace(microsecond=0) + timedelta(
+            seconds=max(60, expires_in - 60)
+        )
         return token
 
     async def search_tracks(self, query: str) -> list[ProviderTrack]:
@@ -72,11 +76,15 @@ class SpotifyProviderClient:
                 ) from exc
             payload = response.json()
 
-        return [self._to_track(item) for item in payload.get("tracks", {}).get("items", [])]
+        return [
+            self._to_track(item) for item in payload.get("tracks", {}).get("items", [])
+        ]
 
     def _to_track(self, item: dict[str, object]) -> ProviderTrack:
         track_id_raw = item.get("id")
-        track_id = track_id_raw if isinstance(track_id_raw, str) and track_id_raw else ""
+        track_id = (
+            track_id_raw if isinstance(track_id_raw, str) and track_id_raw else ""
+        )
 
         album = item.get("album")
         album_data = album if isinstance(album, dict) else {}
@@ -109,7 +117,9 @@ class SpotifyProviderClient:
         duration = int(duration_ms / 1000) if isinstance(duration_ms, int) else 0
 
         title_raw = item.get("name")
-        title = title_raw if isinstance(title_raw, str) and title_raw else "Unknown title"
+        title = (
+            title_raw if isinstance(title_raw, str) and title_raw else "Unknown title"
+        )
 
         return ProviderTrack(
             track_id=track_id,

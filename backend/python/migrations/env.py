@@ -18,7 +18,9 @@ if config.config_file_name is not None:
 target_metadata = Base.metadata
 
 # Get database URL from environment
-DATABASE_URL = os.environ.get("DATABASE_URL", "postgresql://postgres:changeme@localhost:5432/wunschkonzert")
+DATABASE_URL = os.environ.get(
+    "DATABASE_URL", "postgresql://postgres:changeme@localhost:5432/wunschkonzert"
+)
 
 # Ensure we use the synchronous psycopg2 driver, not asyncpg
 if "+asyncpg" in DATABASE_URL:

@@ -17,7 +17,9 @@ def _get_database_url() -> str:
     """Get and format the database URL"""
     database_url = os.environ.get("DATABASE_URL")
     if not database_url:
-        raise RuntimeError("DATABASE_URL environment variable not set. Please set it in your .env file or environment.")
+        raise RuntimeError(
+            "DATABASE_URL environment variable not set. Please set it in your .env file or environment."
+        )
 
     # if prefix is not set or set wrong, force the correct one
     if not database_url.startswith("postgresql+asyncpg://"):
@@ -36,5 +38,7 @@ def get_session_factory() -> async_sessionmaker[AsyncSession]:
     if _session_factory is None:
         database_url = _get_database_url()
         _engine = create_async_engine(database_url)
-        _session_factory = async_sessionmaker(_engine, class_=AsyncSession, expire_on_commit=False)
+        _session_factory = async_sessionmaker(
+            _engine, class_=AsyncSession, expire_on_commit=False
+        )
     return _session_factory

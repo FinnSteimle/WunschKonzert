@@ -55,7 +55,9 @@ class _FakeAsyncClient:
                                 "images": [{"url": "https://cover"}],
                             },
                             "artists": [{"name": "Katy Perry"}],
-                            "external_urls": {"spotify": "https://open.spotify.com/track/abc123"},
+                            "external_urls": {
+                                "spotify": "https://open.spotify.com/track/abc123"
+                            },
                         }
                     ]
                 }

@@ -33,18 +33,26 @@ async def test_websocket_rename_event(db_session, init_room, websocket_client):
         _ = websocket.receive_json()
 
         # 3. Send a rename event
-        rename_event = {"type": "rename", "user_id": host_id, "display_name": "New Name"}
+        rename_event = {
+            "type": "rename",
+            "user_id": host_id,
+            "display_name": "New Name",
+        }
         websocket.send_json(rename_event)
 
         # 4. Receive updated state
         updated_data = websocket.receive_json()
         assert updated_data["host"]["displayName"] == "New Name"
-        assert any(u["user"]["displayName"] == "New Name" for u in updated_data["users"])
+        assert any(
+            u["user"]["displayName"] == "New Name" for u in updated_data["users"]
+        )
         assert updated_data["lastEvent"]["type"] == "participant_renamed"
 
 
 @pytest.mark.asyncio
-async def test_websocket_broadcast_to_multiple_clients(db_session, init_room, websocket_client):
+async def test_websocket_broadcast_to_multiple_clients(
+    db_session, init_room, websocket_client
+):
     # 1. Setup a room and a host
     host_id = str(uuid.uuid4())
     room = await init_room(user_id=host_id)
@@ -87,7 +95,9 @@ async def test_websocket_room_not_found(db_session, websocket_client):
         # So the websocket stays open but no initial state is sent.
 
         # Since no state is sent, we can try to send something and see if it doesn't crash
-        websocket.send_json({"type": "rename", "user_id": "none", "display_name": "fail"})
+        websocket.send_json(
+            {"type": "rename", "user_id": "none", "display_name": "fail"}
+        )
         # handle_room_events also catches exceptions.
 
         # We can't easily check for "no message received" without a timeout,

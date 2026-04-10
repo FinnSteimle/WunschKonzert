@@ -19,7 +19,9 @@ router = APIRouter()
 
 @router.post("/create_room", response_model=RoomResponse)
 async def create_room_endpoint(room_data: CreateRoomRequest) -> dict[str, object]:
-    await room_service.ensure_user_display_name(room_data.user_id, room_data.display_name)
+    await room_service.ensure_user_display_name(
+        room_data.user_id, room_data.display_name
+    )
     await room_service.ensure_provider_exists(room_data.supported_provider_id)
 
     try:
@@ -56,7 +58,9 @@ async def join_room(room_data: RoomRequest) -> dict[str, object]:
             detail="Join code must be exactly 6 characters (A-Z, 2-9, no I/O/0/1).",
         )
 
-    await room_service.ensure_user_display_name(room_data.user_id, room_data.display_name)
+    await room_service.ensure_user_display_name(
+        room_data.user_id, room_data.display_name
+    )
 
     room = await crud.get_room_by_join_code(normalized_code)
     if not room:
@@ -118,8 +122,12 @@ async def delete_room(room_data: DeleteRoomRequest) -> dict[str, object]:
 
 
 @router.post("/rooms/availability", response_model=RoomAvailabilityResponse)
-async def rooms_availability(payload: RoomAvailabilityRequest) -> RoomAvailabilityResponse:
-    available, unavailable = await room_service.check_room_availability(payload.join_codes)
+async def rooms_availability(
+    payload: RoomAvailabilityRequest,
+) -> RoomAvailabilityResponse:
+    available, unavailable = await room_service.check_room_availability(
+        payload.join_codes
+    )
     return RoomAvailabilityResponse(
         available_join_codes=available,
         unavailable_join_codes=unavailable,

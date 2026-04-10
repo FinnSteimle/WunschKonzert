@@ -21,7 +21,9 @@ async def auth_account(auth_data: AuthRequest) -> dict[str, object]:
 
 
 @router.post("/add_music_provider", response_model=AddMusicProviderResponse)
-async def add_music_provider(provider_data: AddMusicProviderRequest) -> dict[str, object]:
+async def add_music_provider(
+    provider_data: AddMusicProviderRequest,
+) -> dict[str, object]:
     user = await crud.get_user(provider_data.user_id)
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
@@ -40,4 +42,6 @@ async def add_music_provider(provider_data: AddMusicProviderRequest) -> dict[str
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to add music provider: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Failed to add music provider: {str(e)}"
+        )

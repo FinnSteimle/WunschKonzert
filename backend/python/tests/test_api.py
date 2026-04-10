@@ -60,7 +60,11 @@ async def test_join_room_success(client, db_session, init_room):
     room = await init_room()
     user_id = str(uuid.uuid4())
 
-    payload = {"join_code": room.joinCode, "user_id": user_id, "display_name": "Guest User"}
+    payload = {
+        "join_code": room.joinCode,
+        "user_id": user_id,
+        "display_name": "Guest User",
+    }
     response = await client.post("/join_room", json=payload)
     assert response.status_code == 200
     data = response.json()
@@ -70,7 +74,11 @@ async def test_join_room_success(client, db_session, init_room):
 
 @pytest.mark.asyncio
 async def test_join_room_not_found(client, db_session):
-    payload = {"join_code": "ABCDEF", "user_id": str(uuid.uuid4()), "display_name": "Guest User"}
+    payload = {
+        "join_code": "ABCDEF",
+        "user_id": str(uuid.uuid4()),
+        "display_name": "Guest User",
+    }
     response = await client.post("/join_room", json=payload)
     assert response.status_code == 404
     assert "Room not found" in response.json()["detail"]
@@ -131,7 +139,9 @@ async def test_rooms_availability(client, db_session, init_room):
 
 
 @pytest.mark.asyncio
-async def test_search_tracks_dispatches_provider(client, db_session, init_room, monkeypatch):
+async def test_search_tracks_dispatches_provider(
+    client, db_session, init_room, monkeypatch
+):
     room = await init_room(provider_id="spotify", provider_name="Spotify")
 
     class _FakeProvider:
@@ -152,7 +162,9 @@ async def test_search_tracks_dispatches_provider(client, db_session, init_room, 
                 )
             ]
 
-    monkeypatch.setattr("api.routers.provider_search.get_provider_client", lambda _: _FakeProvider())
+    monkeypatch.setattr(
+        "api.routers.provider_search.get_provider_client", lambda _: _FakeProvider()
+    )
 
     response = await client.get(f"/rooms/{room.roomId}/search", params={"q": "fire"})
     assert response.status_code == 200
@@ -165,7 +177,9 @@ async def test_search_tracks_dispatches_provider(client, db_session, init_room, 
 
 
 @pytest.mark.asyncio
-async def test_search_tracks_unsupported_provider_returns_400(client, db_session, init_room):
+async def test_search_tracks_unsupported_provider_returns_400(
+    client, db_session, init_room
+):
     room = await init_room(provider_id="apple", provider_name="Apple Music")
 
     response = await client.get(f"/rooms/{room.roomId}/search", params={"q": "fire"})

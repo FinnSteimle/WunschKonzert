@@ -14,5 +14,7 @@ def get_provider_client(provider_id: str) -> MusicProviderClient:
     normalized = provider_id.strip().lower()
     client = _provider_clients.get(normalized)
     if client is None:
-        raise HTTPException(status_code=400, detail=f"Unsupported music provider: {provider_id}")
+        raise HTTPException(
+            status_code=400, detail=f"Unsupported music provider: {provider_id}"
+        )
     return client

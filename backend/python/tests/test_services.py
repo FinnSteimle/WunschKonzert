@@ -167,7 +167,9 @@ async def test_queue_add_remove(db_session, init_room):
     assert item.status == domain.QueueEntryStatus.PLAYING
 
     # Remove the item from the queue (entries are marked REMOVED, not hard-deleted)
-    await crud.update_queue_entry(item.queueEntryId, {"status": domain.QueueEntryStatus.REMOVED})
+    await crud.update_queue_entry(
+        item.queueEntryId, {"status": domain.QueueEntryStatus.REMOVED}
+    )
 
     entries_after = await crud.get_queue_entries(room.roomId)
     active = [
@@ -214,7 +216,9 @@ async def test_vote_upvote_increases_score(db_session, init_room):
     room = await init_room()
     queue_entry_id = await _add_track_to_queue(room.roomId, room.hostedBy)
 
-    await room_service.vote_queue_entry(room.roomId, queue_entry_id, room.hostedBy, "upvote")
+    await room_service.vote_queue_entry(
+        room.roomId, queue_entry_id, room.hostedBy, "upvote"
+    )
 
     entry = await crud.get_queue_entry(queue_entry_id)
     assert entry.voteScore == 1
@@ -225,7 +229,9 @@ async def test_vote_downvote_decreases_score(db_session, init_room):
     room = await init_room()
     queue_entry_id = await _add_track_to_queue(room.roomId, room.hostedBy)
 
-    await room_service.vote_queue_entry(room.roomId, queue_entry_id, room.hostedBy, "downvote")
+    await room_service.vote_queue_entry(
+        room.roomId, queue_entry_id, room.hostedBy, "downvote"
+    )
 
     entry = await crud.get_queue_entry(queue_entry_id)
     assert entry.voteScore == -1
@@ -237,8 +243,12 @@ async def test_vote_change_updates_score_without_duplicate_row(db_session, init_
     room = await init_room()
     queue_entry_id = await _add_track_to_queue(room.roomId, room.hostedBy)
 
-    await room_service.vote_queue_entry(room.roomId, queue_entry_id, room.hostedBy, "upvote")
-    await room_service.vote_queue_entry(room.roomId, queue_entry_id, room.hostedBy, "downvote")
+    await room_service.vote_queue_entry(
+        room.roomId, queue_entry_id, room.hostedBy, "upvote"
+    )
+    await room_service.vote_queue_entry(
+        room.roomId, queue_entry_id, room.hostedBy, "downvote"
+    )
 
     entry = await crud.get_queue_entry(queue_entry_id)
     assert entry.voteScore == -1
@@ -253,8 +263,12 @@ async def test_vote_neutral_removes_feedback_and_resets_score(db_session, init_r
     room = await init_room()
     queue_entry_id = await _add_track_to_queue(room.roomId, room.hostedBy)
 
-    await room_service.vote_queue_entry(room.roomId, queue_entry_id, room.hostedBy, "upvote")
-    await room_service.vote_queue_entry(room.roomId, queue_entry_id, room.hostedBy, "neutral")
+    await room_service.vote_queue_entry(
+        room.roomId, queue_entry_id, room.hostedBy, "upvote"
+    )
+    await room_service.vote_queue_entry(
+        room.roomId, queue_entry_id, room.hostedBy, "neutral"
+    )
 
     entry = await crud.get_queue_entry(queue_entry_id)
     assert entry is not None
@@ -268,7 +282,9 @@ async def test_vote_neutral_with_no_prior_feedback_is_noop(db_session, init_room
     room = await init_room()
     queue_entry_id = await _add_track_to_queue(room.roomId, room.hostedBy)
 
-    await room_service.vote_queue_entry(room.roomId, queue_entry_id, room.hostedBy, "neutral")
+    await room_service.vote_queue_entry(
+        room.roomId, queue_entry_id, room.hostedBy, "neutral"
+    )
 
     entry = await crud.get_queue_entry(queue_entry_id)
     assert entry is not None
@@ -281,7 +297,9 @@ async def test_vote_invalid_type_raises_400(db_session, init_room):
     queue_entry_id = await _add_track_to_queue(room.roomId, room.hostedBy)
 
     with pytest.raises(HTTPException) as exc_info:
-        await room_service.vote_queue_entry(room.roomId, queue_entry_id, room.hostedBy, "sideways")
+        await room_service.vote_queue_entry(
+            room.roomId, queue_entry_id, room.hostedBy, "sideways"
+        )
     assert exc_info.value.status_code == 400
     assert "Invalid vote type" in exc_info.value.detail
 
@@ -293,7 +311,9 @@ async def test_vote_entry_from_different_room_raises_404(db_session, init_room):
     queue_entry_id = await _add_track_to_queue(room.roomId, room.hostedBy)
 
     with pytest.raises(HTTPException) as exc_info:
-        await room_service.vote_queue_entry(str(uuid.uuid4()), queue_entry_id, room.hostedBy, "upvote")
+        await room_service.vote_queue_entry(
+            str(uuid.uuid4()), queue_entry_id, room.hostedBy, "upvote"
+        )
     assert exc_info.value.status_code == 404
     assert "Queue entry not found" in exc_info.value.detail
 
@@ -309,9 +329,13 @@ async def test_vote_multiple_users_score_aggregated(db_session, init_room):
     await crud.create_user(user2_id, "voter2")
     await crud.create_user(user3_id, "voter3")
 
-    await room_service.vote_queue_entry(room.roomId, queue_entry_id, room.hostedBy, "upvote")
+    await room_service.vote_queue_entry(
+        room.roomId, queue_entry_id, room.hostedBy, "upvote"
+    )
     await room_service.vote_queue_entry(room.roomId, queue_entry_id, user2_id, "upvote")
-    await room_service.vote_queue_entry(room.roomId, queue_entry_id, user3_id, "downvote")
+    await room_service.vote_queue_entry(
+        room.roomId, queue_entry_id, user3_id, "downvote"
+    )
 
     entry = await crud.get_queue_entry(queue_entry_id)
     assert entry is not None

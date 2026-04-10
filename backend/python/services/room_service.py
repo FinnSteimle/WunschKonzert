@@ -85,7 +85,9 @@ async def _build_room_state(room_id: str) -> dict[str, object] | None:
                 },
                 "membership": {
                     "joinedAt": membership.joinedAt.isoformat(),
-                    "leftAt": membership.leftAt.isoformat() if membership.leftAt else None,
+                    "leftAt": membership.leftAt.isoformat()
+                    if membership.leftAt
+                    else None,
                     "membershipStatus": _enum_value(membership.membershipStatus),
                 },
             }
@@ -96,7 +98,9 @@ async def _build_room_state(room_id: str) -> dict[str, object] | None:
     queue_entry_ids = [entry.queueEntryId for entry in queue_entries]
 
     # Build feedback map
-    feedback_map: dict[str, list[SongFeedback]] = {entry_id: [] for entry_id in queue_entry_ids}
+    feedback_map: dict[str, list[SongFeedback]] = {
+        entry_id: [] for entry_id in queue_entry_ids
+    }
 
     for entry_id in queue_entry_ids:
         feedback_list = await crud.get_song_feedback_by_queue_entry(entry_id)
@@ -112,8 +116,12 @@ async def _build_room_state(room_id: str) -> dict[str, object] | None:
             continue
 
         feedback_entries = feedback_map.get(queue_entry.queueEntryId, [])
-        upvotes = sum(1 for feedback in feedback_entries if feedback.type == FeedbackType.LIKE)
-        downvotes = sum(1 for feedback in feedback_entries if feedback.type == FeedbackType.DISLIKE)
+        upvotes = sum(
+            1 for feedback in feedback_entries if feedback.type == FeedbackType.LIKE
+        )
+        downvotes = sum(
+            1 for feedback in feedback_entries if feedback.type == FeedbackType.DISLIKE
+        )
         vote_score = upvotes - downvotes
 
         queue.append(
@@ -170,7 +178,9 @@ async def _build_room_state(room_id: str) -> dict[str, object] | None:
         playback_state = _enum_value(latest_playback.state)
         playback = {
             "state": playback_state,
-            "currentQueueEntryId": (latest_playback.queueEntryId if playback_state != "stopped" else None),
+            "currentQueueEntryId": (
+                latest_playback.queueEntryId if playback_state != "stopped" else None
+            ),
             "updatedAt": latest_playback.startedAt.isoformat(),
             "positionMs": int(latest_playback.elapsedTime or 0) * 1000,
         }
@@ -197,7 +207,9 @@ async def _build_room_state(room_id: str) -> dict[str, object] | None:
     return state
 
 
-async def refresh_room_state(room_id: str, event_type: str | None = None) -> dict[str, object]:
+async def refresh_room_state(
+    room_id: str, event_type: str | None = None
+) -> dict[str, object]:
     room_state = await _build_room_state(room_id)
     if room_state is None:
         raise HTTPException(status_code=404, detail="Room not found")
@@ -209,7 +221,9 @@ async def refresh_room_state(room_id: str, event_type: str | None = None) -> dic
     return room_state
 
 
-async def add_to_queue(room_id: str, track_data: dict[str, object], user_id: str) -> dict[str, object]:
+async def add_to_queue(
+    room_id: str, track_data: dict[str, object], user_id: str
+) -> dict[str, object]:
     if not track_data:
         raise HTTPException(status_code=400, detail="No track data provided")
 
@@ -242,7 +256,9 @@ async def add_to_queue(room_id: str, track_data: dict[str, object], user_id: str
         )
 
     # Check if the song is already in the queue
-    existing_entry = await crud.get_queue_entry_by_track(room_id, str(track_data["trackId"]))
+    existing_entry = await crud.get_queue_entry_by_track(
+        room_id, str(track_data["trackId"])
+    )
     if existing_entry:
         raise HTTPException(status_code=409, detail="Song is already in the queue")
 
@@ -260,7 +276,9 @@ async def add_to_queue(room_id: str, track_data: dict[str, object], user_id: str
             "trackId": track_data["trackId"],
             "addedBy": user_id,
             "position": next_position,
-            "status": QueueEntryStatus.PLAYING if has_playing is None else QueueEntryStatus.QUEUED,
+            "status": QueueEntryStatus.PLAYING
+            if has_playing is None
+            else QueueEntryStatus.QUEUED,
             "voteScore": 0,
             "orderRank": float(next_position),
         }
@@ -281,7 +299,9 @@ async def add_to_queue(room_id: str, track_data: dict[str, object], user_id: str
     return await refresh_room_state(room_id, "queue_updated")
 
 
-async def vote_queue_entry(room_id: str, queue_entry_id: str, user_id: str, vote_type: str) -> dict[str, object]:
+async def vote_queue_entry(
+    room_id: str, queue_entry_id: str, user_id: str, vote_type: str
+) -> dict[str, object]:
     if vote_type not in {"upvote", "downvote", "neutral"}:
         raise HTTPException(status_code=400, detail="Invalid vote type")
 
@@ -309,7 +329,9 @@ async def vote_queue_entry(room_id: str, queue_entry_id: str, user_id: str, vote
     # Recalculate vote score
     feedback_list = await crud.get_song_feedback_by_queue_entry(queue_entry_id)
     upvotes = sum(1 for feedback in feedback_list if feedback.type == FeedbackType.LIKE)
-    downvotes = sum(1 for feedback in feedback_list if feedback.type == FeedbackType.DISLIKE)
+    downvotes = sum(
+        1 for feedback in feedback_list if feedback.type == FeedbackType.DISLIKE
+    )
 
     vote_score = upvotes - downvotes
     order_rank = float(queue_entry.position) - float(vote_score) / 100.0
@@ -326,7 +348,9 @@ async def vote_queue_entry(room_id: str, queue_entry_id: str, user_id: str, vote
     return await refresh_room_state(room_id, "vote_updated")
 
 
-async def set_playback_state(room_id: str, user_id: str, action: str) -> dict[str, object]:
+async def set_playback_state(
+    room_id: str, user_id: str, action: str
+) -> dict[str, object]:
     if action not in {"pause", "resume", "stop"}:
         raise HTTPException(status_code=400, detail="Invalid playback action")
 
@@ -335,7 +359,9 @@ async def set_playback_state(room_id: str, user_id: str, action: str) -> dict[st
     if not room:
         raise HTTPException(status_code=404, detail="Room not found")
     if room.hostedBy != user_id:
-        raise HTTPException(status_code=403, detail="Only the host can control playback")
+        raise HTTPException(
+            status_code=403, detail="Only the host can control playback"
+        )
 
     # Get or create playback session
     playback_session = await crud.get_current_playback_session(room_id)
@@ -348,7 +374,9 @@ async def set_playback_state(room_id: str, user_id: str, action: str) -> dict[st
             raise HTTPException(status_code=400, detail="No queued songs")
 
         # Update queue entry status
-        await crud.update_queue_entry(current_queue_entry.queueEntryId, {"status": QueueEntryStatus.PLAYING})
+        await crud.update_queue_entry(
+            current_queue_entry.queueEntryId, {"status": QueueEntryStatus.PLAYING}
+        )
 
         # Create playback session
         playback_session = await crud.create_playback_session(
@@ -458,7 +486,9 @@ async def ensure_provider_exists(provider_id: str) -> None:
     try:
         await crud.get_music_provider(provider_id)
     except ResourceNotFoundError:
-        raise HTTPException(status_code=400, detail=f"Unsupported music provider: {provider_id}. ")
+        raise HTTPException(
+            status_code=400, detail=f"Unsupported music provider: {provider_id}. "
+        )
 
 
 async def ensure_active_membership(user_id: str, room_id: str) -> None:
@@ -469,14 +499,18 @@ async def ensure_active_membership(user_id: str, room_id: str) -> None:
         await crud.create_room_membership(user_id, room_id)
 
 
-async def rename_participant(room_id: str, user_id: str, display_name: str) -> dict[str, object]:
+async def rename_participant(
+    room_id: str, user_id: str, display_name: str
+) -> dict[str, object]:
     room = await crud.get_room(room_id)
     if not room:
         raise HTTPException(status_code=404, detail="Room not found")
 
     membership = await crud.get_room_membership(user_id, room_id)
     if not membership or membership.membershipStatus != MembershipStatus.ACTIVE:
-        raise HTTPException(status_code=403, detail="Only active room participants can rename")
+        raise HTTPException(
+            status_code=403, detail="Only active room participants can rename"
+        )
 
     await ensure_user_display_name(user_id, display_name)
     return await refresh_room_state(room_id, "participant_renamed")
@@ -508,6 +542,8 @@ async def check_room_availability(
 
     available = await crud.get_active_join_codes(unique_codes)
     available_set = set(available)
-    unavailable = [code for code in unique_codes if code not in available_set] + invalid_or_duplicate_codes
+    unavailable = [
+        code for code in unique_codes if code not in available_set
+    ] + invalid_or_duplicate_codes
 
     return available, unavailable

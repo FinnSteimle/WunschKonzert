@@ -27,7 +27,9 @@ from models.domain import (
 )
 
 
-async def create_user(user_id: str, display_name: str, session: AsyncSession | None = None) -> User:
+async def create_user(
+    user_id: str, display_name: str, session: AsyncSession | None = None
+) -> User:
     # Create a session recursively, to avoid duplicating the method logic or burying it in an if/else
     # for both cases (session has been created and needs to be created)
     if session is None:
@@ -64,11 +66,15 @@ async def get_user(user_id: str, session: AsyncSession | None = None) -> User:
     return user
 
 
-async def create_music_provider(provider_id: str, name: str, session: AsyncSession | None = None) -> MusicProvider:
+async def create_music_provider(
+    provider_id: str, name: str, session: AsyncSession | None = None
+) -> MusicProvider:
     if session is None:
         session_factory = get_session_factory()
         async with session_factory() as new_session:
-            provider = await create_music_provider(provider_id, name, session=new_session)
+            provider = await create_music_provider(
+                provider_id, name, session=new_session
+            )
             await new_session.commit()
             return provider
     try:
@@ -84,7 +90,9 @@ async def create_music_provider(provider_id: str, name: str, session: AsyncSessi
     return provider
 
 
-async def get_music_provider(provider_id: str, session: AsyncSession | None = None) -> MusicProvider:
+async def get_music_provider(
+    provider_id: str, session: AsyncSession | None = None
+) -> MusicProvider:
     if session is None:
         session_factory = get_session_factory()
         async with session_factory() as new_session:
@@ -135,7 +143,9 @@ async def get_room_membership(user_id: str, room_id: str) -> RoomMembership | No
     session_factory = get_session_factory()
     async with session_factory() as session:
         result = await session.execute(
-            select(RoomMembership).where(RoomMembership.userId == user_id, RoomMembership.roomId == room_id)
+            select(RoomMembership).where(
+                RoomMembership.userId == user_id, RoomMembership.roomId == room_id
+            )
         )
         return result.scalar_one_or_none()
 
@@ -173,7 +183,9 @@ async def leave_room(user_id: str, room_id: str) -> RoomMembership:
     session_factory = get_session_factory()
     async with session_factory() as session:
         result = await session.execute(
-            select(RoomMembership).where(RoomMembership.userId == user_id, RoomMembership.roomId == room_id)
+            select(RoomMembership).where(
+                RoomMembership.userId == user_id, RoomMembership.roomId == room_id
+            )
         )
         membership = result.scalar_one_or_none()
 
@@ -205,7 +217,9 @@ async def create_room(name: str, user_id: str, supported_provider_id: str) -> Ro
         join_code = _generate_join_code()
 
         # Extremely unlikely collisions, but guaranteed unique before insert.
-        while (await session.execute(select(Room).where(Room.joinCode == join_code))).scalar_one_or_none() is not None:
+        while (
+            await session.execute(select(Room).where(Room.joinCode == join_code))
+        ).scalar_one_or_none() is not None:
             join_code = _generate_join_code()
 
         room = Room(
@@ -222,7 +236,9 @@ async def create_room(name: str, user_id: str, supported_provider_id: str) -> Ro
         return room
 
 
-async def create_provider_account(user_id: str, provider_id: str, external_user_id: str) -> ProviderAccount:
+async def create_provider_account(
+    user_id: str, provider_id: str, external_user_id: str
+) -> ProviderAccount:
     """Create a new provider account for a user"""
     # Check if user exists
     user = await get_user(user_id)
@@ -240,7 +256,9 @@ async def create_provider_account(user_id: str, provider_id: str, external_user_
         )
         existing = result.scalar_one_or_none()
         if existing:
-            raise ValueError(f"User already has an account linked for provider {provider_id}")
+            raise ValueError(
+                f"User already has an account linked for provider {provider_id}"
+            )
 
     # Create new provider account
     session_factory = get_session_factory()
@@ -258,7 +276,9 @@ async def create_provider_account(user_id: str, provider_id: str, external_user_
         return provider_account
 
 
-async def update_membership_status(user_id: str, room_id: str, status: MembershipStatus) -> RoomMembership:
+async def update_membership_status(
+    user_id: str, room_id: str, status: MembershipStatus
+) -> RoomMembership:
     """Update membership status for a user in a room"""
     session_factory = get_session_factory()
     async with session_factory() as session:
@@ -302,7 +322,9 @@ async def get_queue_entries(room_id: str) -> Sequence[QueueEntry]:
     session_factory = get_session_factory()
     async with session_factory() as session:
         result = await session.execute(
-            select(QueueEntry).where(QueueEntry.roomId == room_id).order_by(QueueEntry.position.asc())
+            select(QueueEntry)
+            .where(QueueEntry.roomId == room_id)
+            .order_by(QueueEntry.position.asc())
         )
         return result.scalars().all()
 
@@ -356,7 +378,9 @@ async def get_queue_entry(queue_entry_id: str) -> QueueEntry | None:
         return await session.get(QueueEntry, queue_entry_id)
 
 
-async def update_queue_entry(queue_entry_id: str, updates: dict[str, object]) -> QueueEntry:
+async def update_queue_entry(
+    queue_entry_id: str, updates: dict[str, object]
+) -> QueueEntry:
     """Update a queue entry"""
     session_factory = get_session_factory()
     async with session_factory() as session:
@@ -377,7 +401,9 @@ async def get_queue_entry_by_track(room_id: str, track_id: str) -> QueueEntry | 
     session_factory = get_session_factory()
     async with session_factory() as session:
         result = await session.execute(
-            select(QueueEntry).where(QueueEntry.roomId == room_id, QueueEntry.trackId == track_id)
+            select(QueueEntry).where(
+                QueueEntry.roomId == room_id, QueueEntry.trackId == track_id
+            )
         )
         return result.scalar_one_or_none()
 
@@ -393,7 +419,9 @@ async def create_playback_session(playback_data: dict[str, object]) -> PlaybackS
         return playback_session
 
 
-async def update_playback_session(playback_session_id: str, updates: dict[str, object]) -> PlaybackSession:
+async def update_playback_session(
+    playback_session_id: str, updates: dict[str, object]
+) -> PlaybackSession:
     """Update a playback session"""
     session_factory = get_session_factory()
     async with session_factory() as session:
@@ -436,11 +464,15 @@ async def get_song_feedback(queue_entry_id: str, user_id: str) -> SongFeedback |
         return result.scalar_one_or_none()
 
 
-async def create_or_update_song_feedback(feedback_data: dict[str, object]) -> SongFeedback:
+async def create_or_update_song_feedback(
+    feedback_data: dict[str, object],
+) -> SongFeedback:
     """Create or update song feedback"""
     session_factory = get_session_factory()
     async with session_factory() as session:
-        existing = await get_song_feedback(str(feedback_data["queueEntryId"]), str(feedback_data["userId"]))
+        existing = await get_song_feedback(
+            str(feedback_data["queueEntryId"]), str(feedback_data["userId"])
+        )
 
         if existing:
             existing = await session.merge(existing)
@@ -471,7 +503,9 @@ async def get_max_queue_position(room_id: str) -> int:
     """Get the maximum queue position for a room"""
     session_factory = get_session_factory()
     async with session_factory() as session:
-        result = await session.execute(select(func.max(QueueEntry.position)).where(QueueEntry.roomId == room_id))
+        result = await session.execute(
+            select(func.max(QueueEntry.position)).where(QueueEntry.roomId == room_id)
+        )
         max_position = result.scalar_one_or_none()
         return int(max_position or 0)
 
@@ -496,7 +530,10 @@ async def get_first_queued_entry(room_id: str) -> QueueEntry | None:
     session_factory = get_session_factory()
     async with session_factory() as session:
         result = await session.execute(
-            select(QueueEntry).where(QueueEntry.roomId == room_id).order_by(QueueEntry.position.asc()).limit(1)
+            select(QueueEntry)
+            .where(QueueEntry.roomId == room_id)
+            .order_by(QueueEntry.position.asc())
+            .limit(1)
         )
         return result.scalar_one_or_none()
 
@@ -505,7 +542,9 @@ async def get_room_memberships(room_id: str) -> Sequence[RoomMembership]:
     """Get all memberships for a room"""
     session_factory = get_session_factory()
     async with session_factory() as session:
-        result = await session.execute(select(RoomMembership).where(RoomMembership.roomId == room_id))
+        result = await session.execute(
+            select(RoomMembership).where(RoomMembership.roomId == room_id)
+        )
         return result.scalars().all()
 
 

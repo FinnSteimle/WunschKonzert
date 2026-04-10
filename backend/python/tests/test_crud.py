@@ -38,7 +38,9 @@ async def test_create_and_get_music_provider(db_session):
     name = "test_provider"
 
     await crud.create_music_provider(provider_id, name, db_session)
-    provider: domain.MusicProvider = await crud.get_music_provider(provider_id, db_session)
+    provider: domain.MusicProvider = await crud.get_music_provider(
+        provider_id, db_session
+    )
 
     assert provider.providerId == provider_id
     assert provider.name == name
