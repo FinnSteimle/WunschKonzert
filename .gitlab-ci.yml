@@ -200,7 +200,7 @@ backend:integration:
     - apk add --no-cache docker-compose
   script:
     - cd backend
-    - docker compose -f compose.test.yaml run --rm api-test uv run pytest -m "integration" -q
+    - docker compose -f compose.test.yaml run --rm api-test uv run pytest -m "integration" -q --no-cov
   after_script:
     - cd backend
     - docker compose -f compose.test.yaml down -v
