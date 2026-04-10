@@ -27,6 +27,7 @@ async def test_user_display_name_at_max_length(db_session):
     await room_service.ensure_user_display_name(str(uuid.uuid4()), user_name)
     # no exception → pass
 
+
 @pytest.mark.asyncio
 async def test_user_display_name_above_max_length(db_session):
     user_name = "a" * 61
@@ -35,12 +36,14 @@ async def test_user_display_name_above_max_length(db_session):
     assert exc_info.value.status_code == 400
     assert "too long" in exc_info.value.detail
 
+
 @pytest.mark.asyncio
 async def test_user_display_name_empty_raises(db_session):
     with pytest.raises(HTTPException) as exc_info:
         await room_service.ensure_user_display_name(str(uuid.uuid4()), "   ")
     assert exc_info.value.status_code == 400
     assert "required" in exc_info.value.detail
+
 
 @pytest.mark.asyncio
 async def test_user_display_name_strips_whitespace(db_session):
@@ -127,10 +130,10 @@ async def test_ensure_active_membership_already_active_is_noop(db_session, init_
     assert user_memberships[0].membershipStatus == domain.MembershipStatus.ACTIVE
 
 
-
 #
 # --- Queue Unit Tests ---
 #
+
 
 @pytest.mark.asyncio
 async def test_queue_add_remove(db_session, init_room):
@@ -168,8 +171,10 @@ async def test_queue_add_remove(db_session, init_room):
 
     entries_after = await crud.get_queue_entries(room.roomId)
     active = [
-        e for e in entries_after
-        if e.status not in (
+        e
+        for e in entries_after
+        if e.status
+        not in (
             domain.QueueEntryStatus.REMOVED,
             domain.QueueEntryStatus.PLAYED,
             domain.QueueEntryStatus.SKIPPED,
@@ -181,6 +186,7 @@ async def test_queue_add_remove(db_session, init_room):
 #
 # --- room_service.vote_queue_entry() tests ---
 #
+
 
 async def _add_track_to_queue(room_id: str, user_id: str) -> str:
     """Helper: add one track to a room, return its queueEntryId."""
@@ -310,4 +316,3 @@ async def test_vote_multiple_users_score_aggregated(db_session, init_room):
     entry = await crud.get_queue_entry(queue_entry_id)
     assert entry is not None
     assert entry.voteScore == 1  # 2 upvotes - 1 downvote
-

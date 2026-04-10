@@ -40,6 +40,4 @@ async def add_music_provider(provider_data: AddMusicProviderRequest) -> dict[str
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
-        raise HTTPException(
-            status_code=500, detail=f"Failed to add music provider: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=f"Failed to add music provider: {str(e)}")

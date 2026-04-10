@@ -31,5 +31,4 @@ class ProviderTrack:
 class MusicProviderClient(Protocol):
     provider_id: str
 
-    async def search_tracks(self, query: str) -> list[ProviderTrack]:
-        ...
+    async def search_tracks(self, query: str) -> list[ProviderTrack]: ...

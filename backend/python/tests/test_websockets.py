@@ -19,6 +19,7 @@ async def test_websocket_room_state_on_connect(db_session, init_room, websocket_
         assert "host" in data
         assert data["host"]["displayName"] == "test_host"
 
+
 @pytest.mark.asyncio
 async def test_websocket_rename_event(db_session, init_room, websocket_client):
     # 1. Setup a room and a host
@@ -32,11 +33,7 @@ async def test_websocket_rename_event(db_session, init_room, websocket_client):
         _ = websocket.receive_json()
 
         # 3. Send a rename event
-        rename_event = {
-            "type": "rename",
-            "user_id": host_id,
-            "display_name": "New Name"
-        }
+        rename_event = {"type": "rename", "user_id": host_id, "display_name": "New Name"}
         websocket.send_json(rename_event)
 
         # 4. Receive updated state
@@ -44,6 +41,7 @@ async def test_websocket_rename_event(db_session, init_room, websocket_client):
         assert updated_data["host"]["displayName"] == "New Name"
         assert any(u["user"]["displayName"] == "New Name" for u in updated_data["users"])
         assert updated_data["lastEvent"]["type"] == "participant_renamed"
+
 
 @pytest.mark.asyncio
 async def test_websocket_broadcast_to_multiple_clients(db_session, init_room, websocket_client):
@@ -53,9 +51,10 @@ async def test_websocket_broadcast_to_multiple_clients(db_session, init_room, we
     room_id = room.roomId
 
     # 2. Connect two clients to the same room
-    with websocket_client.websocket_connect(f"/ws/{room_id}") as ws1, \
-         websocket_client.websocket_connect(f"/ws/{room_id}") as ws2:
-
+    with (
+        websocket_client.websocket_connect(f"/ws/{room_id}") as ws1,
+        websocket_client.websocket_connect(f"/ws/{room_id}") as ws2,
+    ):
         # Receive initial states
         data1_init = ws1.receive_json()
         data2_init = ws2.receive_json()
@@ -64,12 +63,14 @@ async def test_websocket_broadcast_to_multiple_clients(db_session, init_room, we
         assert data1_init["room"]["roomId"] == room_id
         assert data2_init["room"]["roomId"] == room_id
 
+
 @pytest.mark.asyncio
 async def test_websocket_generic_endpoint(db_session, websocket_client):
     with websocket_client.websocket_connect("/ws") as websocket:
         websocket.send_text("Hello")
         message = websocket.receive_text()
         assert message == "No detail provided"
+
 
 @pytest.mark.asyncio
 async def test_websocket_room_not_found(db_session, websocket_client):
@@ -93,6 +94,7 @@ async def test_websocket_room_not_found(db_session, websocket_client):
         # but we can check that it didn't close immediately.
         pass
 
+
 @pytest.mark.asyncio
 async def test_websocket_playback_control(db_session, init_room, websocket_client):
     # Test play/pause/skip functionality
@@ -106,6 +108,7 @@ async def test_websocket_playback_control(db_session, init_room, websocket_clien
         assert "room" in state
         assert state["room"]["roomId"] == room.roomId
 
+
 @pytest.mark.asyncio
 async def test_websocket_queue_management(db_session, init_room, websocket_client):
     # Test that websocket connection works and can receive room state
@@ -117,6 +120,7 @@ async def test_websocket_queue_management(db_session, init_room, websocket_clien
         assert "room" in state
         assert "queue" in state
 
+
 @pytest.mark.asyncio
 async def test_websocket_voting(db_session, init_room, websocket_client):
     # Test that websocket connection works and state is maintained
@@ -127,6 +131,7 @@ async def test_websocket_voting(db_session, init_room, websocket_client):
         state = websocket.receive_json()
         assert "room" in state
         assert state["room"]["roomId"] == room.roomId
+
 
 @pytest.mark.asyncio
 async def test_websocket_invalid_event(db_session, init_room, websocket_client):

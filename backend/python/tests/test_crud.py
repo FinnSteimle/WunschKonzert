@@ -38,9 +38,7 @@ async def test_create_and_get_music_provider(db_session):
     name = "test_provider"
 
     await crud.create_music_provider(provider_id, name, db_session)
-    provider: domain.MusicProvider = await crud.get_music_provider(
-        provider_id, db_session
-    )
+    provider: domain.MusicProvider = await crud.get_music_provider(provider_id, db_session)
 
     assert provider.providerId == provider_id
     assert provider.name == name
@@ -55,7 +53,6 @@ async def test_create_provider_that_exists_throws_error(db_session):
 
     with pytest.raises(ResourceExistsError):
         await crud.create_music_provider(provider_id, name, db_session)
-
 
 
 @pytest.mark.asyncio
@@ -79,6 +76,7 @@ async def test_get_room_by_join_code(db_session, init_room):
     assert room_by_code is not None
     assert room_by_code.roomId == room.roomId
     assert len(room.joinCode) == 6
+
 
 @pytest.mark.asyncio
 async def test_get_room_by_join_code_not_found(db_session, init_room):
@@ -126,7 +124,7 @@ async def test_adding_multiple_users_to_room(db_session, init_room):
     for i in range(total_users - 1):
         user_id = str(uuid.uuid4())
         members.append(user_id)
-        await crud.create_user(user_id, f"guest{i+1}")
+        await crud.create_user(user_id, f"guest{i + 1}")
         await crud.create_room_membership(user_id, room.roomId)
 
     memberships = await crud.get_room_memberships(room.roomId)

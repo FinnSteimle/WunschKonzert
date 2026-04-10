@@ -43,9 +43,7 @@ async def handle_room_events(room_id: str, data: str) -> None:
     event_type = event.get("type")
     try:
         if event_type == "addqueue":
-            await room_service.add_to_queue(
-                room_id, event.get("track"), event.get("user_id")
-            )
+            await room_service.add_to_queue(room_id, event.get("track"), event.get("user_id"))
         elif event_type == "vote":
             await room_service.vote_queue_entry(
                 room_id=room_id,

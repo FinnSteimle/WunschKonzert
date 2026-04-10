@@ -19,6 +19,7 @@ This file contains helper fuctions and makes sure we dont use the acutal databas
 It creates a brand new psql-container, creates an engine and session to use for our tests.
 """
 
+
 @pytest.fixture(scope="session")
 def postgres_container():
     """Spin up a Postgres container for the whole test session."""
@@ -122,9 +123,7 @@ async def client(db_session):
     from main import app
 
     with patch("main.run_migrations"), patch("main.initialize_music_providers"):
-        async with httpx.AsyncClient(
-            transport=ASGITransport(app=app), base_url="http://testserver"
-        ) as ac:
+        async with httpx.AsyncClient(transport=ASGITransport(app=app), base_url="http://testserver") as ac:
             yield ac
 
 

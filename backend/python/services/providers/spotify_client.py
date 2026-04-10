@@ -45,9 +45,7 @@ class SpotifyProviderClient:
             raise HTTPException(status_code=502, detail="Spotify token response invalid")
 
         self._token = token
-        self._expires_at = datetime.now(UTC).replace(microsecond=0) + timedelta(
-            seconds=max(60, expires_in - 60)
-        )
+        self._expires_at = datetime.now(UTC).replace(microsecond=0) + timedelta(seconds=max(60, expires_in - 60))
         return token
 
     async def search_tracks(self, query: str) -> list[ProviderTrack]:
