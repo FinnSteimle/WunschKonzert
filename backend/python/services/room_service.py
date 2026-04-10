@@ -508,7 +508,7 @@ async def check_room_availability(
 ) -> tuple[list[str], list[str]]:
     """
     Check availability of rooms by join codes.
-    
+
     Returns a tuple of (available_codes, unavailable_codes).
     Unavailable codes include invalid, duplicate, and non-existent/inactive rooms.
     """

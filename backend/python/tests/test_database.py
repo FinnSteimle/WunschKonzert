@@ -1,11 +1,11 @@
 import os
-import pytest
 from unittest.mock import patch
 
-import core.database
-from core.database import get_session_factory
-from core.database import _get_database_url
+import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
+
+import core.database
+from core.database import _get_database_url, get_session_factory
 
 
 @pytest.mark.parametrize(

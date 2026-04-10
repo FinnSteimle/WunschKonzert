@@ -1,6 +1,9 @@
-import pytest
 import uuid
+
+import pytest
+
 from repositories import crud
+
 
 @pytest.mark.asyncio
 async def test_health_check(client):
@@ -51,7 +54,7 @@ async def test_create_room_invalid_provider(client, db_session):
 async def test_join_room_success(client, db_session, init_room):
     room = await init_room()
     user_id = str(uuid.uuid4())
-    
+
     payload = {
         "join_code": room.joinCode,
         "user_id": user_id,
@@ -107,7 +110,7 @@ async def test_leave_room_success(client, db_session, init_room):
 async def test_delete_room_success(client, db_session, init_room):
     host_id = str(uuid.uuid4())
     room = await init_room(user_id=host_id)
-    
+
     payload = {
         "room_id": room.roomId,
         "user_id": host_id
@@ -120,7 +123,7 @@ async def test_delete_room_success(client, db_session, init_room):
 async def test_rooms_availability(client, db_session, init_room):
     room1 = await init_room(provider_id=str(uuid.uuid4()))
     room2 = await init_room(provider_id=str(uuid.uuid4()))
-    
+
     payload = {
         "join_codes": [room1.joinCode, room2.joinCode, "ABCDEF", "GHIJKL"]
     }

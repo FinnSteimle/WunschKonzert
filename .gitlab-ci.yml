@@ -113,6 +113,18 @@ backend:lint:
     - uv sync --frozen
   script:
     - uv run --with ruff ruff check .
+    - uv run --with ruff ruff format --check .
+
+backend:typecheck:
+  stage: lint
+  image: python:3.14
+  <<: [*cache_uv, *rules_backend_changes]
+  before_script:
+    - pip install uv
+    - cd backend/python
+    - uv sync --frozen
+  script:
+    - uv run mypy .
 
 backend:quality:
   stage: lint

@@ -4,6 +4,7 @@ from datetime import UTC, datetime, timedelta
 
 import httpx
 from fastapi import APIRouter, HTTPException, Query
+
 import repositories.crud as crud
 
 router = APIRouter()

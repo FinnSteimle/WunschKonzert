@@ -79,10 +79,10 @@ async def test_get_room_by_join_code(db_session, init_room):
     assert room_by_code is not None
     assert room_by_code.roomId == room.roomId
     assert len(room.joinCode) == 6
-    
+
 @pytest.mark.asyncio
 async def test_get_room_by_join_code_not_found(db_session, init_room):
-    room = await init_room()
+    await init_room()
 
     room_by_code = await crud.get_room_by_join_code("invalid_code")
     assert room_by_code is None

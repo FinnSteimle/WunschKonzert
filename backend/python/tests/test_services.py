@@ -3,9 +3,6 @@ import uuid
 import pytest
 from fastapi import HTTPException
 
-from core.exceptions import (
-    ResourceExistsError,
-)
 from models import domain
 from repositories import crud
 from services import room_service

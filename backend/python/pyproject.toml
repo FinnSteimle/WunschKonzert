@@ -21,8 +21,7 @@ pythonpath = ["."]
 asyncio_mode = "auto"
 asyncio_default_test_loop_scope = "session"
 asyncio_default_fixture_loop_scope = "session"
-#addopts = "--cov=. --cov-report=term-missing --cov-report=xml:cobertura.xml --cov-fail-under=80"
-addopts = "--cov=. --cov-report=term-missing --cov-report=xml:cobertura.xml"
+addopts = "--cov=. --cov-report=term-missing --cov-report=xml:cobertura.xml --cov-fail-under=80"
 markers = [
     "integration: mark a test as an integration test"
 ]
@@ -63,8 +62,11 @@ ignore_missing_imports = true
 module = "alembic.*"
 ignore_missing_imports = true
 
+[tool.ruff]
+line-length = 125
+
 [tool.ruff.lint]
-select = ["C90"]  # mccabe
+select = ["E", "W", "F", "I", "C90"]  # pycodestyle, pyflakes, isort, mccabe
 
 [tool.ruff.lint.mccabe]
 max-complexity = 10

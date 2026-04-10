@@ -1,14 +1,15 @@
 import uuid
 from datetime import UTC, datetime
 from typing import Sequence
-from sqlalchemy import select, text, func, Row
+
+from sqlalchemy import Row, func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from core.database import get_session_factory
 from core.exceptions import (
     ResourceExistsError,
     ResourceNotFoundError,
 )
-from core.database import get_session_factory
 from models.domain import (
     AccountStatus,
     MembershipStatus,

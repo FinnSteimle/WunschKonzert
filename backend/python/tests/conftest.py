@@ -2,15 +2,14 @@ import os
 import uuid
 from unittest.mock import patch
 
-import pytest
 import httpx
+import pytest
 from httpx import ASGITransport
-from sqlalchemy.pool import NullPool
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+from sqlalchemy.pool import NullPool
 from testcontainers.postgres import PostgresContainer
 
 import core.database
-from models import domain
 from models.domain import Base
 from repositories import crud
 from services import room_service
@@ -135,8 +134,9 @@ def websocket_client(db_session):
     Get a fresh FastAPI TestClient for websocket testing.
     We mock lifespan activities like migrations and seeding to avoid side effects.
     """
-    from main import app
     from fastapi.testclient import TestClient
+
+    from main import app
 
     with patch("main.run_migrations"), patch("main.initialize_music_providers"):
         return TestClient(app)

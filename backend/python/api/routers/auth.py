@@ -1,11 +1,12 @@
 from fastapi import APIRouter, HTTPException
+
+import repositories.crud as crud
 from models.schemas import (
-    AuthRequest,
-    AuthResponse,
     AddMusicProviderRequest,
     AddMusicProviderResponse,
+    AuthRequest,
+    AuthResponse,
 )
-import repositories.crud as crud
 
 router = APIRouter()
 
