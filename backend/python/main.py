@@ -2,6 +2,7 @@ import subprocess
 import sys
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -35,7 +36,7 @@ def run_migrations() -> None:
             ["uv", "run", "alembic", "upgrade", "head"],
             capture_output=True,
             text=True,
-            cwd="/app",
+            cwd=Path(__file__).resolve().parent,
         )
         if result.returncode != 0:
             print(f"Migration failed: {result.stderr}")
