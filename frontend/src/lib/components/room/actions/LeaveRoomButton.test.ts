@@ -146,4 +146,41 @@ describe('LeaveRoomButton', () => {
 		await waitFor(() => expect(toast.error).toHaveBeenCalledWith('Could not leave room'));
 		expect(goto).not.toHaveBeenCalled();
 	});
+
+	it('stays disabled when disabled=true is applied during busy transition', async () => {
+		const request = deferred<{
+			success: boolean;
+			message: string;
+			room_id: string | null;
+			join_code: string | null;
+		}>();
+		vi.mocked(apiClient.leaveRoom).mockReturnValue(request.promise);
+
+		const view = render(LeaveRoomButton, {
+			roomId: 'room-1',
+			userId: 'user-1',
+			disabled: false
+		});
+
+		await fireEvent.click(screen.getByRole('button', { name: 'Leave room' }));
+		expect((screen.getByRole('button', { name: 'Leaving…' }) as HTMLButtonElement).disabled).toBe(true);
+
+		await view.rerender({
+			roomId: 'room-1',
+			userId: 'user-1',
+			disabled: true
+		});
+
+		expect((screen.getByRole('button', { name: 'Leaving…' }) as HTMLButtonElement).disabled).toBe(true);
+
+		request.resolvePromise({
+			success: true,
+			message: 'ok',
+			room_id: 'room-1',
+			join_code: 'AB12CD'
+		});
+
+		await waitFor(() => expect(toast.success).toHaveBeenCalledWith('Left room'));
+		expect((screen.getByRole('button', { name: 'Leave room' }) as HTMLButtonElement).disabled).toBe(true);
+	});
 });
