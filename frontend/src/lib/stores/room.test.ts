@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { get } from 'svelte/store';
-import { roomStore, getPersonalVoteState, getCurrentSong, type RoomUiState } from './room';
+import { roomStore, getPersonalVoteState, getCurrentSong, queueWithoutCurrent, type RoomUiState } from './room';
 import type { QueueEntryDto, RoomStateDto } from '$lib/types/api';
 
 function makeQueueEntry(overrides: Partial<QueueEntryDto> = {}): QueueEntryDto {
@@ -164,6 +164,45 @@ describe('getPersonalVoteState', () => {
 			]
 		});
 		expect(getPersonalVoteState(entry, 'user-1')).toBe('downvote');
+	});
+});
+
+describe('queueWithoutCurrent', () => {
+	it('returns empty array for null state', () => {
+		expect(queueWithoutCurrent(null)).toEqual([]);
+	});
+
+	it('filters out entry matching playback currentQueueEntryId', () => {
+		const playing = makeQueueEntry({ queueEntryId: 'q1', status: 'playing' });
+		const queued = makeQueueEntry({ queueEntryId: 'q2', status: 'queued' });
+		const state = makeRoomState({
+			queue: [playing, queued],
+			playback: {
+				state: 'playing',
+				currentQueueEntryId: 'q1',
+				updatedAt: '2025-01-01T00:00:00Z',
+				positionMs: 0
+			}
+		});
+		expect(queueWithoutCurrent(state)).toEqual([queued]);
+	});
+
+	it('filters out entry with status playing when no playback id', () => {
+		const playing = makeQueueEntry({ queueEntryId: 'q1', status: 'playing' });
+		const queued = makeQueueEntry({ queueEntryId: 'q2', status: 'queued' });
+		const state = makeRoomState({ queue: [playing, queued] });
+		expect(queueWithoutCurrent(state)).toEqual([queued]);
+	});
+
+	it('returns all entries when none is playing and no playback id', () => {
+		const a = makeQueueEntry({ queueEntryId: 'q1', status: 'queued' });
+		const b = makeQueueEntry({ queueEntryId: 'q2', status: 'queued' });
+		const state = makeRoomState({ queue: [a, b] });
+		expect(queueWithoutCurrent(state)).toEqual([a, b]);
+	});
+
+	it('returns empty array for empty queue', () => {
+		expect(queueWithoutCurrent(makeRoomState({ queue: [] }))).toEqual([]);
 	});
 });
 
