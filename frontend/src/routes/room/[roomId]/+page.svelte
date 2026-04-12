@@ -1,23 +1,19 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
+	import { browser } from '$app/environment';
 	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
 	import { apiClient } from '$lib/api/client';
-	import { roomStore, getCurrentSong } from '$lib/stores/room';
+	import { roomStore, getCurrentSong, queueWithoutCurrent } from '$lib/stores/room';
 	import { RoomSocketClient } from '$lib/realtime/roomSocket';
-	import { browser } from '$app/environment';
-	import {
-		getOrCreateSessionUser,
-		saveSessionDisplayName,
-		shouldPromptJoinLinkDisplayName
-	} from '$lib/session/userSession';
+	import { getOrCreateSessionUser, saveSessionDisplayName } from '$lib/session/userSession';
 	import {
 		isJoinFailureForRemovedRoom,
 		recordRecentRoom,
 		removeRecentRoom
 	} from '$lib/session/recentRooms';
-	import type { QueueEntryDto, RoomStateDto, TrackDto, VoteRequest } from '$lib/types/api';
+	import type { TrackDto, VoteRequest } from '$lib/types/api';
 	import { Badge } from '$lib/components/ui/badge';
 	import {
 		Card,
@@ -26,44 +22,43 @@
 		CardHeader,
 		CardTitle
 	} from '$lib/components/ui/card';
-	import CurrentSongCard from '$lib/components/mvp/CurrentSongCard.svelte';
-	import PlaybackProgress from '$lib/components/mvp/PlaybackProgress.svelte';
-	import PlaybackControls from '$lib/components/mvp/PlaybackControls.svelte';
-	import QueueList from '$lib/components/mvp/QueueList.svelte';
-	import SongSearchPanel from '$lib/components/mvp/SongSearchPanel.svelte';
-	import UserList from '$lib/components/mvp/UserList.svelte';
-	import LeaveRoomButton from '$lib/components/mvp/LeaveRoomButton.svelte';
-	import DeleteRoomButton from '$lib/components/mvp/DeleteRoomButton.svelte';
-	import InvitePanelDialog from '$lib/components/mvp/InvitePanelDialog.svelte';
-	import LoadingState from '$lib/components/mvp/LoadingState.svelte';
-	import EmptyState from '$lib/components/mvp/EmptyState.svelte';
+	import CurrentSongCard from '$lib/components/room/playback/CurrentSongCard.svelte';
+	import PlaybackProgress from '$lib/components/room/playback/PlaybackProgress.svelte';
+	import PlaybackControls from '$lib/components/room/playback/PlaybackControls.svelte';
+	import QueueList from '$lib/components/room/queue/QueueList.svelte';
+	import SongSearchPanel from '$lib/components/room/queue/SongSearchPanel.svelte';
+	import UserList from '$lib/components/room/participants/UserList.svelte';
+	import LeaveRoomButton from '$lib/components/room/actions/LeaveRoomButton.svelte';
+	import DeleteRoomButton from '$lib/components/room/actions/DeleteRoomButton.svelte';
+	import InvitePanelDialog from '$lib/components/room/invite/InvitePanelDialog.svelte';
+	import LoadingState from '$lib/components/room/states/LoadingState.svelte';
+	import EmptyState from '$lib/components/room/states/EmptyState.svelte';
+	import * as Dialog from '$lib/components/ui/dialog';
 	import { Button } from '$lib/components/ui/button';
 	import { Input } from '$lib/components/ui/input';
-	import { Label } from '$lib/components/ui/label';
+	import DisplayNameInput from '$lib/components/room/forms/DisplayNameInput.svelte';
 	import { toast } from 'svelte-sonner';
 	import { parseRoomSlug } from '$lib/room/slug';
 	import { get } from 'svelte/store';
 
 	let sessionUser = $state<{ userId: string; displayName: string } | null>(null);
-	let recordedRecentThisMount = $state(false);
+	let recordedRecentThisMount = false;
 	let socketClient = $state<RoomSocketClient | null>(null);
 	let voteBusyId = $state<string | null>(null);
 	let playbackBusy = $state(false);
+	let renameDisplayName = $state('');
+	let renameBusy = $state(false);
+	let renameDialogOpen = $state(false);
 
 	/** Direct link /room/{code}: ask for name before calling join API. */
 	let linkJoinCode = $state<string | null>(null);
 	let linkJoinDisplayName = $state('');
 	let linkJoinBusy = $state(false);
 	let linkJoinError = $state<string | null>(null);
-	const linkJoinLifecycle = { cancelled: false, endSession: undefined as (() => void) | undefined };
-
-	function queueWithoutCurrent(state: RoomStateDto | null): QueueEntryDto[] {
-		if (!state) return [];
-		const currentId = state.playback?.currentQueueEntryId;
-		return currentId
-			? state.queue.filter((e) => e.queueEntryId !== currentId)
-			: state.queue.filter((e) => e.status !== 'playing');
-	}
+	const linkJoinLifecycle = {
+		cancelled: false,
+		endSession: undefined as (() => void) | undefined
+	};
 
 	async function handleVote(queueEntryId: string, vote: VoteRequest['vote_type']) {
 		const uid = sessionUser?.userId;
@@ -103,6 +98,62 @@
 		}
 	}
 
+	function saveDisplayNameChange(): boolean {
+		const uid = sessionUser?.userId;
+		const trimmed = renameDisplayName.trim();
+		if (!uid || !socketClient || !socketClient.isConnected()) {
+			toast.error('Not connected to room');
+			return false;
+		}
+		if (!trimmed) {
+			toast.error('Please enter your display name.');
+			return false;
+		}
+		if (trimmed.length > 60) {
+			toast.error('Display name must be 60 characters or fewer.');
+			return false;
+		}
+		if (trimmed === sessionUser?.displayName) {
+			return true;
+		}
+
+		renameBusy = true;
+		try {
+			const sent = socketClient.renameDisplayName(uid, trimmed);
+			if (!sent) {
+				throw new Error('Rename failed');
+			}
+			saveSessionDisplayName(trimmed);
+			if (sessionUser) {
+				sessionUser = { ...sessionUser, displayName: trimmed };
+			}
+			toast.success('Display name updated');
+			return true;
+		} catch (err) {
+			toast.error(err instanceof Error ? err.message : 'Rename failed');
+			return false;
+		} finally {
+			renameBusy = false;
+		}
+	}
+
+	function openRenameDialog() {
+		renameDisplayName = sessionUser?.displayName ?? '';
+		renameDialogOpen = true;
+	}
+
+	function handleRenameSave() {
+		const saved = saveDisplayNameChange();
+		if (saved) {
+			renameDialogOpen = false;
+		}
+	}
+
+	function handleRenameSubmit(event: Event) {
+		event.preventDefault();
+		handleRenameSave();
+	}
+
 	$effect(() => {
 		if (!browser) return;
 		const rs = $roomStore.roomState;
@@ -138,7 +189,7 @@
 		}
 	}
 
-	function beginRoomSession(roomId: string, opts?: { joinCodeForRecents?: string }): () => void {
+	function beginRoomSession(roomId: string): () => void {
 		roomStore.reset();
 		roomStore.setLoading(true);
 
@@ -148,23 +199,13 @@
 			if (ui.roomState?.room.status === 'deleted') {
 				roomDeletedRedirectDone = true;
 				removeRecentRoom(ui.roomState.room.joinCode);
-				toast.message('Room ended by host');
+				// Only show message if current user is not the host
+				if (sessionUser && ui.roomState.host.userId !== sessionUser.userId) {
+					toast.message('Room ended by host');
+				}
 				void goto(resolve('/'));
 			}
 		});
-
-		void apiClient
-			.getRoomState(roomId)
-			.then((state) => roomStore.setRoomState(state))
-			.catch((err: unknown) => {
-				roomStore.setLoading(false);
-				const msg = err instanceof Error ? err.message : '';
-				const code = opts?.joinCodeForRecents;
-				if (code && isJoinFailureForRemovedRoom(msg)) {
-					removeRecentRoom(code);
-				}
-				roomStore.setError(msg || 'Could not load room');
-			});
 
 		const socket = new RoomSocketClient(roomId, {
 			onState: (s) => roomStore.setRoomState(s),
@@ -199,7 +240,7 @@
 			saveSessionDisplayName(trimmed);
 			const { userId } = getOrCreateSessionUser();
 			const res = await apiClient.joinRoom({
-				room_id: code,
+				join_code: code,
 				user_id: userId,
 				display_name: trimmed
 			});
@@ -211,9 +252,7 @@
 				throw new Error(msg);
 			}
 			if (linkJoinLifecycle.cancelled) return;
-			linkJoinLifecycle.endSession = beginRoomSession(res.room_id, {
-				joinCodeForRecents: code
-			});
+			linkJoinLifecycle.endSession = beginRoomSession(res.room_id);
 			linkJoinCode = null;
 			sessionUser = getOrCreateSessionUser();
 		} catch (err: unknown) {
@@ -235,6 +274,7 @@
 		const parsed = parseRoomSlug(segment);
 
 		sessionUser = getOrCreateSessionUser();
+		renameDisplayName = sessionUser.displayName;
 
 		if (parsed.kind === 'invalid') {
 			roomStore.reset();
@@ -245,22 +285,17 @@
 
 		if (parsed.kind === 'joinCode') {
 			roomStore.reset();
-			const fromHomeForm =
-				browser && sessionStorage.getItem('wk_prefilled_join_code') === parsed.joinCode;
-			if (fromHomeForm) {
-				sessionStorage.removeItem('wk_prefilled_join_code');
-			}
-			const skipNamePrompt = fromHomeForm || (browser && !shouldPromptJoinLinkDisplayName());
-			if (skipNamePrompt) {
+			const storedDisplayName = getOrCreateSessionUser().displayName.trim();
+			if (storedDisplayName) {
 				roomStore.setLoading(true);
 				linkJoinCode = null;
 				void (async () => {
 					try {
-						const { userId, displayName } = getOrCreateSessionUser();
+						const { userId } = getOrCreateSessionUser();
 						const res = await apiClient.joinRoom({
-							room_id: parsed.joinCode,
+							join_code: parsed.joinCode,
 							user_id: userId,
-							display_name: displayName
+							display_name: storedDisplayName
 						});
 						if (!res.success || !res.room_id) {
 							const msg = res.message || 'Could not join this room.';
@@ -270,9 +305,7 @@
 							throw new Error(msg);
 						}
 						if (linkJoinLifecycle.cancelled) return;
-						linkJoinLifecycle.endSession = beginRoomSession(res.room_id, {
-							joinCodeForRecents: parsed.joinCode
-						});
+						linkJoinLifecycle.endSession = beginRoomSession(res.room_id);
 						sessionUser = getOrCreateSessionUser();
 					} catch (err: unknown) {
 						if (linkJoinLifecycle.cancelled) return;
@@ -293,7 +326,7 @@
 
 			roomStore.setLoading(false);
 			linkJoinCode = parsed.joinCode;
-			linkJoinDisplayName = getOrCreateSessionUser().displayName;
+			linkJoinDisplayName = '';
 			linkJoinError = null;
 			return () => {
 				linkJoinLifecycle.cancelled = true;
@@ -324,18 +357,12 @@
 					</p>
 				</CardHeader>
 				<CardContent class="flex flex-col gap-4">
-					<div class="flex flex-col gap-2">
-						<Label for="wk-link-join-display">Your display name</Label>
-						<Input
-							id="wk-link-join-display"
-							type="text"
-							placeholder="How others see you"
-							bind:value={linkJoinDisplayName}
-							disabled={linkJoinBusy}
-							maxlength={60}
-							autocomplete="nickname"
-						/>
-					</div>
+					<DisplayNameInput
+						id="wk-link-join-display"
+						bind:value={linkJoinDisplayName}
+						disabled={linkJoinBusy}
+						maxlength={60}
+					/>
 					{#if linkJoinError}
 						<p class="text-destructive text-sm">{linkJoinError}</p>
 					{/if}
@@ -360,22 +387,29 @@
 			</EmptyState>
 		{:else if $roomStore.roomState && sessionUser}
 			{@const rs = $roomStore.roomState}
-			{@const isHost = rs.host.userId === sessionUser.userId}
+			{@const isHost = rs.host?.userId === sessionUser.userId}
 			{@const current = getCurrentSong(rs)}
 			{@const durationMs = current ? Math.max(0, current.track.duration) * 1000 : 0}
 			{@const positionMs = rs.playback?.positionMs ?? 0}
-			{@const inviteUrl = `${page.url.origin}/room/${rs.room.joinCode}`}
+			{@const inviteUrl = rs.room ? `${page.url.origin}/room/${rs.room.joinCode}` : ''}
 			{@const queuedTrackIds = new Set(rs.queue.map((e) => e.track.trackId))}
 
-			<header class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-				<div class="min-w-0">
-					<h1 class="truncate text-2xl font-semibold tracking-tight">{rs.room.name}</h1>
-					<p class="text-muted-foreground font-mono text-sm tracking-wide">
-						Code {rs.room.joinCode}
-					</p>
+			<header
+				class="flex flex-row flex-wrap gap-3 sm:items-center sm:justify-between w-[calc(100%-40px)]"
+			>
+				<div class="flex min-w-0 items-center gap-3">
+					<img src="/logo.svg" alt="WunschKonzert logo" class="h-8 w-8 shrink-0 sm:h-10 sm:w-10" />
+					<div class="min-w-0">
+						<h1 class="truncate text-2xl font-semibold tracking-tight">
+							{rs.room?.name || 'Room'}
+						</h1>
+						<p class="text-muted-foreground font-mono text-sm tracking-wide">
+							Code {rs.room?.joinCode || 'N/A'}
+						</p>
+					</div>
 				</div>
 				<div class="flex flex-wrap items-center gap-2">
-					<InvitePanelDialog joinCode={rs.room.joinCode} {inviteUrl} class="shrink-0" />
+					<InvitePanelDialog joinCode={rs.room?.joinCode || ''} {inviteUrl} class="shrink-0" />
 					{#if $roomStore.connected}
 						<Badge variant="success">Live</Badge>
 					{:else}
@@ -422,7 +456,7 @@
 						</CardHeader>
 						<CardContent>
 							<SongSearchPanel
-								roomId={rs.room.roomId}
+								roomId={rs.room?.roomId || ''}
 								{queuedTrackIds}
 								onAddTrack={handleAddTrack}
 							/>
@@ -436,6 +470,7 @@
 						users={rs.users}
 						hostUserId={rs.host.userId}
 						currentUserId={sessionUser.userId}
+						onEditSelf={openRenameDialog}
 					/>
 				</section>
 			</main>
@@ -444,16 +479,46 @@
 				class="border-border flex flex-col gap-2 border-t pt-6 min-[400px]:flex-row min-[400px]:flex-wrap"
 			>
 				{#if isHost}
-					<DeleteRoomButton
-						roomId={rs.room.roomId}
-						joinCode={rs.room.joinCode}
-						userId={sessionUser.userId}
-					/>
+					<DeleteRoomButton roomId={rs.room?.roomId || ''} userId={sessionUser.userId} />
 				{:else}
-					<LeaveRoomButton roomId={rs.room.roomId} userId={sessionUser.userId} />
+					<LeaveRoomButton roomId={rs.room?.roomId || ''} userId={sessionUser.userId} />
 					<Button variant="ghost" href="/" class="w-full min-[400px]:w-auto">Home</Button>
 				{/if}
 			</footer>
+
+			<Dialog.Root bind:open={renameDialogOpen}>
+				<Dialog.Content class="max-w-md">
+					<Dialog.Header>
+						<Dialog.Title>Edit display name</Dialog.Title>
+						<Dialog.Description>
+							Choose how your name appears to everyone in this room.
+						</Dialog.Description>
+					</Dialog.Header>
+					<form class="flex flex-col gap-4" onsubmit={handleRenameSubmit}>
+						<Input
+							type="text"
+							maxlength={60}
+							placeholder="How others see you"
+							bind:value={renameDisplayName}
+							disabled={renameBusy}
+							autocomplete="nickname"
+						/>
+						<div class="flex justify-end gap-2">
+							<Button
+								type="button"
+								variant="outline"
+								disabled={renameBusy}
+								onclick={() => (renameDialogOpen = false)}
+							>
+								Cancel
+							</Button>
+							<Button type="submit" disabled={renameBusy}>
+								{renameBusy ? 'Saving…' : 'Save'}
+							</Button>
+						</div>
+					</form>
+				</Dialog.Content>
+			</Dialog.Root>
 		{:else}
 			<LoadingState message="Preparing room…" />
 		{/if}

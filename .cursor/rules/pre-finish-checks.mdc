@@ -33,7 +33,8 @@ Before considering a coding task **finished** (or handing off to the user), run 
 
 1. `npm run check` — SvelteKit sync + `svelte-check` (TypeScript)
 2. `npm run lint` — ESLint
+3. `npm run test:unit` — Unit tests
 
 **Working directory:** `frontend/` (this repo’s `package.json` with these scripts lives there).
 
-If either command fails, fix the reported issues or explain what is blocked before treating the task as done.
+If any command fails, fix the reported issues or explain what is blocked before treating the task as done.

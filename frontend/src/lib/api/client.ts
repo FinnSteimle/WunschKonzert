@@ -2,6 +2,8 @@ import {
 	type CreateRoomRequest,
 	type DeleteRoomRequest,
 	type LeaveRoomRequest,
+	type RoomAvailabilityRequest,
+	type RoomAvailabilityResponse,
 	type RoomRequest,
 	type RoomResponse,
 	type RoomStateDto,
@@ -49,6 +51,10 @@ export const apiClient = {
 
 	async deleteRoom(payload: DeleteRoomRequest): Promise<RoomResponse> {
 		return postJson<RoomResponse>('/delete_room', payload);
+	},
+
+	async getRoomsAvailability(payload: RoomAvailabilityRequest): Promise<RoomAvailabilityResponse> {
+		return postJson<RoomAvailabilityResponse>('/rooms/availability', payload);
 	},
 
 	async getRoomState(roomId: string): Promise<RoomStateDto> {

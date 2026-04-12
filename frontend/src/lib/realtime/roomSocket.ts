@@ -90,6 +90,14 @@ export class RoomSocketClient {
 		});
 	}
 
+	renameDisplayName(userId: string, displayName: string) {
+		return this.send({
+			type: 'rename',
+			user_id: userId,
+			display_name: displayName
+		});
+	}
+
 	disconnect() {
 		this.disposed = true;
 		if (this.reconnectTimer) {

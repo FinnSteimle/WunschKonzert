@@ -21,7 +21,7 @@ export interface CreateRoomRequest {
 }
 
 export interface RoomRequest {
-	room_id: string;
+	join_code: string;
 	user_id: string;
 	display_name: string;
 }
@@ -34,6 +34,15 @@ export interface LeaveRoomRequest {
 export interface DeleteRoomRequest {
 	room_id: string;
 	user_id: string;
+}
+
+export interface RoomAvailabilityRequest {
+	join_codes: string[];
+}
+
+export interface RoomAvailabilityResponse {
+	available_join_codes: string[];
+	unavailable_join_codes: string[];
 }
 
 export interface TrackDto {

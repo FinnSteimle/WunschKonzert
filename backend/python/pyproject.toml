@@ -19,10 +19,18 @@ dependencies = [
 [tool.pytest.ini_options]
 pythonpath = ["."]
 asyncio_mode = "auto"
-# addopts = "--cov=. --cov-report=term-missing --cov-report=xml:cobertura.xml --cov-fail-under=80"
-addopts = "--cov=. --cov-report=term-missing --cov-report=xml:cobertura.xml"
+asyncio_default_test_loop_scope = "session"
+asyncio_default_fixture_loop_scope = "session"
+addopts = "--cov=. --cov-report=term-missing --cov-report=xml:cobertura.xml --cov-fail-under=80"
 markers = [
     "integration: mark a test as an integration test"
+]
+
+[tool.coverage.run]
+omit = [
+    "*/asyncpg/*",
+    "*/.venv/*",
+    "*/tests/*"
 ]
 
 [dependency-groups]
@@ -32,4 +40,34 @@ dev = [
     "pytest-cov>=7.1.0",
     "pytest-mock>=3.15.1",
     "pytest-socket>=0.7.0",
+    "testcontainers[postgres]>=4.14.2",
+    "mypy>=1.15.0",
 ]
+
+[tool.mypy]
+python_version = "3.14"
+strict = true
+ignore_missing_imports = true
+exclude = ["tests/", "migrations/"]
+
+[[tool.mypy.overrides]]
+module = "testcontainers.*"
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = "sqlalchemy.*"
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = "alembic.*"
+ignore_missing_imports = true
+
+[tool.ruff]
+#line-length = 125
+
+[tool.ruff.lint]
+select = ["E", "W", "F", "I", "C90"]  # pycodestyle, pyflakes, isort, mccabe
+ignore = ["E501"]  # line length is enforced by ruff format, not ruff check
+
+[tool.ruff.lint.mccabe]
+max-complexity = 10

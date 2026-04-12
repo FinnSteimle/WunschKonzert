@@ -9,8 +9,9 @@ WORKDIR /app
 # Copy dependency files
 COPY python/pyproject.toml python/uv.lock ./
 
-# Install production dependencies
-RUN uv sync --frozen --no-dev
+# Decide whether to install dev dependencies
+ARG DEV=false
+RUN if [ "$DEV" = "true" ] ; then uv sync --frozen ; else uv sync --frozen --no-dev ; fi
 
 
 # --- Test Stage ---
@@ -27,4 +28,4 @@ FROM base AS runner
 # Copy source code only (production)
 COPY python/ .
 EXPOSE 8000
-CMD ["uv", "run", "uvicorn", "fast_api:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["uv", "run", "uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
