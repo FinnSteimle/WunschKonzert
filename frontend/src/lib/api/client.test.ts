@@ -124,6 +124,37 @@ describe('apiClient', () => {
 		});
 	});
 
+	it('posts delete room payload and returns parsed response', async () => {
+		const fetchMock = vi.fn().mockResolvedValue(
+			mockJsonResponse(true, {
+				success: true,
+				message: 'deleted',
+				room_id: 'room-1',
+				join_code: null
+			})
+		);
+		vi.stubGlobal('fetch', fetchMock);
+
+		const payload = {
+			room_id: 'room-1',
+			user_id: 'U_123'
+		};
+
+		const result = await apiClient.deleteRoom(payload);
+
+		expect(result).toEqual({
+			success: true,
+			message: 'deleted',
+			room_id: 'room-1',
+			join_code: null
+		});
+		expect(fetchMock).toHaveBeenCalledWith('http://localhost:8000/delete_room', {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify(payload)
+		});
+	});
+
 	it('falls back to status text when error body cannot be parsed', async () => {
 		const fetchMock = vi.fn().mockResolvedValue({
 			ok: false,
