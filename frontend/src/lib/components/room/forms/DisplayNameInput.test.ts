@@ -21,7 +21,7 @@ describe('DisplayNameInput', () => {
 	});
 
 	it('renders a labelled text input', () => {
-		render(DisplayNameInput, { id: 'wk-dn' });
+		render(DisplayNameInput, { id: 'wk-dn', value: '' });
 
 		const input = screen.getByLabelText('Your display name') as HTMLInputElement;
 		expect(input).toBeTruthy();
@@ -30,13 +30,13 @@ describe('DisplayNameInput', () => {
 	});
 
 	it('renders a randomize button', () => {
-		render(DisplayNameInput, { id: 'wk-dn' });
+		render(DisplayNameInput, { id: 'wk-dn', value: '' });
 
 		expect(screen.getByRole('button', { name: 'Randomize display name' })).toBeTruthy();
 	});
 
 	it('disables both input and randomize button when disabled', () => {
-		render(DisplayNameInput, { id: 'wk-dn', disabled: true });
+		render(DisplayNameInput, { id: 'wk-dn', value: '', disabled: true });
 
 		expect((screen.getByLabelText('Your display name') as HTMLInputElement).disabled).toBe(true);
 		expect(
@@ -45,7 +45,7 @@ describe('DisplayNameInput', () => {
 	});
 
 	it('sets the generated name as value after randomize animation completes', async () => {
-		render(DisplayNameInput, { id: 'wk-dn' });
+		render(DisplayNameInput, { id: 'wk-dn', value: '' });
 
 		await fireEvent.click(screen.getByRole('button', { name: 'Randomize display name' }));
 
@@ -60,7 +60,7 @@ describe('DisplayNameInput', () => {
 	});
 
 	it('disables randomize button while animation is spinning', async () => {
-		render(DisplayNameInput, { id: 'wk-dn' });
+		render(DisplayNameInput, { id: 'wk-dn', value: '' });
 
 		await fireEvent.click(screen.getByRole('button', { name: 'Randomize display name' }));
 
@@ -80,7 +80,7 @@ describe('DisplayNameInput', () => {
 	});
 
 	it('does not randomize when disabled prop is true', async () => {
-		render(DisplayNameInput, { id: 'wk-dn', disabled: true });
+		render(DisplayNameInput, { id: 'wk-dn', value: '', disabled: true });
 
 		await fireEvent.click(screen.getByRole('button', { name: 'Randomize display name' }));
 
@@ -89,13 +89,13 @@ describe('DisplayNameInput', () => {
 	});
 
 	it('applies maxlength to the input element', () => {
-		render(DisplayNameInput, { id: 'wk-dn', maxlength: 60 });
+		render(DisplayNameInput, { id: 'wk-dn', value: '', maxlength: 60 });
 
 		expect((screen.getByLabelText('Your display name') as HTMLInputElement).maxLength).toBe(60);
 	});
 
 	it('uses the correct id attribute on the input', () => {
-		render(DisplayNameInput, { id: 'wk-custom-id' });
+		render(DisplayNameInput, { id: 'wk-custom-id', value: '' });
 
 		expect(screen.getByLabelText('Your display name').id).toBe('wk-custom-id');
 	});

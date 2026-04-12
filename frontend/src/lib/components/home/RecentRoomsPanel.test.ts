@@ -1,5 +1,5 @@
 import { render, screen, waitFor } from '@testing-library/svelte';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import RecentRoomsPanel from './RecentRoomsPanel.svelte';
 import { getRecentRooms, syncRecentRoomsAvailability } from '$lib/session/recentRooms';
 import type { RecentRoomEntry } from '$lib/session/recentRooms';
