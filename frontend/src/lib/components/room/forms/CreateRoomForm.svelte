@@ -31,6 +31,8 @@
 
 	const providerLinked = $derived(provider === 'spotify' && spotifyLinked);
 	const canCreate = $derived(providerLinked);
+	const MAX_ROOM_NAME_LENGTH = 40;
+	const SUPPORTED_PROVIDERS: ProviderId[] = ['spotify'];
 
 	onMount(() => {
 		displayName = getOrCreateSessionUser().displayName;
@@ -63,12 +65,18 @@
 			toast.error('Please enter a room name.');
 			return;
 		}
+		if (trimmed.length > MAX_ROOM_NAME_LENGTH) {
+			toast.error(`Room name must be ${MAX_ROOM_NAME_LENGTH} characters or fewer.`);
+			return;
+		}
 		if (!trimmedDisplay) {
 			toast.error('Please enter your display name.');
 			return;
 		}
 		if (!canCreate) {
 			toast.error('Please link your Spotify account first.');
+		if (!SUPPORTED_PROVIDERS.includes(provider)) {
+			toast.error('Please choose a supported music provider.');
 			return;
 		}
 		busy = true;
@@ -110,7 +118,7 @@
 			placeholder="Friday vibes"
 			bind:value={name}
 			disabled={busy}
-			maxlength={120}
+			maxlength={MAX_ROOM_NAME_LENGTH}
 		/>
 	</div>
 	<div class="flex w-full min-w-0 flex-col gap-2">

@@ -36,6 +36,14 @@ export function getPersonalVoteState(queueEntry: QueueEntryDto, userId: string):
 	return vote?.type ?? 'neutral';
 }
 
+export function queueWithoutCurrent(state: RoomStateDto | null): QueueEntryDto[] {
+	if (!state) return [];
+	const currentId = state.playback?.currentQueueEntryId;
+	return currentId
+		? state.queue.filter((e) => e.queueEntryId !== currentId)
+		: state.queue.filter((e) => e.status !== 'playing');
+}
+
 export function getCurrentSong(roomState: RoomStateDto | null): QueueEntryDto | null {
 	if (!roomState) return null;
 	const playbackId = roomState.playback?.currentQueueEntryId;

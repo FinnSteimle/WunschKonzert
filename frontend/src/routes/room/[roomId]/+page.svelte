@@ -5,7 +5,7 @@
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
 	import { apiClient } from '$lib/api/client';
-	import { roomStore, getCurrentSong } from '$lib/stores/room';
+	import { roomStore, getCurrentSong, queueWithoutCurrent } from '$lib/stores/room';
 	import { RoomSocketClient } from '$lib/realtime/roomSocket';
 	import { getOrCreateSessionUser, saveSessionDisplayName } from '$lib/session/userSession';
 	import {
@@ -13,7 +13,7 @@
 		recordRecentRoom,
 		removeRecentRoom
 	} from '$lib/session/recentRooms';
-	import type { QueueEntryDto, RoomStateDto, TrackDto, VoteRequest } from '$lib/types/api';
+	import type { TrackDto, VoteRequest } from '$lib/types/api';
 	import type { MusicPlayer, MusicPlayerState } from '$lib/playback/types';
 	import { SpotifyPlayer } from '$lib/playback/spotifyPlayer';
 	import { Badge } from '$lib/components/ui/badge';
@@ -68,14 +68,6 @@
 		cancelled: false,
 		endSession: undefined as (() => void) | undefined
 	};
-
-	function queueWithoutCurrent(state: RoomStateDto | null): QueueEntryDto[] {
-		if (!state) return [];
-		const currentId = state.playback?.currentQueueEntryId;
-		return currentId
-			? state.queue.filter((e) => e.queueEntryId !== currentId)
-			: state.queue.filter((e) => e.status !== 'playing');
-	}
 
 	async function handleVote(queueEntryId: string, vote: VoteRequest['vote_type']) {
 		const uid = sessionUser?.userId;

@@ -78,6 +78,53 @@ describe('CreateRoomForm', () => {
 		expect(apiClient.createRoom).not.toHaveBeenCalled();
 	});
 
+	it('accepts room name at max length boundary (40 chars)', async () => {
+		vi.mocked(apiClient.createRoom).mockResolvedValue({
+			success: true,
+			message: 'ok',
+			room_id: 'room-1',
+			join_code: 'AB2CD3'
+		});
+		render(CreateRoomForm);
+
+		const roomName = 'A'.repeat(40);
+		await fireEvent.input(screen.getByLabelText('Room name'), { target: { value: roomName } });
+		await fireEvent.click(screen.getByRole('button', { name: 'Create room' }));
+
+		await waitFor(() => expect(apiClient.createRoom).toHaveBeenCalledTimes(1));
+		expect(apiClient.createRoom).toHaveBeenCalledWith(
+			expect.objectContaining({
+				name: roomName
+			})
+		);
+	});
+
+	it('shows an error when room name exceeds max length', async () => {
+		render(CreateRoomForm);
+
+		await fireEvent.input(screen.getByLabelText('Room name'), { target: { value: 'B'.repeat(41) } });
+		await fireEvent.click(screen.getByRole('button', { name: 'Create room' }));
+
+		expect(toast.error).toHaveBeenCalledWith('Room name must be 40 characters or fewer.');
+		expect(apiClient.createRoom).not.toHaveBeenCalled();
+	});
+
+	it('shows an error for unsupported provider values', async () => {
+		render(CreateRoomForm);
+		const providerSelect = screen.getByLabelText('Music provider') as HTMLSelectElement;
+		const unsupportedOption = document.createElement('option');
+		unsupportedOption.value = 'invalid-provider';
+		unsupportedOption.text = 'Invalid';
+		providerSelect.append(unsupportedOption);
+
+		await fireEvent.input(screen.getByLabelText('Room name'), { target: { value: 'Friday vibes' } });
+		await fireEvent.change(providerSelect, { target: { value: 'invalid-provider' } });
+		await fireEvent.click(screen.getByRole('button', { name: 'Create room' }));
+
+		expect(toast.error).toHaveBeenCalledWith('Please choose a supported music provider.');
+		expect(apiClient.createRoom).not.toHaveBeenCalled();
+	});
+
 	it('submits trimmed values and emits success payload', async () => {
 		vi.mocked(apiClient.createRoom).mockResolvedValue({
 			success: true,

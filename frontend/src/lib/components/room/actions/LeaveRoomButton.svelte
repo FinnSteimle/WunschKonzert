@@ -18,6 +18,7 @@
 	let busy = $state(false);
 
 	async function leave() {
+	if (busy) return;
 		busy = true;
 		try {
 			await apiClient.leaveRoom({ room_id: roomId, user_id: userId });
