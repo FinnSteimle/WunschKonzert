@@ -470,50 +470,145 @@ async def _advance_to_next(room_id: str) -> dict[str, object]:
 
 
 async def leave_room_service(room_id: str, user_id: str) -> dict[str, object]:
-    user = await crud.get_user(user_id)
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found")
+    try:
+        user = await crud.get_user(user_id)
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
 
-    room = await crud.get_room(room_id)
-    if not room:
-        raise HTTPException(status_code=404, detail="Room not found")
+        room = await crud.get_room(room_id)
+        if not room:
+            raise HTTPException(status_code=404, detail="Room not found")
 
-    if room.hostedBy == user_id:
+        if room.hostedBy == user_id:
+            raise HTTPException(
+                status_code=403,
+                detail="Hosts cannot leave the room. Please delete the room instead.",
+            )
+
+        await crud.leave_room(user_id, room_id)
+        return await refresh_room_state(room_id, "participant_left")
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        if isinstance(e, HTTPException):
+            raise
+        raise HTTPException(status_code=500, detail=f"Failed to leave room: {str(e)}")
+
+
+async def create_room_service(
+    name: str, user_id: str, display_name: str, supported_provider_id: str
+) -> dict[str, object]:
+    """Create a new room, validating user and provider."""
+    await ensure_user_display_name(user_id, display_name)
+    await ensure_provider_exists(supported_provider_id)
+
+    pa = await crud.get_provider_account_by_user(user_id, supported_provider_id)
+    if not pa or not pa.refreshToken:
         raise HTTPException(
             status_code=403,
-            detail="Hosts cannot leave the room. Please delete the room instead.",
+            detail="You must link your Spotify account before creating a room",
         )
 
-    await crud.leave_room(user_id, room_id)
-    return await refresh_room_state(room_id, "participant_left")
+    try:
+        room = await crud.create_room(
+            name,
+            user_id,
+            supported_provider_id,
+        )
+        await ensure_active_membership(user_id, room.roomId)
+        await refresh_room_state(room.roomId, "room_created")
+        return {
+            "success": True,
+            "message": f"Successfully created room {room.roomId}",
+            "room_id": room.roomId,
+            "join_code": room.joinCode,
+        }
+    except ValueError as e:
+        if "already exists" in str(e):
+            raise HTTPException(status_code=400, detail="Room already exists")
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        # Re-raise HTTPExceptions, wrap others in 500
+        if isinstance(e, HTTPException):
+            raise
+        raise HTTPException(status_code=500, detail=f"Failed to create room: {str(e)}")
+
+
+async def join_room_service(
+    join_code: str, user_id: str, display_name: str
+) -> dict[str, object]:
+    """Validate and join a room by its join code."""
+    if display_name is None or not display_name.strip():
+        raise HTTPException(status_code=400, detail="Display name is required")
+
+    normalized_code = join_code.strip().upper()
+    if not JOIN_CODE_RE.match(normalized_code):
+        raise HTTPException(
+            status_code=422,
+            detail="Join code must be exactly 6 characters (A-Z, 2-9, no I/O/0/1).",
+        )
+
+    await ensure_user_display_name(user_id, display_name)
+
+    room = await crud.get_room_by_join_code(normalized_code)
+    if not room:
+        raise HTTPException(status_code=404, detail="Room not found")
+    if room.status != RoomStatus.ACTIVE:
+        raise HTTPException(
+            status_code=410,
+            detail="This session has ended and is no longer available.",
+        )
+
+    try:
+        await ensure_active_membership(user_id, room.roomId)
+        await refresh_room_state(room.roomId, "participant_joined")
+        return {
+            "success": True,
+            "message": f"Successfully joined room {room.roomId}",
+            "room_id": room.roomId,
+            "join_code": room.joinCode,
+        }
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        if isinstance(e, HTTPException):
+            raise
+        raise HTTPException(status_code=500, detail=f"Failed to join room: {str(e)}")
 
 
 async def delete_room_service(room_id: str, user_id: str) -> dict[str, object]:
-    # Get room and validate
-    room = await crud.get_room(room_id)
-    if not room:
-        raise HTTPException(status_code=404, detail="Room not found")
-    if room.hostedBy != user_id:
-        raise HTTPException(status_code=403, detail="Only host can delete room")
+    try:
+        # Get room and validate
+        room = await crud.get_room(room_id)
+        if not room:
+            raise HTTPException(status_code=404, detail="Room not found")
+        if room.hostedBy != user_id:
+            raise HTTPException(status_code=403, detail="Only host can delete room")
 
-    # Update room status
-    await crud.update_room_status(room_id, RoomStatus.DELETED)
+        # Update room status
+        await crud.update_room_status(room_id, RoomStatus.DELETED)
 
-    # Update all memberships
-    memberships = await crud.get_room_memberships(room_id)
-    from core.database import get_session_factory
+        # Update all memberships
+        memberships = await crud.get_room_memberships(room_id)
+        from core.database import get_session_factory
 
-    session_factory = get_session_factory()
-    async with session_factory() as session:
-        for membership in memberships:
-            # Re-fetch or merge into session if needed, but here we can just update
-            membership = await session.merge(membership)
-            membership.membershipStatus = MembershipStatus.INACTIVE
-            if membership.leftAt is None:
-                membership.leftAt = datetime.now(UTC).replace(tzinfo=None)
-        await session.commit()
+        session_factory = get_session_factory()
+        async with session_factory() as session:
+            for membership in memberships:
+                # Re-fetch or merge into session if needed, but here we can just update
+                membership = await session.merge(membership)
+                membership.membershipStatus = MembershipStatus.INACTIVE
+                if membership.leftAt is None:
+                    membership.leftAt = datetime.now(UTC).replace(tzinfo=None)
+            await session.commit()
 
-    return await refresh_room_state(room_id, "room_deleted")
+        return await refresh_room_state(room_id, "room_deleted")
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        if isinstance(e, HTTPException):
+            raise
+        raise HTTPException(status_code=500, detail=f"Failed to delete room: {str(e)}")
 
 
 async def ensure_user_display_name(user_id: str, display_name: str) -> None:
@@ -564,18 +659,27 @@ async def ensure_active_membership(user_id: str, room_id: str) -> None:
 async def rename_participant(
     room_id: str, user_id: str, display_name: str
 ) -> dict[str, object]:
-    room = await crud.get_room(room_id)
-    if not room:
-        raise HTTPException(status_code=404, detail="Room not found")
+    try:
+        room = await crud.get_room(room_id)
+        if not room:
+            raise HTTPException(status_code=404, detail="Room not found")
 
-    membership = await crud.get_room_membership(user_id, room_id)
-    if not membership or membership.membershipStatus != MembershipStatus.ACTIVE:
+        membership = await crud.get_room_membership(user_id, room_id)
+        if not membership or membership.membershipStatus != MembershipStatus.ACTIVE:
+            raise HTTPException(
+                status_code=403, detail="Only active room participants can rename"
+            )
+
+        await ensure_user_display_name(user_id, display_name)
+        return await refresh_room_state(room_id, "participant_renamed")
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        if isinstance(e, HTTPException):
+            raise
         raise HTTPException(
-            status_code=403, detail="Only active room participants can rename"
+            status_code=500, detail=f"Failed to rename participant: {str(e)}"
         )
-
-    await ensure_user_display_name(user_id, display_name)
-    return await refresh_room_state(room_id, "participant_renamed")
 
 
 async def check_room_availability(
