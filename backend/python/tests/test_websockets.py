@@ -1,14 +1,11 @@
 import json
 import uuid
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
-from fastapi import FastAPI
-from fastapi.testclient import TestClient
 
 from api.websockets import (
     active_room_connections,
-    generic_connections,
     handle_room_events,
     send_room_state,
 )
@@ -178,13 +175,13 @@ async def test_websocket_invalid_event(db_session, init_room, websocket_client):
 async def test_send_room_state_refresh_failure():
     """Test send_room_state when refresh_room_state raises an exception."""
     room_id = "test_room"
-    
+
     # Mock the room service to raise an exception
     with patch.object(
         room_service, "refresh_room_state", side_effect=Exception("DB error")
     ):
         await send_room_state(room_id)
-    
+
     # Should not raise, just print error
     assert room_id not in room_service.room_state_cache
 
@@ -193,7 +190,7 @@ async def test_send_room_state_refresh_failure():
 async def test_send_room_state_none_cache():
     """Test send_room_state when cache returns None."""
     room_id = "test_room"
-    
+
     # Mock cache to return None by temporarily replacing the cache
     original_cache = room_service.room_state_cache
     try:
@@ -210,14 +207,14 @@ async def test_send_room_state_websocket_failure():
     """Test send_room_state when websocket.send_text fails."""
     room_id = "test_room"
     state = {"roomId": room_id, "status": "active"}
-    
+
     # Setup mock websocket that fails
     mock_websocket = AsyncMock()
     mock_websocket.send_text.side_effect = Exception("Connection lost")
-    
+
     # Add to active connections
     active_room_connections[room_id].add(mock_websocket)
-    
+
     # Mock cache to return state by temporarily replacing the cache
     original_cache = room_service.room_state_cache
     try:
@@ -234,7 +231,7 @@ async def test_handle_room_events_invalid_json():
     """Test handle_room_events with invalid JSON."""
     room_id = "test_room"
     invalid_json = "not valid json"
-    
+
     # Should not raise, just print error
     await handle_room_events(room_id, invalid_json)
 
@@ -244,7 +241,7 @@ async def test_handle_room_events_unknown_type():
     """Test handle_room_events with unknown event type."""
     room_id = "test_room"
     unknown_event = json.dumps({"type": "unknown_event"})
-    
+
     # Should not raise, just ignore
     await handle_room_events(room_id, unknown_event)
 
@@ -253,11 +250,11 @@ async def test_handle_room_events_unknown_type():
 async def test_handle_room_events_missing_fields():
     """Test handle_room_events with missing required fields."""
     room_id = "test_room"
-    
+
     # Test addqueue with missing fields
     event = json.dumps({"type": "addqueue"})
     await handle_room_events(room_id, event)
-    
+
     # Should not raise, room_service will handle validation
 
 
@@ -265,16 +262,12 @@ async def test_handle_room_events_missing_fields():
 async def test_handle_room_events_service_errors():
     """Test handle_room_events when room_service functions raise exceptions."""
     room_id = "test_room"
-    
+
     # Mock room_service functions to raise exceptions
     with patch.object(
         room_service, "add_to_queue", side_effect=Exception("Service error")
     ):
-        event = json.dumps({
-            "type": "addqueue",
-            "track": {},
-            "user_id": "user1"
-        })
+        event = json.dumps({"type": "addqueue", "track": {}, "user_id": "user1"})
         # Should not raise, just print error
         await handle_room_events(room_id, event)
 
@@ -283,16 +276,10 @@ async def test_handle_room_events_service_errors():
 async def test_handle_room_events_leave():
     """Test handle_room_events with leave event type."""
     room_id = "test_room"
-    
+
     # Mock leave_room_service to avoid database operations
     with patch.object(room_service, "leave_room_service", new_callable=AsyncMock):
-        event = json.dumps({
-            "type": "leave",
-            "user_id": "user1"
-        })
+        event = json.dumps({"type": "leave", "user_id": "user1"})
         await handle_room_events(room_id, event)
         # Should call leave_room_service
         room_service.leave_room_service.assert_awaited_once_with(room_id, "user1")
-
-
-

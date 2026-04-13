@@ -504,9 +504,7 @@ async def test_playback_advance_moves_to_next_track(db_session, init_room):
     await room_service.add_to_queue(room.roomId, await _track("First"), room.hostedBy)
     await room_service.add_to_queue(room.roomId, await _track("Second"), room.hostedBy)
 
-    state = await room_service.set_playback_state(
-        room.roomId, room.hostedBy, "advance"
-    )
+    state = await room_service.set_playback_state(room.roomId, room.hostedBy, "advance")
 
     playing = [e for e in state["queue"] if e["status"] == "playing"]  # type: ignore[index]
     assert len(playing) == 1
