@@ -562,6 +562,103 @@ async def update_room_status(room_id: str, status: RoomStatus) -> Room:
         return room
 
 
+async def get_provider_account_by_user(
+    user_id: str, provider_id: str
+) -> ProviderAccount | None:
+    """Get a provider account for a user and provider, or None."""
+    session_factory = get_session_factory()
+    async with session_factory() as session:
+        result = await session.execute(
+            select(ProviderAccount).where(
+                ProviderAccount.userId == user_id,
+                ProviderAccount.providerId == provider_id,
+            )
+        )
+        return result.scalar_one_or_none()
+
+
+async def create_or_update_provider_account_tokens(
+    user_id: str,
+    provider_id: str,
+    external_user_id: str,
+    access_token: str,
+    refresh_token: str,
+    token_expires_at: datetime,
+) -> ProviderAccount:
+    """Create or update a provider account with OAuth tokens."""
+    session_factory = get_session_factory()
+    async with session_factory() as session:
+        result = await session.execute(
+            select(ProviderAccount).where(
+                ProviderAccount.userId == user_id,
+                ProviderAccount.providerId == provider_id,
+            )
+        )
+        existing = result.scalar_one_or_none()
+
+        if existing:
+            existing.externalUserId = external_user_id
+            existing.accessToken = access_token
+            existing.refreshToken = refresh_token
+            existing.tokenExpiresAt = token_expires_at
+            existing.status = AccountStatus.ACTIVE
+            await session.commit()
+            await session.refresh(existing)
+            return existing
+
+        provider_account = ProviderAccount(
+            providerAccountId=str(uuid.uuid4()),
+            externalUserId=external_user_id,
+            userId=user_id,
+            providerId=provider_id,
+            status=AccountStatus.ACTIVE,
+            accessToken=access_token,
+            refreshToken=refresh_token,
+            tokenExpiresAt=token_expires_at,
+        )
+        session.add(provider_account)
+        await session.commit()
+        await session.refresh(provider_account)
+        return provider_account
+
+
+async def update_provider_account_tokens(
+    provider_account_id: str,
+    access_token: str,
+    token_expires_at: datetime,
+    refresh_token: str | None = None,
+) -> ProviderAccount:
+    """Update OAuth tokens on an existing provider account."""
+    session_factory = get_session_factory()
+    async with session_factory() as session:
+        pa = await session.get(ProviderAccount, provider_account_id)
+        if not pa:
+            raise ValueError("Provider account not found")
+        pa.accessToken = access_token
+        pa.tokenExpiresAt = token_expires_at
+        if refresh_token is not None:
+            pa.refreshToken = refresh_token
+        await session.commit()
+        await session.refresh(pa)
+        return pa
+
+
+async def get_next_queued_entry(room_id: str) -> QueueEntry | None:
+    """Get the next queued entry by highest vote score, then earliest position."""
+    session_factory = get_session_factory()
+    async with session_factory() as session:
+        result = await session.execute(
+            select(QueueEntry)
+            .where(
+                QueueEntry.roomId == room_id,
+                QueueEntry.status == QueueEntryStatus.QUEUED,
+            )
+            .order_by(QueueEntry.voteScore.desc(), QueueEntry.position.asc())
+            .limit(1)
+        )
+        return result.scalar_one_or_none()
+
+
 async def check_db_health() -> dict[str, object]:
     """Check if database is healthy by executing a simple query"""
     try:

@@ -75,6 +75,21 @@ export const apiClient = {
 			user_id: userId,
 			track
 		});
+	},
+
+	async getSpotifyLoginUrl(
+		userId: string,
+		returnTo: string
+	): Promise<{ auth_url: string }> {
+		const params = new URLSearchParams({ user_id: userId, return_to: returnTo });
+		const response = await fetch(`${API_BASE_URL}/auth/spotify/login?${params}`);
+		return parseResponse<{ auth_url: string }>(response);
+	},
+
+	async getSpotifyToken(userId: string): Promise<{ access_token: string }> {
+		const params = new URLSearchParams({ user_id: userId });
+		const response = await fetch(`${API_BASE_URL}/auth/spotify/token?${params}`);
+		return parseResponse<{ access_token: string }>(response);
 	}
 };
 

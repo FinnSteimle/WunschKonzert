@@ -221,6 +221,28 @@ async def refresh_room_state(
     return room_state
 
 
+async def sync_playback_position(
+    room_id: str, user_id: str, position_ms: int
+) -> None:
+    """Lightweight position sync: update DB + patch cache without full rebuild."""
+    room = await crud.get_room(room_id)
+    if not room or room.hostedBy != user_id:
+        return
+
+    session = await crud.get_current_playback_session(room_id)
+    if not session or _enum_value(session.state) != "playing":
+        return
+
+    elapsed = max(0, position_ms // 1000)
+    await crud.update_playback_session(
+        session.playbackSessionId, {"elapsedTime": elapsed}
+    )
+
+    cached = room_state_cache.get(room_id)
+    if cached and isinstance(cached.get("playback"), dict):
+        cached["playback"]["positionMs"] = elapsed * 1000
+
+
 async def add_to_queue(
     room_id: str, track_data: dict[str, object], user_id: str
 ) -> dict[str, object]:
@@ -349,12 +371,14 @@ async def vote_queue_entry(
 
 
 async def set_playback_state(
-    room_id: str, user_id: str, action: str
+    room_id: str,
+    user_id: str,
+    action: str,
+    position_ms: int | None = None,
 ) -> dict[str, object]:
-    if action not in {"pause", "resume", "stop"}:
+    if action not in {"pause", "resume", "stop", "advance"}:
         raise HTTPException(status_code=400, detail="Invalid playback action")
 
-    # Get room and validate
     room = await crud.get_room(room_id)
     if not room:
         raise HTTPException(status_code=404, detail="Room not found")
@@ -363,22 +387,21 @@ async def set_playback_state(
             status_code=403, detail="Only the host can control playback"
         )
 
-    # Get or create playback session
+    if action == "advance":
+        return await _advance_to_next(room_id)
+
     playback_session = await crud.get_current_playback_session(room_id)
 
     if not playback_session:
-        # Get first queued entry
         current_queue_entry = await crud.get_first_queued_entry(room_id)
 
         if not current_queue_entry:
             raise HTTPException(status_code=400, detail="No queued songs")
 
-        # Update queue entry status
         await crud.update_queue_entry(
             current_queue_entry.queueEntryId, {"status": QueueEntryStatus.PLAYING}
         )
 
-        # Create playback session
         playback_session = await crud.create_playback_session(
             {
                 "playbackSessionId": str(uuid.uuid4()),
@@ -389,7 +412,10 @@ async def set_playback_state(
             }
         )
 
-    # Update playback session state
+    elapsed_seconds = (
+        max(0, int(position_ms) // 1000) if position_ms is not None else None
+    )
+
     updates: dict[str, object] = {"state": PlaybackState.PLAYING, "pausedAt": None}
     if action == "pause":
         updates = {
@@ -402,9 +428,45 @@ async def set_playback_state(
             "pausedAt": datetime.now(UTC).replace(tzinfo=None),
         }
 
+    if elapsed_seconds is not None:
+        updates["elapsedTime"] = elapsed_seconds
+
     await crud.update_playback_session(playback_session.playbackSessionId, updates)
 
     return await refresh_room_state(room_id, "playback_updated")
+
+
+async def _advance_to_next(room_id: str) -> dict[str, object]:
+    """Mark the current song as played and start the next highest-voted song."""
+    current_session = await crud.get_current_playback_session(room_id)
+    if current_session:
+        await crud.update_playback_session(
+            current_session.playbackSessionId,
+            {
+                "state": PlaybackState.STOPPED,
+                "pausedAt": datetime.now(UTC).replace(tzinfo=None),
+            },
+        )
+        await crud.update_queue_entry(
+            current_session.queueEntryId, {"status": QueueEntryStatus.PLAYED}
+        )
+
+    next_entry = await crud.get_next_queued_entry(room_id)
+    if next_entry:
+        await crud.update_queue_entry(
+            next_entry.queueEntryId, {"status": QueueEntryStatus.PLAYING}
+        )
+        await crud.create_playback_session(
+            {
+                "playbackSessionId": str(uuid.uuid4()),
+                "roomId": room_id,
+                "queueEntryId": next_entry.queueEntryId,
+                "state": PlaybackState.PLAYING,
+                "elapsedTime": 0,
+            }
+        )
+
+    return await refresh_room_state(room_id, "playback_advanced")
 
 
 async def leave_room_service(room_id: str, user_id: str) -> dict[str, object]:

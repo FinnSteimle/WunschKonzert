@@ -24,6 +24,15 @@ async def create_room_endpoint(room_data: CreateRoomRequest) -> dict[str, object
     )
     await room_service.ensure_provider_exists(room_data.supported_provider_id)
 
+    pa = await crud.get_provider_account_by_user(
+        room_data.user_id, room_data.supported_provider_id
+    )
+    if not pa or not pa.refreshToken:
+        raise HTTPException(
+            status_code=403,
+            detail="You must link your Spotify account before creating a room",
+        )
+
     try:
         room = await crud.create_room(
             room_data.name,

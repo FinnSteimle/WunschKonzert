@@ -14,6 +14,8 @@
 		removeRecentRoom
 	} from '$lib/session/recentRooms';
 	import type { QueueEntryDto, RoomStateDto, TrackDto, VoteRequest } from '$lib/types/api';
+	import type { MusicPlayer, MusicPlayerState } from '$lib/playback/types';
+	import { SpotifyPlayer } from '$lib/playback/spotifyPlayer';
 	import { Badge } from '$lib/components/ui/badge';
 	import {
 		Card,
@@ -49,6 +51,13 @@
 	let renameDisplayName = $state('');
 	let renameBusy = $state(false);
 	let renameDialogOpen = $state(false);
+
+	// Spotify SDK playback (host only)
+	let musicPlayer = $state<MusicPlayer | null>(null);
+	let sdkPlayerState = $state<MusicPlayerState | null>(null);
+	let lastPlayedQueueEntryId = $state<string | null>(null);
+	let advanceSent = false;
+	let positionSyncInterval: ReturnType<typeof setInterval> | null = null;
 
 	/** Direct link /room/{code}: ask for name before calling join API. */
 	let linkJoinCode = $state<string | null>(null);
@@ -95,7 +104,14 @@
 		}
 		playbackBusy = true;
 		try {
-			const sent = await socketClient.setPlayback(uid, action);
+			if (musicPlayer) {
+				if (action === 'pause') await musicPlayer.pause();
+				else await musicPlayer.resume();
+			}
+			const currentPos = musicPlayer
+				? await musicPlayer.getPositionMs()
+				: (sdkPlayerState?.positionMs ?? undefined);
+			const sent = await socketClient.setPlayback(uid, action, currentPos);
 			if (!sent) {
 				throw new Error('Playback command failed');
 			}
@@ -175,6 +191,34 @@
 		});
 	});
 
+	// When the server's current track changes (or the SDK becomes ready), play it.
+	$effect(() => {
+		if (!browser || !musicPlayer) return;
+		const ready = sdkPlayerState?.isReady;
+		if (!ready) return;
+
+		const rs = $roomStore.roomState;
+		if (!rs) return;
+
+		const queueEntryId = rs.playback?.currentQueueEntryId ?? null;
+		const playbackState = rs.playback?.state;
+
+		if (!queueEntryId || playbackState === 'stopped') return;
+		if (queueEntryId === lastPlayedQueueEntryId) return;
+
+		const entry = rs.queue.find((e) => e.queueEntryId === queueEntryId);
+		if (!entry) return;
+
+		lastPlayedQueueEntryId = queueEntryId;
+		advanceSent = false;
+
+		const resumePos = rs.playback?.positionMs ?? 0;
+		musicPlayer.play(entry.track.providerTrackId, resumePos).catch((err) => {
+			console.error('[SpotifyPlayer] play failed:', err);
+			lastPlayedQueueEntryId = null;
+		});
+	});
+
 	async function handleAddTrack(track: TrackDto) {
 		const uid = sessionUser?.userId;
 		if (!uid || !socketClient || !socketClient.isConnected()) {
@@ -197,6 +241,36 @@
 		}
 	}
 
+	function initMusicPlayer(userId: string): void {
+		const player = new SpotifyPlayer(userId);
+		player.onStateChange((s) => {
+			sdkPlayerState = s;
+
+			if (s.trackEnded && !advanceSent) {
+				advanceSent = true;
+				socketClient?.send({
+					type: 'playback',
+					user_id: userId,
+					action: 'advance'
+				});
+			}
+		});
+		musicPlayer = player;
+		player.connect().catch((err) => {
+			console.error('[SpotifyPlayer] connect failed:', err);
+		});
+
+		positionSyncInterval = setInterval(() => {
+			if (!socketClient?.isConnected() || !sdkPlayerState?.isPlaying) return;
+			const pos = sdkPlayerState.positionMs;
+			socketClient.send({
+				type: 'position_sync',
+				user_id: userId,
+				position_ms: Math.round(pos)
+			});
+		}, 5000);
+	}
+
 	function beginRoomSession(roomId: string): () => void {
 		roomStore.reset();
 		roomStore.setLoading(true);
@@ -207,11 +281,20 @@
 			if (ui.roomState?.room.status === 'deleted') {
 				roomDeletedRedirectDone = true;
 				removeRecentRoom(ui.roomState.room.joinCode);
-				// Only show message if current user is not the host
 				if (sessionUser && ui.roomState.host.userId !== sessionUser.userId) {
 					toast.message('Room ended by host');
 				}
 				void goto(resolve('/'));
+			}
+
+			// Initialize the Spotify player once we know this user is the host.
+			if (
+				!musicPlayer &&
+				sessionUser &&
+				ui.roomState?.host.userId === sessionUser.userId &&
+				ui.roomState.room.supportedProviderId === 'spotify'
+			) {
+				initMusicPlayer(sessionUser.userId);
 			}
 		});
 
@@ -230,6 +313,13 @@
 			unsubDeleted();
 			socket.disconnect();
 			socketClient = null;
+			if (positionSyncInterval) {
+				clearInterval(positionSyncInterval);
+				positionSyncInterval = null;
+			}
+			musicPlayer?.disconnect();
+			musicPlayer = null;
+			sdkPlayerState = null;
 			roomStore.reset();
 		};
 	}
@@ -397,8 +487,14 @@
 			{@const rs = $roomStore.roomState}
 			{@const isHost = rs.host?.userId === sessionUser.userId}
 			{@const current = getCurrentSong(rs)}
-			{@const durationMs = current ? Math.max(0, current.track.duration) * 1000 : 0}
-			{@const positionMs = rs.playback?.positionMs ?? 0}
+			{@const durationMs =
+				isHost && sdkPlayerState && sdkPlayerState.durationMs > 0
+					? sdkPlayerState.durationMs
+					: current
+						? Math.max(0, current.track.duration) * 1000
+						: 0}
+			{@const positionMs =
+				isHost && sdkPlayerState ? sdkPlayerState.positionMs : (rs.playback?.positionMs ?? 0)}
 			{@const inviteUrl = rs.room ? `${page.url.origin}/room/${rs.room.joinCode}` : ''}
 			{@const queuedTrackIds = new Set(rs.queue.map((e) => e.track.trackId))}
 
@@ -434,7 +530,7 @@
 					<h2 id="wk-now-playing" class="text-sm font-medium">Now playing</h2>
 					<CurrentSongCard entry={current} />
 					{#if current && durationMs > 0}
-						<PlaybackProgress {positionMs} {durationMs} state={rs.playback?.state} />
+						<PlaybackProgress {positionMs} {durationMs} playbackState={rs.playback?.state} />
 					{/if}
 					{#if isHost}
 						<PlaybackControls

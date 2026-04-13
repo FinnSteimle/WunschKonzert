@@ -10,7 +10,7 @@ from fastapi.responses import JSONResponse
 
 import repositories.crud as crud
 from api import websockets
-from api.routers import auth, playback, provider_search, rooms
+from api.routers import auth, playback, provider_search, rooms, spotify_auth
 from core.exceptions import ResourceNotFoundError
 
 
@@ -71,6 +71,7 @@ app.include_router(rooms.router)
 app.include_router(auth.router)
 app.include_router(provider_search.router)
 app.include_router(playback.router)
+app.include_router(spotify_auth.router)
 app.include_router(websockets.router)
 
 

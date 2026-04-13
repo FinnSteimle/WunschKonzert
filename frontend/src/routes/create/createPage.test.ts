@@ -18,6 +18,12 @@ vi.mock('$app/paths', () => ({
 	)
 }));
 
+vi.mock('$app/state', () => ({
+	page: {
+		url: new URL('http://localhost/create?spotify_linked=true')
+	}
+}));
+
 vi.mock('$lib/api/client', () => ({
 	apiClient: {
 		createRoom: vi.fn()

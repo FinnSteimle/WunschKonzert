@@ -55,7 +55,7 @@ describe('CreateRoomForm', () => {
 	});
 
 	it('shows an error when room name is empty', async () => {
-		render(CreateRoomForm);
+		render(CreateRoomForm, { spotifyLinked: true });
 
 		await fireEvent.click(screen.getByRole('button', { name: 'Create room' }));
 
@@ -69,7 +69,7 @@ describe('CreateRoomForm', () => {
 			displayName: ''
 		});
 
-		render(CreateRoomForm);
+		render(CreateRoomForm, { spotifyLinked: true });
 
 		await fireEvent.input(screen.getByLabelText('Room name'), { target: { value: 'Friday vibes' } });
 		await fireEvent.click(screen.getByRole('button', { name: 'Create room' }));
@@ -86,7 +86,7 @@ describe('CreateRoomForm', () => {
 			join_code: 'AB2CD3'
 		});
 		const onSuccess = vi.fn();
-		render(CreateRoomForm, { onsuccess: onSuccess });
+		render(CreateRoomForm, { onsuccess: onSuccess, spotifyLinked: true });
 
 		const displayNameInput = screen.getByLabelText('Your display name');
 		const roomNameInput = screen.getByLabelText('Room name');
@@ -122,7 +122,7 @@ describe('CreateRoomForm', () => {
 		}>();
 		vi.mocked(apiClient.createRoom).mockReturnValue(request.promise);
 
-		render(CreateRoomForm);
+		render(CreateRoomForm, { spotifyLinked: true });
 
 		const displayNameInput = screen.getByLabelText('Your display name');
 		const roomNameInput = screen.getByLabelText('Room name');

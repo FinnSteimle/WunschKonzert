@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
+	import { page } from '$app/state';
 	import {
 		Card,
 		CardContent,
@@ -9,6 +10,8 @@
 		CardTitle
 	} from '$lib/components/ui/card';
 	import CreateRoomForm from '$lib/components/room/forms/CreateRoomForm.svelte';
+
+	const spotifyLinked = $derived(page.url.searchParams.get('spotify_linked') === 'true');
 
 	function onsuccess(payload: { roomId: string; joinCode: string }) {
 		void goto(resolve('/room/[roomId]', { roomId: payload.joinCode }));
@@ -42,7 +45,7 @@
 				<CardDescription>We generate a short join code for you.</CardDescription>
 			</CardHeader>
 			<CardContent>
-				<CreateRoomForm {onsuccess} />
+				<CreateRoomForm {onsuccess} {spotifyLinked} />
 			</CardContent>
 		</Card>
 	</div>

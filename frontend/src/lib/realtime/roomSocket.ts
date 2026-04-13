@@ -82,12 +82,16 @@ export class RoomSocketClient {
 		});
 	}
 
-	setPlayback(userId: string, action: 'pause' | 'resume') {
-		return this.send({
+	setPlayback(userId: string, action: 'pause' | 'resume', positionMs?: number) {
+		const payload: Record<string, unknown> = {
 			type: 'playback',
 			user_id: userId,
 			action
-		});
+		};
+		if (positionMs !== undefined) {
+			payload.position_ms = Math.round(positionMs);
+		}
+		return this.send(payload);
 	}
 
 	renameDisplayName(userId: string, displayName: string) {

@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
+	import CheckIcon from '@lucide/svelte/icons/check';
 	import { Button } from '$lib/components/ui/button';
 	import { Input } from '$lib/components/ui/input';
 	import { Label } from '$lib/components/ui/label';
@@ -15,19 +16,44 @@
 	import { toast } from 'svelte-sonner';
 
 	let {
-		onsuccess
+		onsuccess,
+		spotifyLinked = false
 	}: {
 		onsuccess?: (payload: { roomId: string; joinCode: string }) => void;
+		spotifyLinked?: boolean;
 	} = $props();
 
 	let name = $state('');
 	let displayName = $state('');
 	let provider = $state<ProviderId>('spotify');
 	let busy = $state(false);
+	let linkBusy = $state(false);
+
+	const providerLinked = $derived(provider === 'spotify' && spotifyLinked);
+	const canCreate = $derived(providerLinked);
 
 	onMount(() => {
 		displayName = getOrCreateSessionUser().displayName;
 	});
+
+	async function linkSpotify() {
+		const trimmedDisplay = displayName.trim();
+		if (!trimmedDisplay) {
+			toast.error('Please enter your display name first.');
+			return;
+		}
+		linkBusy = true;
+		try {
+			saveSessionDisplayName(trimmedDisplay);
+			const { userId } = getOrCreateSessionUser();
+			const returnTo = window.location.origin + '/create';
+			const { auth_url } = await apiClient.getSpotifyLoginUrl(userId, returnTo);
+			window.location.href = auth_url;
+		} catch (err) {
+			toast.error(err instanceof Error ? err.message : 'Could not start Spotify login');
+			linkBusy = false;
+		}
+	}
 
 	async function submit(e: Event) {
 		e.preventDefault();
@@ -39,6 +65,10 @@
 		}
 		if (!trimmedDisplay) {
 			toast.error('Please enter your display name.');
+			return;
+		}
+		if (!canCreate) {
+			toast.error('Please link your Spotify account first.');
 			return;
 		}
 		busy = true;
@@ -89,7 +119,32 @@
 			<NativeSelectOption value="spotify">Spotify</NativeSelectOption>
 		</NativeSelect>
 	</div>
-	<Button type="submit" class="w-full min-[400px]:w-auto" disabled={busy}>
+
+	{#if provider === 'spotify'}
+		<div class="flex flex-col gap-2">
+			{#if spotifyLinked}
+				<div class="text-sm flex items-center gap-1.5 text-green-600 dark:text-green-400">
+					<CheckIcon class="size-4" aria-hidden="true" />
+					Spotify account linked
+				</div>
+			{:else}
+				<Button
+					type="button"
+					variant="outline"
+					class="w-full min-[400px]:w-auto"
+					disabled={linkBusy}
+					onclick={linkSpotify}
+				>
+					{linkBusy ? 'Redirecting…' : 'Link Spotify account'}
+				</Button>
+				<p class="text-muted-foreground text-xs">
+					A Spotify Premium account is required to play music in the room.
+				</p>
+			{/if}
+		</div>
+	{/if}
+
+	<Button type="submit" class="w-full min-[400px]:w-auto" disabled={busy || !canCreate}>
 		{busy ? 'Creating…' : 'Create room'}
 	</Button>
 </form>

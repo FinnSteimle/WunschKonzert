@@ -166,6 +166,11 @@ class ProviderAccount(Base):
     status: Mapped[AccountStatus] = mapped_column(
         _db_enum(AccountStatus, "accountstatus"), default=AccountStatus.ACTIVE
     )
+    accessToken: Mapped[str | None] = mapped_column(String, nullable=True)
+    refreshToken: Mapped[str | None] = mapped_column(String, nullable=True)
+    tokenExpiresAt: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
 
     # Relationships
     user: Mapped["User"] = relationship("User", back_populates="provider_accounts")
