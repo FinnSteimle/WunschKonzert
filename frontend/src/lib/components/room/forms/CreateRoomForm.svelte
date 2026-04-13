@@ -4,10 +4,7 @@
 	import { Button } from '$lib/components/ui/button';
 	import { Input } from '$lib/components/ui/input';
 	import { Label } from '$lib/components/ui/label';
-	import {
-		NativeSelect,
-		NativeSelectOption
-	} from '$lib/components/ui/native-select';
+	import { NativeSelect, NativeSelectOption } from '$lib/components/ui/native-select';
 	import DisplayNameInput from '$lib/components/room/forms/DisplayNameInput.svelte';
 	import { apiClient } from '$lib/api/client';
 	import { getOrCreateSessionUser, saveSessionDisplayName } from '$lib/session/userSession';
@@ -75,6 +72,8 @@
 		}
 		if (!canCreate) {
 			toast.error('Please link your Spotify account first.');
+			return;
+		}
 		if (!SUPPORTED_PROVIDERS.includes(provider)) {
 			toast.error('Please choose a supported music provider.');
 			return;
