@@ -221,9 +221,7 @@ async def refresh_room_state(
     return room_state
 
 
-async def sync_playback_position(
-    room_id: str, user_id: str, position_ms: int
-) -> None:
+async def sync_playback_position(room_id: str, user_id: str, position_ms: int) -> None:
     """Lightweight position sync: update DB + patch cache without full rebuild."""
     room = await crud.get_room(room_id)
     if not room or room.hostedBy != user_id:
@@ -239,8 +237,10 @@ async def sync_playback_position(
     )
 
     cached = room_state_cache.get(room_id)
-    if cached and isinstance(cached.get("playback"), dict):
-        cached["playback"]["positionMs"] = elapsed * 1000
+    if cached:
+        playback = cached.get("playback")
+        if isinstance(playback, dict):
+            playback["positionMs"] = elapsed * 1000
 
 
 async def add_to_queue(

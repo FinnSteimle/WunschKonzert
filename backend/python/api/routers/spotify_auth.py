@@ -95,9 +95,7 @@ async def spotify_callback(
     client_id, client_secret = _spotify_credentials()
     redirect_uri = _redirect_uri()
 
-    auth_value = base64.b64encode(
-        f"{client_id}:{client_secret}".encode()
-    ).decode()
+    auth_value = base64.b64encode(f"{client_id}:{client_secret}".encode()).decode()
 
     async with httpx.AsyncClient(timeout=15) as http:
         resp = await http.post(
@@ -160,18 +158,12 @@ async def spotify_token(user_id: str) -> dict[str, str]:
         )
 
     # If the token is still valid, return it directly.
-    if (
-        pa.accessToken
-        and pa.tokenExpiresAt
-        and datetime.now(UTC) < pa.tokenExpiresAt
-    ):
+    if pa.accessToken and pa.tokenExpiresAt and datetime.now(UTC) < pa.tokenExpiresAt:
         return {"access_token": pa.accessToken}
 
     # Token expired -- refresh it.
     client_id, client_secret = _spotify_credentials()
-    auth_value = base64.b64encode(
-        f"{client_id}:{client_secret}".encode()
-    ).decode()
+    auth_value = base64.b64encode(f"{client_id}:{client_secret}".encode()).decode()
 
     async with httpx.AsyncClient(timeout=15) as http:
         resp = await http.post(
