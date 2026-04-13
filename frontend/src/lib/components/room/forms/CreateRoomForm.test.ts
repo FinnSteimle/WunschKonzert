@@ -85,7 +85,7 @@ describe('CreateRoomForm', () => {
 			room_id: 'room-1',
 			join_code: 'AB2CD3'
 		});
-		render(CreateRoomForm);
+		render(CreateRoomForm, { spotifyLinked: true });
 
 		const roomName = 'A'.repeat(40);
 		await fireEvent.input(screen.getByLabelText('Room name'), { target: { value: roomName } });
@@ -100,7 +100,7 @@ describe('CreateRoomForm', () => {
 	});
 
 	it('shows an error when room name exceeds max length', async () => {
-		render(CreateRoomForm);
+		render(CreateRoomForm, { spotifyLinked: true });
 
 		await fireEvent.input(screen.getByLabelText('Room name'), { target: { value: 'B'.repeat(41) } });
 		await fireEvent.click(screen.getByRole('button', { name: 'Create room' }));
@@ -109,8 +109,8 @@ describe('CreateRoomForm', () => {
 		expect(apiClient.createRoom).not.toHaveBeenCalled();
 	});
 
-	it('shows an error for unsupported provider values', async () => {
-		render(CreateRoomForm);
+	it('disables submit button for unsupported provider values', async () => {
+		render(CreateRoomForm, { spotifyLinked: true });
 		const providerSelect = screen.getByLabelText('Music provider') as HTMLSelectElement;
 		const unsupportedOption = document.createElement('option');
 		unsupportedOption.value = 'invalid-provider';
@@ -119,9 +119,9 @@ describe('CreateRoomForm', () => {
 
 		await fireEvent.input(screen.getByLabelText('Room name'), { target: { value: 'Friday vibes' } });
 		await fireEvent.change(providerSelect, { target: { value: 'invalid-provider' } });
-		await fireEvent.click(screen.getByRole('button', { name: 'Create room' }));
 
-		expect(toast.error).toHaveBeenCalledWith('Please choose a supported music provider.');
+		const submitButton = screen.getByRole('button', { name: 'Create room' }) as HTMLButtonElement;
+		expect(submitButton.disabled).toBe(true);
 		expect(apiClient.createRoom).not.toHaveBeenCalled();
 	});
 
