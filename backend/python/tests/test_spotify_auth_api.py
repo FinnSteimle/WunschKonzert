@@ -132,7 +132,10 @@ async def test_spotify_callback_with_provider_error_redirects(client):
     )
 
     assert response.status_code == 307
-    assert response.headers["location"] == "http://localhost/create?spotify_error=access_denied"
+    assert (
+        response.headers["location"]
+        == "http://localhost/create?spotify_error=access_denied"
+    )
     assert state not in spotify_auth._pending_states
 
 
@@ -152,7 +155,9 @@ async def test_spotify_callback_token_exchange_failure_redirects(
     }
 
     _SequencedAsyncClient.post_responses = [_FakeResponse({}, status_code=400)]
-    monkeypatch.setattr("api.routers.spotify_auth.httpx.AsyncClient", _SequencedAsyncClient)
+    monkeypatch.setattr(
+        "api.routers.spotify_auth.httpx.AsyncClient", _SequencedAsyncClient
+    )
 
     response = await client.get(
         "/auth/spotify/callback",
@@ -184,12 +189,18 @@ async def test_spotify_callback_profile_fetch_failure_redirects(
 
     _SequencedAsyncClient.post_responses = [
         _FakeResponse(
-            {"access_token": "access-token", "refresh_token": "refresh-token", "expires_in": 3600},
+            {
+                "access_token": "access-token",
+                "refresh_token": "refresh-token",
+                "expires_in": 3600,
+            },
             status_code=200,
         )
     ]
     _SequencedAsyncClient.get_responses = [_FakeResponse({}, status_code=401)]
-    monkeypatch.setattr("api.routers.spotify_auth.httpx.AsyncClient", _SequencedAsyncClient)
+    monkeypatch.setattr(
+        "api.routers.spotify_auth.httpx.AsyncClient", _SequencedAsyncClient
+    )
 
     response = await client.get(
         "/auth/spotify/callback",
@@ -221,11 +232,17 @@ async def test_spotify_callback_success_stores_tokens_and_redirects(
 
     _SequencedAsyncClient.post_responses = [
         _FakeResponse(
-            {"access_token": "access-token", "refresh_token": "refresh-token", "expires_in": 3600}
+            {
+                "access_token": "access-token",
+                "refresh_token": "refresh-token",
+                "expires_in": 3600,
+            }
         )
     ]
     _SequencedAsyncClient.get_responses = [_FakeResponse({"id": "spotify-external-id"})]
-    monkeypatch.setattr("api.routers.spotify_auth.httpx.AsyncClient", _SequencedAsyncClient)
+    monkeypatch.setattr(
+        "api.routers.spotify_auth.httpx.AsyncClient", _SequencedAsyncClient
+    )
 
     response = await client.get(
         "/auth/spotify/callback",
@@ -276,7 +293,9 @@ async def test_spotify_token_returns_cached_valid_access_token(client, db_sessio
 
 
 @pytest.mark.asyncio
-async def test_spotify_token_refresh_success_updates_tokens(client, db_session, monkeypatch):
+async def test_spotify_token_refresh_success_updates_tokens(
+    client, db_session, monkeypatch
+):
     user_id = str(uuid.uuid4())
     await crud.create_user(user_id, "Host User", db_session)
     await crud.create_music_provider("spotify", "Spotify", db_session)
@@ -299,7 +318,9 @@ async def test_spotify_token_refresh_success_updates_tokens(client, db_session, 
             }
         )
     ]
-    monkeypatch.setattr("api.routers.spotify_auth.httpx.AsyncClient", _SequencedAsyncClient)
+    monkeypatch.setattr(
+        "api.routers.spotify_auth.httpx.AsyncClient", _SequencedAsyncClient
+    )
 
     response = await client.get("/auth/spotify/token", params={"user_id": user_id})
 
@@ -313,7 +334,9 @@ async def test_spotify_token_refresh_success_updates_tokens(client, db_session, 
 
 
 @pytest.mark.asyncio
-async def test_spotify_token_refresh_failure_returns_502(client, db_session, monkeypatch):
+async def test_spotify_token_refresh_failure_returns_502(
+    client, db_session, monkeypatch
+):
     user_id = str(uuid.uuid4())
     await crud.create_user(user_id, "Host User", db_session)
     await crud.create_music_provider("spotify", "Spotify", db_session)
@@ -328,7 +351,9 @@ async def test_spotify_token_refresh_failure_returns_502(client, db_session, mon
     )
 
     _SequencedAsyncClient.post_responses = [_FakeResponse({}, status_code=500)]
-    monkeypatch.setattr("api.routers.spotify_auth.httpx.AsyncClient", _SequencedAsyncClient)
+    monkeypatch.setattr(
+        "api.routers.spotify_auth.httpx.AsyncClient", _SequencedAsyncClient
+    )
 
     response = await client.get("/auth/spotify/token", params={"user_id": user_id})
 

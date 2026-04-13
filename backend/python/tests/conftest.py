@@ -42,7 +42,12 @@ async def db_engine(postgres_container):
 
     # NullPool: no connection pooling — prevents deadlocks when db_session
     # holds a connection while CRUD functions check out additional ones.
-    engine = create_async_engine(url, poolclass=NullPool)
+    engine = create_async_engine(
+        url,
+        poolclass=NullPool,
+        pool_pre_ping=True,
+        connect_args={"timeout": 120, "command_timeout": 120},
+    )
 
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
@@ -70,22 +75,19 @@ async def db_session(session_factory):
     core.database.get_session_factory = lambda: session_factory
     crud.get_session_factory = lambda: session_factory
 
-    async with session_factory() as session:
-        yield session
-        # Truncate all tables after each test — rollback alone cannot undo
-        # commits made by CRUD functions that open their own sessions
-        await session.rollback()
-        for table in reversed(Base.metadata.sorted_tables):
-            await session.execute(table.delete())
-        await session.commit()
-
-    # Clear the room state cache to prevent memory accumulation across tests
-    room_service.room_state_cache.clear()
-
-    core.database._engine = original_engine_singleton
-    core.database._session_factory = original_session_factory_singleton
-    crud.get_session_factory = original_crud_get_session_factory
-    core.database.get_session_factory = original_get_session_factory
+    try:
+        async with session_factory() as session:
+            yield session
+            await session.rollback()
+            for table in reversed(Base.metadata.sorted_tables):
+                await session.execute(table.delete())
+            await session.commit()
+    finally:
+        room_service.room_state_cache.clear()
+        core.database._engine = original_engine_singleton
+        core.database._session_factory = original_session_factory_singleton
+        crud.get_session_factory = original_crud_get_session_factory
+        core.database.get_session_factory = original_get_session_factory
 
 
 @pytest.fixture
