@@ -1,4 +1,5 @@
 import uuid
+from datetime import UTC, datetime, timedelta
 
 import pytest
 
@@ -24,12 +25,22 @@ async def test_hello_world(client):
 async def test_create_room_success(client, db_session):
     # Seed provider
     provider_id = "spotify"
+    user_id = str(uuid.uuid4())
+    await crud.create_user(user_id, "Host User", db_session)
     await crud.create_music_provider(provider_id, "Spotify", db_session)
     await db_session.commit()
+    await crud.create_or_update_provider_account_tokens(
+        user_id=user_id,
+        provider_id=provider_id,
+        external_user_id="spotify-user",
+        access_token="access-token",
+        refresh_token="refresh-token",
+        token_expires_at=datetime.now(UTC) + timedelta(hours=1),
+    )
 
     payload = {
         "name": "My Awesome Room",
-        "user_id": str(uuid.uuid4()),
+        "user_id": user_id,
         "display_name": "Host User",
         "supported_provider_id": provider_id,
     }
