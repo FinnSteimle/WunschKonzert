@@ -155,7 +155,7 @@ async def create_room(
     return room
 
 
-async def get_room(room_id: str, session: AsyncSession | None = None) -> Room | None:
+async def get_room(room_id: str, session: AsyncSession | None = None) -> Room:
     if session is None:
         session_factory = get_session_factory()
         async with session_factory() as new_session:
@@ -169,7 +169,7 @@ async def get_room(room_id: str, session: AsyncSession | None = None) -> Room | 
 
 async def get_room_by_join_code(
     join_code: str, session: AsyncSession | None = None
-) -> Room | None:
+) -> Room:
     if session is None:
         session_factory = get_session_factory()
         async with session_factory() as new_session:
