@@ -46,12 +46,10 @@ def _ui_to_feedback(vote_type: str) -> FeedbackType | None:
 
 async def _build_room_state(room_id: str) -> dict[str, object] | None:
     # Get room and host
-    room = await crud.get_room(room_id)
-    if not room:
-        return None
-
-    host = await crud.get_user(room.hostedBy)
-    if not host:
+    try:
+        room = await crud.get_room(room_id)
+        host = await crud.get_user(room.hostedBy)
+    except ResourceNotFoundError:
         return None
 
     # Get room members
@@ -223,8 +221,12 @@ async def refresh_room_state(
 
 async def sync_playback_position(room_id: str, user_id: str, position_ms: int) -> None:
     """Lightweight position sync: update DB + patch cache without full rebuild."""
-    room = await crud.get_room(room_id)
-    if not room or room.hostedBy != user_id:
+    try:
+        room = await crud.get_room(room_id)
+    except ResourceNotFoundError:
+        return
+
+    if room.hostedBy != user_id:
         return
 
     session = await crud.get_current_playback_session(room_id)
@@ -250,15 +252,18 @@ async def add_to_queue(
         raise HTTPException(status_code=400, detail="No track data provided")
 
     # Get room and validate
-    room = await crud.get_room(room_id)
-    if not room:
+    try:
+        room = await crud.get_room(room_id)
+    except ResourceNotFoundError:
         raise HTTPException(status_code=404, detail="Room not found")
+
     if room.status != RoomStatus.ACTIVE:
         raise HTTPException(status_code=400, detail="Room is not active")
 
     # Get user
-    user = await crud.get_user(user_id)
-    if not user:
+    try:
+        await crud.get_user(user_id)
+    except ResourceNotFoundError:
         raise HTTPException(status_code=404, detail="User not found")
 
     # Get or create track
@@ -379,9 +384,11 @@ async def set_playback_state(
     if action not in {"pause", "resume", "stop", "advance"}:
         raise HTTPException(status_code=400, detail="Invalid playback action")
 
-    room = await crud.get_room(room_id)
-    if not room:
+    try:
+        room = await crud.get_room(room_id)
+    except ResourceNotFoundError:
         raise HTTPException(status_code=404, detail="Room not found")
+
     if room.hostedBy != user_id:
         raise HTTPException(
             status_code=403, detail="Only the host can control playback"
@@ -471,12 +478,14 @@ async def _advance_to_next(room_id: str) -> dict[str, object]:
 
 async def leave_room_service(room_id: str, user_id: str) -> dict[str, object]:
     try:
-        user = await crud.get_user(user_id)
-        if not user:
+        try:
+            await crud.get_user(user_id)
+        except ResourceNotFoundError:
             raise HTTPException(status_code=404, detail="User not found")
 
-        room = await crud.get_room(room_id)
-        if not room:
+        try:
+            room = await crud.get_room(room_id)
+        except ResourceNotFoundError:
             raise HTTPException(status_code=404, detail="Room not found")
 
         if room.hostedBy == user_id:
@@ -511,9 +520,9 @@ async def create_room_service(
 
     try:
         room = await crud.create_room(
-            name,
             user_id,
             supported_provider_id,
+            name,
         )
         await ensure_active_membership(user_id, room.roomId)
         await refresh_room_state(room.roomId, "room_created")
@@ -550,9 +559,11 @@ async def join_room_service(
 
     await ensure_user_display_name(user_id, display_name)
 
-    room = await crud.get_room_by_join_code(normalized_code)
-    if not room:
+    try:
+        room = await crud.get_room_by_join_code(normalized_code)
+    except ResourceNotFoundError:
         raise HTTPException(status_code=404, detail="Room not found")
+
     if room.status != RoomStatus.ACTIVE:
         raise HTTPException(
             status_code=410,
@@ -580,8 +591,6 @@ async def delete_room_service(room_id: str, user_id: str) -> dict[str, object]:
     try:
         # Get room and validate
         room = await crud.get_room(room_id)
-        if not room:
-            raise HTTPException(status_code=404, detail="Room not found")
         if room.hostedBy != user_id:
             raise HTTPException(status_code=403, detail="Only host can delete room")
 
@@ -603,6 +612,8 @@ async def delete_room_service(room_id: str, user_id: str) -> dict[str, object]:
             await session.commit()
 
         return await refresh_room_state(room_id, "room_deleted")
+    except ResourceNotFoundError:
+        raise HTTPException(status_code=404, detail="Room not found")
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
@@ -660,8 +671,9 @@ async def rename_participant(
     room_id: str, user_id: str, display_name: str
 ) -> dict[str, object]:
     try:
-        room = await crud.get_room(room_id)
-        if not room:
+        try:
+            await crud.get_room(room_id)
+        except ResourceNotFoundError:
             raise HTTPException(status_code=404, detail="Room not found")
 
         membership = await crud.get_room_membership(user_id, room_id)

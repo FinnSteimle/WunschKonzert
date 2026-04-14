@@ -4,6 +4,7 @@ import pytest
 
 from core.exceptions import (
     ResourceExistsError,
+    ResourceNotFoundError,
 )
 from models import domain
 from repositories import crud
@@ -58,16 +59,33 @@ async def test_create_provider_that_exists_throws_error(db_session):
 
 
 @pytest.mark.asyncio
-async def test_create_room(db_session, init_room):
+async def test_create_room(db_session):
     user_id = str(uuid.uuid4())
-    room = await init_room(user_id=user_id)
+    provider_id = str(uuid.uuid4())
+    await crud.create_user(user_id, "host", db_session)
+    await crud.create_music_provider(provider_id, "Spotify", db_session)
+    await db_session.flush()
 
-    assert room is not None
-    assert room.name == "test_room"
+    room = await crud.create_room(user_id, provider_id, "My Custom Room", db_session)
+
+    assert room.name == "My Custom Room"
     assert room.hostedBy == user_id
+    assert room.supportedProviderId == provider_id
+    assert room.joinCode is not None
 
 
-# Delete room test is in test_services.py since it uses services for deletion and not crud directly
+@pytest.mark.asyncio
+async def test_create_room_with_default_name(db_session):
+    user_id = str(uuid.uuid4())
+    provider_id = str(uuid.uuid4())
+    await crud.create_user(user_id, "host", db_session)
+    await crud.create_music_provider(provider_id, "Spotify", db_session)
+    await db_session.flush()
+
+    room = await crud.create_room(user_id, provider_id, session=db_session)
+
+    assert room.name == f"Room_{room.joinCode}"
+    assert room.hostedBy == user_id
 
 
 @pytest.mark.asyncio
@@ -84,8 +102,11 @@ async def test_get_room_by_join_code(db_session, init_room):
 async def test_get_room_by_join_code_not_found(db_session, init_room):
     await init_room()
 
-    room_by_code = await crud.get_room_by_join_code("invalid_code")
-    assert room_by_code is None
+    with pytest.raises(ResourceNotFoundError):
+        await crud.get_room_by_join_code("invalid_code")
+
+
+# Delete room test is in test_services.py since it uses services for deletion and not crud directly
 
 
 @pytest.mark.asyncio

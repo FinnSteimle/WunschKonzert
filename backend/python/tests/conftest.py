@@ -71,6 +71,7 @@ async def db_session(session_factory):
     original_engine_singleton = core.database._engine
 
     # Keep all DB access on the real test factory for this test case.
+    core.database._engine = db_engine
     core.database._session_factory = session_factory
     core.database.get_session_factory = lambda: session_factory
     crud.get_session_factory = lambda: session_factory
@@ -98,7 +99,6 @@ def init_room(db_session):
         room_name="test_room",
         user_id=None,
     ):
-
         provider_id = provider_id or str(uuid.uuid4())
         provider_name = provider_name or f"provider_{str(uuid.uuid4())[:8]}"
         user_id = user_id or str(uuid.uuid4())
@@ -109,8 +109,11 @@ def init_room(db_session):
 
         provider = await crud.get_music_provider(provider_id, db_session)
 
-        room = await crud.create_room(room_name, user_id, provider.providerId)
-        await crud.create_room_membership(user_id, room.roomId)
+        room = await crud.create_room(
+            user_id, provider.providerId, room_name, session=db_session
+        )
+        await crud.create_room_membership(user_id, room.roomId, session=db_session)
+        await db_session.commit()
         return room
 
     return _factory

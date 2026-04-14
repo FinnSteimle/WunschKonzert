@@ -10,6 +10,7 @@ from core.exceptions import (
     ResourceExistsError,
     ResourceNotFoundError,
 )
+from core.identifiers import generate_join_code, generate_room_id
 from models.domain import (
     AccountStatus,
     MembershipStatus,
@@ -104,66 +105,147 @@ async def get_music_provider(
     return provider
 
 
-async def get_room(room_id: str) -> Room | None:
-    """Get room by ID or return None if not found"""
-    session_factory = get_session_factory()
-    async with session_factory() as session:
-        return await session.get(Room, room_id)
+# helper methods to make sure room_id and join_code are unique
+async def _get_unique_room_id(session: AsyncSession) -> str:
+    while True:
+        new_id = generate_room_id()
+        if await session.get(Room, new_id) is None:
+            return new_id
 
 
-async def get_room_by_join_code(join_code: str) -> Room | None:
-    """Get room by join code or return None if not found"""
-    session_factory = get_session_factory()
-    async with session_factory() as session:
-        result = await session.execute(select(Room).where(Room.joinCode == join_code))
-        return result.scalar_one_or_none()
+async def _get_unique_join_code(session: AsyncSession) -> str:
+    while True:
+        new_code = generate_join_code()
+        result = await session.execute(select(Room).where(Room.joinCode == new_code))
+        if result.scalar_one_or_none() is None:
+            return new_code
 
 
-async def get_active_join_codes(join_codes: Sequence[str]) -> list[str]:
+async def create_room(
+    user_id: str,
+    supported_provider_id: str,
+    name: str | None = None,
+    session: AsyncSession | None = None,
+) -> Room:
+    if session is None:
+        session_factory = get_session_factory()
+        async with session_factory() as new_session:
+            room = await create_room(
+                user_id, supported_provider_id, name, session=new_session
+            )
+            await new_session.commit()
+            return room
+
+    join_code = await _get_unique_join_code(session)
+
+    if name is None:
+        name = f"Room_{join_code}"
+
+    room = Room(
+        roomId=await _get_unique_room_id(session),
+        joinCode=join_code,
+        name=name,
+        hostedBy=user_id,
+        supportedProviderId=supported_provider_id,
+        status=RoomStatus.ACTIVE,
+    )
+    session.add(room)
+    await session.flush()
+    await session.refresh(room)
+    return room
+
+
+async def get_room(room_id: str, session: AsyncSession | None = None) -> Room | None:
+    if session is None:
+        session_factory = get_session_factory()
+        async with session_factory() as new_session:
+            return await get_room(room_id, session=new_session)
+
+    room: Room | None = await session.get(Room, room_id)
+    if room is None:
+        raise ResourceNotFoundError("Room not found in database.")
+    return room
+
+
+async def get_room_by_join_code(
+    join_code: str, session: AsyncSession | None = None
+) -> Room | None:
+    if session is None:
+        session_factory = get_session_factory()
+        async with session_factory() as new_session:
+            return await get_room_by_join_code(join_code, session=new_session)
+
+    result = await session.execute(select(Room).where(Room.joinCode == join_code))
+    room: Room | None = result.scalar_one_or_none()
+    if room is None:
+        raise ResourceNotFoundError("Room not found in database.")
+    return room
+
+
+async def get_active_join_codes(
+    join_codes: Sequence[str], session: AsyncSession | None = None
+) -> list[str]:
     """Return join codes that currently map to active rooms."""
+    if session is None:
+        session_factory = get_session_factory()
+        async with session_factory() as new_session:
+            return await get_active_join_codes(join_codes, session=new_session)
+
     normalized = [code.strip().upper() for code in join_codes if code.strip()]
     if not normalized:
         return []
 
-    session_factory = get_session_factory()
-    async with session_factory() as session:
-        result = await session.execute(
-            select(Room.joinCode).where(
-                Room.joinCode.in_(normalized),
-                Room.status == RoomStatus.ACTIVE,
-            )
+    result = await session.execute(
+        select(Room.joinCode).where(
+            Room.joinCode.in_(normalized),
+            Room.status == RoomStatus.ACTIVE,
         )
-        # Keep order stable by preserving first appearance in input.
-        available = set(result.scalars().all())
-        return [code for code in normalized if code in available]
+    )
+    # Keep order stable by preserving first appearance in input.
+    available = set(result.scalars().all())
+    return [code for code in normalized if code in available]
 
 
-async def get_room_membership(user_id: str, room_id: str) -> RoomMembership | None:
+async def get_room_membership(
+    user_id: str, room_id: str, session: AsyncSession | None = None
+) -> RoomMembership | None:
     """Get existing room membership or return None if not found"""
-    session_factory = get_session_factory()
-    async with session_factory() as session:
-        result = await session.execute(
-            select(RoomMembership).where(
-                RoomMembership.userId == user_id, RoomMembership.roomId == room_id
-            )
+    if session is None:
+        session_factory = get_session_factory()
+        async with session_factory() as new_session:
+            return await get_room_membership(user_id, room_id, session=new_session)
+
+    result = await session.execute(
+        select(RoomMembership).where(
+            RoomMembership.userId == user_id, RoomMembership.roomId == room_id
         )
-        return result.scalar_one_or_none()
+    )
+    return result.scalar_one_or_none()
 
 
-async def create_room_membership(user_id: str, room_id: str) -> RoomMembership:
+async def create_room_membership(
+    user_id: str, room_id: str, session: AsyncSession | None = None
+) -> RoomMembership:
     """Create a new room membership"""
+    if session is None:
+        session_factory = get_session_factory()
+        async with session_factory() as new_session:
+            membership = await create_room_membership(
+                user_id, room_id, session=new_session
+            )
+            await new_session.commit()
+            return membership
+
     # Check if membership already exists
-    existing = await get_room_membership(user_id, room_id)
+    existing = await get_room_membership(user_id, room_id, session=session)
     if existing:
         raise ValueError("User is already a member of this room")
 
-    session_factory = get_session_factory()
-    async with session_factory() as session:
-        membership = RoomMembership(userId=user_id, roomId=room_id)
-        session.add(membership)
-        await session.commit()
-        await session.refresh(membership)
-        return membership
+    membership = RoomMembership(userId=user_id, roomId=room_id)
+    session.add(membership)
+    await session.flush()
+    await session.refresh(membership)
+    return membership
 
 
 async def update_user_display_name(user_id: str, display_name: str) -> None:
@@ -197,43 +279,6 @@ async def leave_room(user_id: str, room_id: str) -> RoomMembership:
         await session.commit()
         await session.refresh(membership)
         return membership
-
-
-def _generate_join_code(length: int = 6) -> str:
-    alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
-    # Sampling from UUID bytes keeps generation deterministic and server-side.
-    random_bytes = uuid.uuid4().bytes
-    out = []
-    for i in range(length):
-        out.append(alphabet[random_bytes[i] % len(alphabet)])
-    return "".join(out)
-
-
-async def create_room(name: str, user_id: str, supported_provider_id: str) -> Room:
-    """Create a new room"""
-    session_factory = get_session_factory()
-    async with session_factory() as session:
-        room_id = str(uuid.uuid4())
-        join_code = _generate_join_code()
-
-        # Extremely unlikely collisions, but guaranteed unique before insert.
-        while (
-            await session.execute(select(Room).where(Room.joinCode == join_code))
-        ).scalar_one_or_none() is not None:
-            join_code = _generate_join_code()
-
-        room = Room(
-            roomId=room_id,
-            joinCode=join_code,
-            name=name,
-            hostedBy=user_id,
-            supportedProviderId=supported_provider_id,
-            status=RoomStatus.ACTIVE,
-        )
-        session.add(room)
-        await session.commit()
-        await session.refresh(room)
-        return room
 
 
 async def create_provider_account(
