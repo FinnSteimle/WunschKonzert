@@ -53,7 +53,7 @@ async def _build_room_state(room_id: str) -> dict[str, object] | None:
         return None
 
     # Get room members
-    memberships = await crud.get_room_members(room_id)
+    memberships = await crud.get_room_active_memberships(room_id)
 
     users: list[dict[str, object]] = [
         {
@@ -644,7 +644,7 @@ async def ensure_user_display_name(user_id: str, display_name: str) -> None:
                 raise HTTPException(status_code=400, detail=str(e)) from e
     try:
         await crud.update_user_display_name(user_id, trimmed)
-    except ValueError as e:
+    except ResourceNotFoundError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
 
 
@@ -661,8 +661,10 @@ async def ensure_provider_exists(provider_id: str) -> None:
 
 async def ensure_active_membership(user_id: str, room_id: str) -> None:
     try:
-        await crud.update_membership_status(user_id, room_id, MembershipStatus.ACTIVE)
-    except ValueError:
+        await crud.update_room_membership_status(
+            user_id, room_id, MembershipStatus.ACTIVE
+        )
+    except ResourceNotFoundError:
         # Membership doesn't exist, create it
         await crud.create_room_membership(user_id, room_id)
 
@@ -676,8 +678,14 @@ async def rename_participant(
         except ResourceNotFoundError:
             raise HTTPException(status_code=404, detail="Room not found")
 
-        membership = await crud.get_room_membership(user_id, room_id)
-        if not membership or membership.membershipStatus != MembershipStatus.ACTIVE:
+        try:
+            membership = await crud.get_room_membership(user_id, room_id)
+        except ResourceNotFoundError:
+            raise HTTPException(
+                status_code=403, detail="Only active room participants can rename"
+            )
+
+        if membership.membershipStatus != MembershipStatus.ACTIVE:
             raise HTTPException(
                 status_code=403, detail="Only active room participants can rename"
             )
@@ -718,7 +726,7 @@ async def check_room_availability(
         seen_codes.add(normalized_code)
         unique_codes.append(normalized_code)
 
-    available = await crud.get_active_join_codes(unique_codes)
+    available = await crud.get_all_active_rooms_by_join_codes(unique_codes)
     available_set = set(available)
     unavailable = [
         code for code in unique_codes if code not in available_set

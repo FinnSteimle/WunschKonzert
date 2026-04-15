@@ -106,9 +106,6 @@ async def test_get_room_by_join_code_not_found(db_session, init_room):
         await crud.get_room_by_join_code("invalid_code")
 
 
-# Delete room test is in test_services.py since it uses services for deletion and not crud directly
-
-
 @pytest.mark.asyncio
 async def test_membership(db_session, init_room):
     host_id = str(uuid.uuid4())

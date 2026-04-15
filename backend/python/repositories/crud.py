@@ -67,6 +67,28 @@ async def get_user(user_id: str, session: AsyncSession | None = None) -> User:
     return user
 
 
+async def update_user_display_name(
+    user_id: str, display_name: str, session: AsyncSession | None = None
+) -> User:
+    if session is None:
+        session_factory = get_session_factory()
+        async with session_factory() as new_session:
+            updated_user = await update_user_display_name(
+                user_id, display_name, session=new_session
+            )
+            await new_session.commit()
+            return updated_user
+
+    result = await session.execute(select(User).where(User.userId == user_id))
+    user: User | None = result.scalar_one_or_none()
+    if not user:
+        raise ResourceNotFoundError("User not found in database.")
+    user.displayName = display_name
+    await session.flush()
+    await session.refresh(user)
+    return user
+
+
 async def create_music_provider(
     provider_id: str, name: str, session: AsyncSession | None = None
 ) -> MusicProvider:
@@ -141,6 +163,8 @@ async def create_room(
     if name is None:
         name = f"Room_{join_code}"
 
+    # no try except to see if room already exists, since a new unique id is generated (room will always have a different id)
+
     room = Room(
         roomId=await _get_unique_room_id(session),
         joinCode=join_code,
@@ -182,14 +206,15 @@ async def get_room_by_join_code(
     return room
 
 
-async def get_active_join_codes(
+async def get_all_active_rooms_by_join_codes(
     join_codes: Sequence[str], session: AsyncSession | None = None
 ) -> list[str]:
-    """Return join codes that currently map to active rooms."""
     if session is None:
         session_factory = get_session_factory()
         async with session_factory() as new_session:
-            return await get_active_join_codes(join_codes, session=new_session)
+            return await get_all_active_rooms_by_join_codes(
+                join_codes, session=new_session
+            )
 
     normalized = [code.strip().upper() for code in join_codes if code.strip()]
     if not normalized:
@@ -206,10 +231,83 @@ async def get_active_join_codes(
     return [code for code in normalized if code in available]
 
 
+async def update_room_status(
+    room_id: str, status: RoomStatus, session: AsyncSession | None = None
+) -> Room:
+    if session is None:
+        session_factory = get_session_factory()
+        async with session_factory() as new_session:
+            room = await update_room_status(room_id, status, session=new_session)
+            await new_session.commit()
+            return room
+
+    room = await get_room(room_id, session=session)
+
+    room.status = status
+    await session.flush()
+    await session.refresh(room)
+    return room
+
+
+# refactor to use update_room_membership
+async def leave_room(
+    user_id: str, room_id: str, session: AsyncSession | None = None
+) -> RoomMembership:
+    if session is None:
+        session_factory = get_session_factory()
+        async with session_factory() as new_session:
+            updated_membership = await leave_room(user_id, room_id, session=new_session)
+            await new_session.commit()
+            return updated_membership
+
+    result = await session.execute(
+        select(RoomMembership).where(
+            RoomMembership.userId == user_id, RoomMembership.roomId == room_id
+        )
+    )
+
+    membership: RoomMembership | None = result.scalar_one_or_none()
+
+    if not membership:
+        raise ResourceNotFoundError(
+            "Membership between this user and the room was not found in the database."
+        )
+
+    membership.leftAt = datetime.now(UTC)
+    membership.membershipStatus = MembershipStatus.INACTIVE
+    await session.flush()
+    await session.refresh(membership)
+    return membership
+
+
+async def create_room_membership(
+    user_id: str, room_id: str, session: AsyncSession | None = None
+) -> RoomMembership:
+    if session is None:
+        session_factory = get_session_factory()
+        async with session_factory() as new_session:
+            membership = await create_room_membership(
+                user_id, room_id, session=new_session
+            )
+            await new_session.commit()
+            return membership
+
+    try:
+        await get_room_membership(user_id, room_id, session=session)
+        raise ResourceExistsError("User is already a member of this room.")
+    except ResourceNotFoundError:
+        pass
+
+    membership = RoomMembership(userId=user_id, roomId=room_id)
+    session.add(membership)
+    await session.flush()
+    await session.refresh(membership)
+    return membership
+
+
 async def get_room_membership(
     user_id: str, room_id: str, session: AsyncSession | None = None
-) -> RoomMembership | None:
-    """Get existing room membership or return None if not found"""
+) -> RoomMembership:
     if session is None:
         session_factory = get_session_factory()
         async with session_factory() as new_session:
@@ -220,65 +318,80 @@ async def get_room_membership(
             RoomMembership.userId == user_id, RoomMembership.roomId == room_id
         )
     )
-    return result.scalar_one_or_none()
-
-
-async def create_room_membership(
-    user_id: str, room_id: str, session: AsyncSession | None = None
-) -> RoomMembership:
-    """Create a new room membership"""
-    if session is None:
-        session_factory = get_session_factory()
-        async with session_factory() as new_session:
-            membership = await create_room_membership(
-                user_id, room_id, session=new_session
-            )
-            await new_session.commit()
-            return membership
-
-    # Check if membership already exists
-    existing = await get_room_membership(user_id, room_id, session=session)
-    if existing:
-        raise ValueError("User is already a member of this room")
-
-    membership = RoomMembership(userId=user_id, roomId=room_id)
-    session.add(membership)
-    await session.flush()
-    await session.refresh(membership)
+    membership: RoomMembership | None = result.scalar_one_or_none()
+    if membership is None:
+        raise ResourceNotFoundError("Room-Membership not found in database.")
     return membership
 
 
-async def update_user_display_name(user_id: str, display_name: str) -> None:
-    """Update an existing user's display name."""
-    session_factory = get_session_factory()
-    async with session_factory() as session:
-        result = await session.execute(select(User).where(User.userId == user_id))
-        user = result.scalar_one_or_none()
-        if not user:
-            raise ValueError("User not found")
-        user.displayName = display_name
-        await session.commit()
-
-
-async def leave_room(user_id: str, room_id: str) -> RoomMembership:
-    """Leave a room by setting leftAt timestamp"""
+async def get_room_memberships(room_id: str) -> Sequence[RoomMembership]:
     session_factory = get_session_factory()
     async with session_factory() as session:
         result = await session.execute(
-            select(RoomMembership).where(
-                RoomMembership.userId == user_id, RoomMembership.roomId == room_id
-            )
+            select(RoomMembership).where(RoomMembership.roomId == room_id)
         )
-        membership = result.scalar_one_or_none()
+        return result.scalars().all()
 
-        if not membership:
-            raise ValueError("User is not a member of this room")
 
+async def get_room_active_memberships(
+    room_id: str, session: AsyncSession | None = None
+) -> Sequence[Row[tuple[RoomMembership, User]]]:
+    """Get all active members of a room with their user data"""
+    if session is None:
+        session_factory = get_session_factory()
+        async with session_factory() as new_session:
+            return await get_room_active_memberships(room_id, session=new_session)
+
+    result = await session.execute(
+        select(RoomMembership, User)
+        .join(User)
+        .where(
+            RoomMembership.roomId == room_id,
+            RoomMembership.membershipStatus == MembershipStatus.ACTIVE,
+        )
+    )
+    return result.all()
+
+
+async def update_room_membership_status(
+    user_id: str,
+    room_id: str,
+    status: MembershipStatus,
+    session: AsyncSession | None = None,
+) -> RoomMembership:
+    if session is None:
+        session_factory = get_session_factory()
+        async with session_factory() as new_session:
+            updated_membership = await update_room_membership_status(
+                user_id, room_id, status, session=new_session
+            )
+            await new_session.commit()
+            return updated_membership
+
+    result = await session.execute(
+        select(RoomMembership).where(
+            RoomMembership.userId == user_id,
+            RoomMembership.roomId == room_id,
+        )
+    )
+
+    membership: RoomMembership | None = result.scalar_one_or_none()
+    if membership is None:
+        raise ResourceNotFoundError("Room Membership not found in database.")
+
+    membership.membershipStatus = status
+    if status == MembershipStatus.ACTIVE:
+        membership.leftAt = None
+        membership.joinedAt = datetime.now(UTC)
+
+    if (
+        status == MembershipStatus.INACTIVE
+        or status == MembershipStatus.KICKED
+        or status == MembershipStatus.BANNED
+    ):
         membership.leftAt = datetime.now(UTC)
-        membership.membershipStatus = MembershipStatus.INACTIVE
-        await session.commit()
-        await session.refresh(membership)
-        return membership
+
+    return membership
 
 
 async def create_provider_account(
@@ -319,47 +432,6 @@ async def create_provider_account(
         await session.commit()
         await session.refresh(provider_account)
         return provider_account
-
-
-async def update_membership_status(
-    user_id: str, room_id: str, status: MembershipStatus
-) -> RoomMembership:
-    """Update membership status for a user in a room"""
-    session_factory = get_session_factory()
-    async with session_factory() as session:
-        result = await session.execute(
-            select(RoomMembership).where(
-                RoomMembership.userId == user_id,
-                RoomMembership.roomId == room_id,
-            )
-        )
-        membership = result.scalar_one_or_none()
-
-        if not membership:
-            raise ValueError("Membership not found")
-
-        membership.membershipStatus = status
-        if status == MembershipStatus.ACTIVE:
-            membership.leftAt = None
-
-        await session.commit()
-        await session.refresh(membership)
-        return membership
-
-
-async def get_room_members(room_id: str) -> Sequence[Row[tuple[RoomMembership, User]]]:
-    """Get all active members of a room with their user data"""
-    session_factory = get_session_factory()
-    async with session_factory() as session:
-        result = await session.execute(
-            select(RoomMembership, User)
-            .join(User)
-            .where(
-                RoomMembership.roomId == room_id,
-                RoomMembership.membershipStatus == MembershipStatus.ACTIVE,
-            )
-        )
-        return result.all()
 
 
 async def get_queue_entries(room_id: str) -> Sequence[QueueEntry]:
@@ -581,30 +653,6 @@ async def get_first_queued_entry(room_id: str) -> QueueEntry | None:
             .limit(1)
         )
         return result.scalar_one_or_none()
-
-
-async def get_room_memberships(room_id: str) -> Sequence[RoomMembership]:
-    """Get all memberships for a room"""
-    session_factory = get_session_factory()
-    async with session_factory() as session:
-        result = await session.execute(
-            select(RoomMembership).where(RoomMembership.roomId == room_id)
-        )
-        return result.scalars().all()
-
-
-async def update_room_status(room_id: str, status: RoomStatus) -> Room:
-    """Update room status"""
-    session_factory = get_session_factory()
-    async with session_factory() as session:
-        room = await session.get(Room, room_id)
-        if not room:
-            raise ValueError("Room not found")
-
-        room.status = status
-        await session.commit()
-        await session.refresh(room)
-        return room
 
 
 async def get_provider_account_by_user(
