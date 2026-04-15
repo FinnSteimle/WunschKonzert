@@ -3,8 +3,9 @@
     "roomId": "ROOM001",
     "joinCode": "ROOM001",
     "name": "Room ROOM001",
-    "status": "playing",
-    "createdAt": "2026-03-20T12:00:00Z"
+    "status": "active",
+    "createdAt": "2026-03-20T12:00:00Z",
+    "supportedProviderId": "spotify"
   },
   "host": {
     "userId": "HOST123",
@@ -155,5 +156,11 @@
       "orderRank": 3,
       "feedback": []
     }
-  ]
+  ],
+  "playback": {
+    "state": "playing",
+    "currentQueueEntryId": "QENTRY003",
+    "updatedAt": "2026-03-20T11:25:00Z",
+    "positionMs": 45000
+  }
 }

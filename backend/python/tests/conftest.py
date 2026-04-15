@@ -134,8 +134,8 @@ async def client(db_session):
             yield ac
 
 
-@pytest.fixture
-def websocket_client(db_session):
+@pytest.fixture(scope="session")
+def websocket_client():
     """
     Get a fresh FastAPI TestClient for websocket testing.
     We mock lifespan activities like migrations and seeding to avoid side effects.
@@ -145,4 +145,4 @@ def websocket_client(db_session):
     from main import app
 
     with patch("main.run_migrations"), patch("main.initialize_music_providers"):
-        return TestClient(app)
+        yield TestClient(app)

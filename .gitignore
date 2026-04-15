@@ -219,3 +219,6 @@ gl-code-quality-report.json
 ruff-output.json
 frontend/junit/
 frontend/coverage/
+
+# Kiro AI assistant
+.kiro/
