@@ -394,8 +394,6 @@ async def update_room_membership_status(
         membership.leftAt = datetime.now(UTC)
 
     return membership
-
-
 async def create_provider_account(
     user_id: str, provider_id: str, external_user_id: str
 ) -> ProviderAccount:

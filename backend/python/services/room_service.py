@@ -5,6 +5,8 @@ from datetime import UTC, datetime
 from fastapi import HTTPException
 
 import repositories.crud as crud
+import repositories.membership_repo as membership_repo
+import repositories.room_repo as room_repo
 from core.exceptions import ResourceNotFoundError
 from models.domain import (
     FeedbackType,
@@ -47,13 +49,13 @@ def _ui_to_feedback(vote_type: str) -> FeedbackType | None:
 async def _build_room_state(room_id: str) -> dict[str, object] | None:
     # Get room and host
     try:
-        room = await crud.get_room(room_id)
+        room = await room_repo.get_room(room_id)
         host = await crud.get_user(room.hostedBy)
     except ResourceNotFoundError:
         return None
 
     # Get room members
-    memberships = await crud.get_room_active_memberships(room_id)
+    memberships_list = await membership_repo.get_room_active_memberships(room_id)
 
     users: list[dict[str, object]] = [
         {
@@ -70,7 +72,7 @@ async def _build_room_state(room_id: str) -> dict[str, object] | None:
         }
     ]
     seen_user_ids = {host.userId}
-    for membership, user in memberships:
+    for membership, user in memberships_list:
         if user.userId in seen_user_ids:
             continue
         seen_user_ids.add(user.userId)
@@ -222,7 +224,7 @@ async def refresh_room_state(
 async def sync_playback_position(room_id: str, user_id: str, position_ms: int) -> None:
     """Lightweight position sync: update DB + patch cache without full rebuild."""
     try:
-        room = await crud.get_room(room_id)
+        room = await room_repo.get_room(room_id)
     except ResourceNotFoundError:
         return
 
@@ -253,7 +255,7 @@ async def add_to_queue(
 
     # Get room and validate
     try:
-        room = await crud.get_room(room_id)
+        room = await room_repo.get_room(room_id)
     except ResourceNotFoundError:
         raise HTTPException(status_code=404, detail="Room not found")
 
@@ -385,7 +387,7 @@ async def set_playback_state(
         raise HTTPException(status_code=400, detail="Invalid playback action")
 
     try:
-        room = await crud.get_room(room_id)
+        room = await room_repo.get_room(room_id)
     except ResourceNotFoundError:
         raise HTTPException(status_code=404, detail="Room not found")
 
@@ -484,7 +486,7 @@ async def leave_room_service(room_id: str, user_id: str) -> dict[str, object]:
             raise HTTPException(status_code=404, detail="User not found")
 
         try:
-            room = await crud.get_room(room_id)
+            room = await room_repo.get_room(room_id)
         except ResourceNotFoundError:
             raise HTTPException(status_code=404, detail="Room not found")
 
@@ -494,7 +496,7 @@ async def leave_room_service(room_id: str, user_id: str) -> dict[str, object]:
                 detail="Hosts cannot leave the room. Please delete the room instead.",
             )
 
-        await crud.leave_room(user_id, room_id)
+        await membership_repo.leave_room(user_id, room_id)
         return await refresh_room_state(room_id, "participant_left")
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -519,7 +521,7 @@ async def create_room_service(
         )
 
     try:
-        room = await crud.create_room(
+        room = await room_repo.create_room(
             user_id,
             supported_provider_id,
             name,
@@ -560,7 +562,7 @@ async def join_room_service(
     await ensure_user_display_name(user_id, display_name)
 
     try:
-        room = await crud.get_room_by_join_code(normalized_code)
+        room = await room_repo.get_room_by_join_code(normalized_code)
     except ResourceNotFoundError:
         raise HTTPException(status_code=404, detail="Room not found")
 
@@ -590,20 +592,20 @@ async def join_room_service(
 async def delete_room_service(room_id: str, user_id: str) -> dict[str, object]:
     try:
         # Get room and validate
-        room = await crud.get_room(room_id)
+        room = await room_repo.get_room(room_id)
         if room.hostedBy != user_id:
             raise HTTPException(status_code=403, detail="Only host can delete room")
 
         # Update room status
-        await crud.update_room_status(room_id, RoomStatus.DELETED)
+        await room_repo.update_room_status(room_id, RoomStatus.DELETED)
 
         # Update all memberships
-        memberships = await crud.get_room_memberships(room_id)
+        memberships_list = await membership_repo.get_room_memberships(room_id)
         from core.database import get_session_factory
 
         session_factory = get_session_factory()
         async with session_factory() as session:
-            for membership in memberships:
+            for membership in memberships_list:
                 # Re-fetch or merge into session if needed, but here we can just update
                 membership = await session.merge(membership)
                 membership.membershipStatus = MembershipStatus.INACTIVE
@@ -661,12 +663,12 @@ async def ensure_provider_exists(provider_id: str) -> None:
 
 async def ensure_active_membership(user_id: str, room_id: str) -> None:
     try:
-        await crud.update_room_membership_status(
+        await membership_repo.update_room_membership_status(
             user_id, room_id, MembershipStatus.ACTIVE
         )
     except ResourceNotFoundError:
         # Membership doesn't exist, create it
-        await crud.create_room_membership(user_id, room_id)
+        await membership_repo.create_room_membership(user_id, room_id)
 
 
 async def rename_participant(
@@ -674,12 +676,12 @@ async def rename_participant(
 ) -> dict[str, object]:
     try:
         try:
-            await crud.get_room(room_id)
+            await room_repo.get_room(room_id)
         except ResourceNotFoundError:
             raise HTTPException(status_code=404, detail="Room not found")
 
         try:
-            membership = await crud.get_room_membership(user_id, room_id)
+            membership = await membership_repo.get_room_membership(user_id, room_id)
         except ResourceNotFoundError:
             raise HTTPException(
                 status_code=403, detail="Only active room participants can rename"
@@ -709,7 +711,7 @@ async def check_room_availability(
     Check availability of rooms by join codes.
 
     Returns a tuple of (available_codes, unavailable_codes).
-    Unavailable codes include invalid, duplicate, and non-existent/inactive rooms.
+    Unavailable codes include invalid, duplicate, and non-existent/inactive room_repo.
     """
     unique_codes: list[str] = []
     seen_codes: set[str] = set()
@@ -726,7 +728,7 @@ async def check_room_availability(
         seen_codes.add(normalized_code)
         unique_codes.append(normalized_code)
 
-    available = await crud.get_all_active_rooms_by_join_codes(unique_codes)
+    available = await room_repo.get_all_active_rooms_by_join_codes(unique_codes)
     available_set = set(available)
     unavailable = [
         code for code in unique_codes if code not in available_set
