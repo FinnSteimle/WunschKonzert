@@ -1,6 +1,6 @@
 import uuid
+from collections.abc import Sequence
 from datetime import UTC, datetime
-from typing import Sequence
 
 from sqlalchemy import Row, func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -163,7 +163,9 @@ async def create_room(
     if name is None:
         name = f"Room_{join_code}"
 
-    # no try except to see if room already exists, since a new unique id is generated (room will always have a different id)
+    # existing = await session.execute(select(Room).where(Room.name == name))
+    # if existing.scalar_one_or_none() is not None:
+    #    raise ResourceExistsError("Room with this name already exists.")
 
     room = Room(
         roomId=await _get_unique_room_id(session),

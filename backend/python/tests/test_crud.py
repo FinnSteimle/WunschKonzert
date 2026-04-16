@@ -89,6 +89,30 @@ async def test_create_room_with_default_name(db_session):
 
 
 @pytest.mark.asyncio
+async def test_create_two_rooms_with_same_name(db_session):
+    # First Room
+    user_id = str(uuid.uuid4())
+    provider_id = str(uuid.uuid4())
+    await crud.create_user(user_id, "host", db_session)
+    await crud.create_music_provider(provider_id, "Spotify", db_session)
+    await db_session.flush()
+
+    room1 = await crud.create_room(user_id, provider_id, "My Custom Room", db_session)
+
+    # Second room with same name must raise
+    user_id2 = str(uuid.uuid4())
+    provider_id2 = str(uuid.uuid4())
+    await crud.create_user(user_id2, "host2", db_session)
+    await crud.create_music_provider(provider_id2, "Spotify2", db_session)
+    await db_session.flush()
+
+    # with pytest.raises(ResourceExistsError):
+    room2 = await crud.create_room(user_id2, provider_id2, "My Custom Room", db_session)
+    assert room1.name == room2.name
+    assert room1.roomId != room2.roomId
+
+
+@pytest.mark.asyncio
 async def test_get_room_by_join_code(db_session, init_room):
     room = await init_room()
 
