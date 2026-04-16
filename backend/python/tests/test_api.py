@@ -3,7 +3,7 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 
-from repositories import crud
+from repositories import crud, membership_repo
 from services.providers.base import ProviderTrack
 
 
@@ -115,7 +115,7 @@ async def test_leave_room_success(client, db_session, init_room):
     guest_id = str(uuid.uuid4())
     await crud.create_user(guest_id, "Guest", db_session)
     await db_session.commit()
-    await crud.create_room_membership(guest_id, room.roomId)
+    await membership_repo.create_room_membership(guest_id, room.roomId)
 
     payload = {"room_id": room.roomId, "user_id": guest_id}
     response = await client.post("/leave_room", json=payload)

@@ -4,7 +4,7 @@ import pytest
 from fastapi import HTTPException
 
 from models import domain
-from repositories import crud
+from repositories import crud, membership_repo, room_repo
 from services import room_service
 
 
@@ -14,7 +14,7 @@ async def test_delete_room(db_session, init_room):
     room = await init_room(user_id=user_id)
     await room_service.delete_room_service(room.roomId, user_id)
 
-    deleted_room = await crud.get_room(room.roomId)
+    deleted_room = await room_repo.get_room(room.roomId)
     assert deleted_room.status == domain.RoomStatus.DELETED
 
 
@@ -87,7 +87,7 @@ async def test_ensure_active_membership_creates_new(db_session, init_room):
 
     await room_service.ensure_active_membership(user_id, room.roomId)
 
-    membership = await crud.get_room_membership(user_id, room.roomId)
+    membership = await membership_repo.get_room_membership(user_id, room.roomId)
     assert membership is not None
     assert membership.membershipStatus == domain.MembershipStatus.ACTIVE
 
@@ -98,17 +98,17 @@ async def test_ensure_active_membership_reactivates_inactive(db_session, init_ro
     room = await init_room()
     user_id = str(uuid.uuid4())
     await crud.create_user(user_id, "returning_guest")
-    await crud.create_room_membership(user_id, room.roomId)
+    await membership_repo.create_room_membership(user_id, room.roomId)
 
     # Simulate leaving
-    await crud.leave_room(user_id, room.roomId)
-    left = await crud.get_room_membership(user_id, room.roomId)
+    await membership_repo.leave_room(user_id, room.roomId)
+    left = await membership_repo.get_room_membership(user_id, room.roomId)
     assert left.membershipStatus == domain.MembershipStatus.INACTIVE
 
     # Rejoin
     await room_service.ensure_active_membership(user_id, room.roomId)
 
-    reactivated = await crud.get_room_membership(user_id, room.roomId)
+    reactivated = await membership_repo.get_room_membership(user_id, room.roomId)
     assert reactivated.membershipStatus == domain.MembershipStatus.ACTIVE
     assert reactivated.leftAt is None
 
@@ -119,13 +119,13 @@ async def test_ensure_active_membership_already_active_is_noop(db_session, init_
     room = await init_room()
     user_id = str(uuid.uuid4())
     await crud.create_user(user_id, "active_guest")
-    await crud.create_room_membership(user_id, room.roomId)
+    await membership_repo.create_room_membership(user_id, room.roomId)
 
     # Should not raise
     await room_service.ensure_active_membership(user_id, room.roomId)
 
-    memberships = await crud.get_room_memberships(room.roomId)
-    user_memberships = [m for m in memberships if m.userId == user_id]
+    memberships_list = await membership_repo.get_room_memberships(room.roomId)
+    user_memberships = [m for m in memberships_list if m.userId == user_id]
     assert len(user_memberships) == 1
     assert user_memberships[0].membershipStatus == domain.MembershipStatus.ACTIVE
 
@@ -141,7 +141,7 @@ async def test_queue_add_remove(db_session, init_room):
     room = await init_room()
     user_id = str(uuid.uuid4())
     await crud.create_user(user_id, "queue_guest")
-    await crud.create_room_membership(user_id, room.roomId)
+    await membership_repo.create_room_membership(user_id, room.roomId)
 
     track_id = str(uuid.uuid4())
     track_data = {
@@ -557,11 +557,11 @@ async def test_leave_room_success(db_session, init_room):
     room = await init_room()
     guest_id = str(uuid.uuid4())
     await crud.create_user(guest_id, "guest")
-    await crud.create_room_membership(guest_id, room.roomId)
+    await membership_repo.create_room_membership(guest_id, room.roomId)
 
     await room_service.leave_room_service(room.roomId, guest_id)
 
-    membership = await crud.get_room_membership(guest_id, room.roomId)
+    membership = await membership_repo.get_room_membership(guest_id, room.roomId)
     assert membership.membershipStatus == domain.MembershipStatus.INACTIVE
 
 
@@ -597,7 +597,7 @@ async def test_join_room_success(db_session, init_room):
 
     assert result["success"] is True
     assert result["room_id"] == room.roomId
-    membership = await crud.get_room_membership(guest_id, room.roomId)
+    membership = await membership_repo.get_room_membership(guest_id, room.roomId)
     assert membership.membershipStatus == domain.MembershipStatus.ACTIVE
 
 
