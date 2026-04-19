@@ -476,10 +476,10 @@ async def test_queue_sort_order(db_session, init_room):
     d = await _enqueue("D")
     a = await _enqueue("A")
 
-    await _vote(a, "upvote", count=2)   # score +2
-    await _vote(b, "upvote", count=1)   # score +1
+    await _vote(a, "upvote", count=2)  # score +2
+    await _vote(b, "upvote", count=1)  # score +1
     # d: no votes                        # score  0
-    await _vote(e, "downvote", count=1) # score -1
+    await _vote(e, "downvote", count=1)  # score -1
 
     room_state = await room_service.refresh_room_state(room.roomId)
 
@@ -532,8 +532,6 @@ async def test_vote_reflected_in_room_state(db_session, init_room):
     assert sum(1 for f in feedback if f["type"] == "downvote") == 1
 
 
-
-
 @pytest.mark.asyncio
 async def test_playback_state_mapping_in_room_state(db_session, init_room):
     room = await init_room()
@@ -568,7 +566,6 @@ async def test_playback_state_mapping_in_room_state(db_session, init_room):
     playback = cast(dict, stopped_state["playback"])
     assert playback["state"] == "stopped"
     assert playback["currentQueueEntryId"] is None
-
 
 
 #
@@ -679,7 +676,6 @@ async def test_playback_no_session_resume_creates_session(db_session, init_room)
     session = await crud.get_current_playback_session(room.roomId)
     assert session is not None
     assert session.state == domain.PlaybackState.PLAYING
-
 
 
 @pytest.mark.asyncio
