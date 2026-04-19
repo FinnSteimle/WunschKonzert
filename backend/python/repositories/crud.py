@@ -163,10 +163,6 @@ async def create_room(
     if name is None:
         name = f"Room_{join_code}"
 
-    # existing = await session.execute(select(Room).where(Room.name == name))
-    # if existing.scalar_one_or_none() is not None:
-    #    raise ResourceExistsError("Room with this name already exists.")
-
     room = Room(
         roomId=await _get_unique_room_id(session),
         joinCode=join_code,

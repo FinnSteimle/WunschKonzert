@@ -1,4 +1,5 @@
 import uuid
+from typing import cast
 
 import pytest
 from fastapi import HTTPException
@@ -438,6 +439,139 @@ async def test_add_to_queue_second_track_is_queued_not_playing(db_session, init_
 
 
 #
+# --- Queue Order State
+#
+
+
+@pytest.mark.asyncio
+async def test_queue_sort_order(db_session, init_room):
+    room = await init_room()
+
+    async def _enqueue(title: str) -> str:
+        track = {
+            "trackId": str(uuid.uuid4()),
+            "providerTrackId": f"spotify:{title}",
+            "title": title,
+            "artist": "Test Artist",
+            "album": "",
+            "duration": 180,
+            "coverUrl": "",
+            "deepLink": "",
+        }
+        await room_service.add_to_queue(room.roomId, track, room.hostedBy)
+        entry = await crud.get_queue_entry_by_track(room.roomId, track["trackId"])
+        assert entry is not None
+        return entry.queueEntryId
+
+    async def _vote(entry_id: str, vote: str, count: int = 1) -> None:
+        for _ in range(count):
+            uid = str(uuid.uuid4())
+            await crud.create_user(uid, uid)
+            await room_service.vote_queue_entry(room.roomId, entry_id, uid, vote)
+
+    # C is added first → gets status=playing, always sorts first
+    c = await _enqueue("C")
+    b = await _enqueue("B")
+    e = await _enqueue("E")
+    d = await _enqueue("D")
+    a = await _enqueue("A")
+
+    await _vote(a, "upvote", count=2)   # score +2
+    await _vote(b, "upvote", count=1)   # score +1
+    # d: no votes                        # score  0
+    await _vote(e, "downvote", count=1) # score -1
+
+    room_state = await room_service.refresh_room_state(room.roomId)
+
+    titles = [e["track"]["title"] for e in cast(list[dict], room_state["queue"])]
+    assert titles == ["C", "A", "B", "D", "E"]
+
+
+@pytest.mark.asyncio
+async def test_vote_reflected_in_room_state(db_session, init_room):
+    room = await init_room()
+
+    async def _enqueue(title: str) -> str:
+        track = {
+            "trackId": str(uuid.uuid4()),
+            "providerTrackId": f"spotify:{title}",
+            "title": title,
+            "artist": "Test Artist",
+            "album": "",
+            "duration": 180,
+            "coverUrl": "",
+            "deepLink": "",
+        }
+        await room_service.add_to_queue(room.roomId, track, room.hostedBy)
+        entry = await crud.get_queue_entry_by_track(room.roomId, track["trackId"])
+        assert entry is not None
+        return entry.queueEntryId
+
+    entry_id = await _enqueue("Song")
+
+    voter1 = str(uuid.uuid4())
+    voter2 = str(uuid.uuid4())
+    voter3 = str(uuid.uuid4())
+    await crud.create_user(voter1, "voter1")
+    await crud.create_user(voter2, "voter2")
+    await crud.create_user(voter3, "voter3")
+
+    await room_service.vote_queue_entry(room.roomId, entry_id, voter1, "upvote")
+    await room_service.vote_queue_entry(room.roomId, entry_id, voter2, "upvote")
+    await room_service.vote_queue_entry(room.roomId, entry_id, voter3, "downvote")
+
+    room_state = await room_service.refresh_room_state(room.roomId)
+    queue = cast(list[dict], room_state["queue"])
+
+    assert len(queue) == 1
+    song = queue[0]
+    assert song["voteScore"] == 1
+    feedback = cast(list[dict], song["feedback"])
+    assert len(feedback) == 3
+    assert sum(1 for f in feedback if f["type"] == "upvote") == 2
+    assert sum(1 for f in feedback if f["type"] == "downvote") == 1
+
+
+
+
+@pytest.mark.asyncio
+async def test_playback_state_mapping_in_room_state(db_session, init_room):
+    room = await init_room()
+
+    async def _enqueue(title: str) -> str:
+        track = {
+            "trackId": str(uuid.uuid4()),
+            "providerTrackId": f"spotify:{title}",
+            "title": title,
+            "artist": "Test Artist",
+            "album": "",
+            "duration": 180,
+            "coverUrl": "",
+            "deepLink": "",
+        }
+        await room_service.add_to_queue(room.roomId, track, room.hostedBy)
+        entry = await crud.get_queue_entry_by_track(room.roomId, track["trackId"])
+        assert entry is not None
+        return entry.queueEntryId
+
+    song_a = await _enqueue("A")
+    await _enqueue("B")
+
+    playing_state = await room_service.refresh_room_state(room.roomId)
+    playback = cast(dict, playing_state["playback"])
+    assert playback["state"] == "playing"
+    assert playback["currentQueueEntryId"] == song_a
+
+    # After stop, currentQueueEntryId must be None
+    await room_service.set_playback_state(room.roomId, room.hostedBy, "stop")
+    stopped_state = await room_service.refresh_room_state(room.roomId)
+    playback = cast(dict, stopped_state["playback"])
+    assert playback["state"] == "stopped"
+    assert playback["currentQueueEntryId"] is None
+
+
+
+#
 # --- room_service.set_playback_state() tests ---
 #
 
@@ -545,6 +679,33 @@ async def test_playback_no_session_resume_creates_session(db_session, init_room)
     session = await crud.get_current_playback_session(room.roomId)
     assert session is not None
     assert session.state == domain.PlaybackState.PLAYING
+
+
+
+@pytest.mark.asyncio
+async def test_user_list_exclude_users_who_left(db_session, init_room):
+    room = await init_room()
+    guest_id = str(uuid.uuid4())
+
+    await crud.create_user(guest_id, "guest")
+    await membership_repo.create_room_membership(guest_id, room.roomId)
+    await membership_repo.leave_room(guest_id, room.roomId)
+
+    state = await room_service.refresh_room_state(room.roomId)
+    participants = cast(dict, state["users"])
+    user_ids = [u["user"]["userId"] for u in participants]
+    assert guest_id not in user_ids
+
+
+@pytest.mark.asyncio
+async def test_user_list_host_not_dublicated(db_session, init_room):
+    room = await init_room()
+
+    state = await room_service.refresh_room_state(room.roomId)
+    participants = cast(dict, state["users"])
+    user_ids = [u["user"]["userId"] for u in participants]
+
+    assert user_ids.count(room.hostedBy) == 1
 
 
 #
