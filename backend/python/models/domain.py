@@ -179,6 +179,20 @@ class ProviderAccount(Base):
     )
 
 
+class OAuthStateNonce(Base):
+    __tablename__ = "oauth_state_nonces"
+
+    nonce: Mapped[str] = mapped_column(String, primary_key=True)
+    providerId: Mapped[str] = mapped_column(String, nullable=False)
+    issuedAt: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=lambda: datetime.now(UTC)
+    )
+    expiresAt: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    consumedAt: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+
+
 # Room Management Package
 class Room(Base):
     __tablename__ = "rooms"

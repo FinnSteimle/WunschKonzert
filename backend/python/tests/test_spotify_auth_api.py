@@ -4,7 +4,6 @@ from urllib.parse import parse_qs, urlparse
 
 import pytest
 
-from api.routers import spotify_auth
 from repositories import crud, user_repo
 
 
@@ -48,18 +47,34 @@ class _SequencedAsyncClient:
 
 @pytest.fixture(autouse=True)
 def _reset_spotify_state(monkeypatch):
-    spotify_auth._pending_states.clear()
     _SequencedAsyncClient.post_responses = []
     _SequencedAsyncClient.get_responses = []
     monkeypatch.setenv("SPOTIFY_CLIENT_ID", "client-id")
     monkeypatch.setenv("SPOTIFY_CLIENT_SECRET", "client-secret")
+    monkeypatch.setenv("SPOTIFY_OAUTH_STATE_SECRET", "state-secret")
     monkeypatch.setenv("SPOTIFY_REDIRECT_URI", "http://localhost/auth/spotify/callback")
     yield
-    spotify_auth._pending_states.clear()
+
+
+def _extract_state_from_auth_url(auth_url: str) -> str:
+    parsed = urlparse(auth_url)
+    query = parse_qs(parsed.query)
+    return query["state"][0]
+
+
+async def _login_and_get_state(
+    client, user_id: str, return_to: str = "http://localhost/create"
+) -> str:
+    response = await client.get(
+        "/auth/spotify/login",
+        params={"user_id": user_id, "return_to": return_to},
+    )
+    assert response.status_code == 200
+    return _extract_state_from_auth_url(response.json()["auth_url"])
 
 
 @pytest.mark.asyncio
-async def test_spotify_login_returns_auth_url_and_persists_state(client):
+async def test_spotify_login_returns_auth_url_with_signed_state(client):
     user_id = str(uuid.uuid4())
     return_to = "http://localhost/create"
 
@@ -77,8 +92,8 @@ async def test_spotify_login_returns_auth_url_and_persists_state(client):
     assert parsed.netloc == "accounts.spotify.com"
     assert query["client_id"][0] == "client-id"
     assert query["redirect_uri"][0] == "http://localhost/auth/spotify/callback"
-    assert spotify_auth._pending_states[state]["user_id"] == user_id
-    assert spotify_auth._pending_states[state]["return_to"] == return_to
+    assert "." in state
+    assert len(state.split(".", 1)) == 2
 
 
 @pytest.mark.asyncio
@@ -119,11 +134,7 @@ async def test_spotify_callback_invalid_state_returns_400(client):
 
 @pytest.mark.asyncio
 async def test_spotify_callback_with_provider_error_redirects(client):
-    state = "state-provider-error"
-    spotify_auth._pending_states[state] = {
-        "user_id": str(uuid.uuid4()),
-        "return_to": "http://localhost/create",
-    }
+    state = await _login_and_get_state(client, str(uuid.uuid4()))
 
     response = await client.get(
         "/auth/spotify/callback",
@@ -136,7 +147,6 @@ async def test_spotify_callback_with_provider_error_redirects(client):
         response.headers["location"]
         == "http://localhost/create?spotify_error=access_denied"
     )
-    assert state not in spotify_auth._pending_states
 
 
 @pytest.mark.asyncio
@@ -148,15 +158,11 @@ async def test_spotify_callback_token_exchange_failure_redirects(
     await crud.create_music_provider("spotify", "Spotify", db_session)
     await db_session.commit()
 
-    state = "state-token-fail"
-    spotify_auth._pending_states[state] = {
-        "user_id": user_id,
-        "return_to": "http://localhost/create",
-    }
+    state = await _login_and_get_state(client, user_id)
 
     _SequencedAsyncClient.post_responses = [_FakeResponse({}, status_code=400)]
     monkeypatch.setattr(
-        "api.routers.spotify_auth.httpx.AsyncClient", _SequencedAsyncClient
+        "services.providers.spotify_oauth.httpx.AsyncClient", _SequencedAsyncClient
     )
 
     response = await client.get(
@@ -181,11 +187,7 @@ async def test_spotify_callback_profile_fetch_failure_redirects(
     await crud.create_music_provider("spotify", "Spotify", db_session)
     await db_session.commit()
 
-    state = "state-profile-fail"
-    spotify_auth._pending_states[state] = {
-        "user_id": user_id,
-        "return_to": "http://localhost/create",
-    }
+    state = await _login_and_get_state(client, user_id)
 
     _SequencedAsyncClient.post_responses = [
         _FakeResponse(
@@ -199,7 +201,7 @@ async def test_spotify_callback_profile_fetch_failure_redirects(
     ]
     _SequencedAsyncClient.get_responses = [_FakeResponse({}, status_code=401)]
     monkeypatch.setattr(
-        "api.routers.spotify_auth.httpx.AsyncClient", _SequencedAsyncClient
+        "services.providers.spotify_oauth.httpx.AsyncClient", _SequencedAsyncClient
     )
 
     response = await client.get(
@@ -224,11 +226,7 @@ async def test_spotify_callback_success_stores_tokens_and_redirects(
     await crud.create_music_provider("spotify", "Spotify", db_session)
     await db_session.commit()
 
-    state = "state-success"
-    spotify_auth._pending_states[state] = {
-        "user_id": user_id,
-        "return_to": "http://localhost/create",
-    }
+    state = await _login_and_get_state(client, user_id)
 
     _SequencedAsyncClient.post_responses = [
         _FakeResponse(
@@ -241,7 +239,7 @@ async def test_spotify_callback_success_stores_tokens_and_redirects(
     ]
     _SequencedAsyncClient.get_responses = [_FakeResponse({"id": "spotify-external-id"})]
     monkeypatch.setattr(
-        "api.routers.spotify_auth.httpx.AsyncClient", _SequencedAsyncClient
+        "services.providers.spotify_oauth.httpx.AsyncClient", _SequencedAsyncClient
     )
 
     response = await client.get(
@@ -258,6 +256,26 @@ async def test_spotify_callback_success_stores_tokens_and_redirects(
     assert provider_account.externalUserId == "spotify-external-id"
     assert provider_account.accessToken == "access-token"
     assert provider_account.refreshToken == "refresh-token"
+
+
+@pytest.mark.asyncio
+async def test_spotify_callback_replay_state_rejected(client):
+    state = await _login_and_get_state(client, str(uuid.uuid4()))
+
+    first = await client.get(
+        "/auth/spotify/callback",
+        params={"state": state, "error": "access_denied"},
+        follow_redirects=False,
+    )
+    assert first.status_code == 307
+
+    second = await client.get(
+        "/auth/spotify/callback",
+        params={"state": state, "error": "access_denied"},
+        follow_redirects=False,
+    )
+    assert second.status_code == 400
+    assert "Invalid or expired OAuth state" in second.json()["detail"]
 
 
 @pytest.mark.asyncio
@@ -319,7 +337,7 @@ async def test_spotify_token_refresh_success_updates_tokens(
         )
     ]
     monkeypatch.setattr(
-        "api.routers.spotify_auth.httpx.AsyncClient", _SequencedAsyncClient
+        "services.providers.spotify_oauth.httpx.AsyncClient", _SequencedAsyncClient
     )
 
     response = await client.get("/auth/spotify/token", params={"user_id": user_id})
@@ -352,7 +370,7 @@ async def test_spotify_token_refresh_failure_returns_502(
 
     _SequencedAsyncClient.post_responses = [_FakeResponse({}, status_code=500)]
     monkeypatch.setattr(
-        "api.routers.spotify_auth.httpx.AsyncClient", _SequencedAsyncClient
+        "services.providers.spotify_oauth.httpx.AsyncClient", _SequencedAsyncClient
     )
 
     response = await client.get("/auth/spotify/token", params={"user_id": user_id})
