@@ -88,7 +88,12 @@ def parse_signed_state(
         return None
     if now_ts - issued_at > ttl_seconds:
         return None
-    return payload
+    return {
+        "user_id": str(user_id),
+        "return_to": str(return_to),
+        "nonce": str(nonce),
+        "issued_at": issued_at,
+    }
 
 
 async def issue_state(

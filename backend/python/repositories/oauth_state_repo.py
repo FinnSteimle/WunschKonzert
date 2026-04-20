@@ -1,6 +1,7 @@
 from datetime import UTC, datetime
 
 from sqlalchemy import update
+from sqlalchemy.engine import CursorResult
 
 from core.database import get_session_factory
 from models.domain import OAuthStateNonce
@@ -35,7 +36,7 @@ async def consume_oauth_state_nonce(
     checked_at = now or datetime.now(UTC)
     session_factory = get_session_factory()
     async with session_factory() as session:
-        result = await session.execute(
+        result: CursorResult[tuple[()]] = await session.execute(  # type: ignore[assignment]
             update(OAuthStateNonce)
             .where(
                 OAuthStateNonce.nonce == nonce,
@@ -46,4 +47,4 @@ async def consume_oauth_state_nonce(
             .values(consumedAt=checked_at)
         )
         await session.commit()
-        return result.rowcount == 1
+        return int(result.rowcount) == 1
