@@ -69,7 +69,7 @@ def parse_signed_state(
 
     try:
         payload = json.loads(_base64_url_decode(payload_b64).decode("utf-8"))
-    except (ValueError, json.JSONDecodeError, binascii.Error):
+    except ValueError, json.JSONDecodeError, binascii.Error:
         return None
 
     user_id = payload.get("user_id")
