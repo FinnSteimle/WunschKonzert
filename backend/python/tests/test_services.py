@@ -5,7 +5,7 @@ import pytest
 from fastapi import HTTPException
 
 from models import domain
-from repositories import crud, membership_repo, room_repo
+from repositories import crud, membership_repo, room_repo, user_repo
 from services import room_service
 
 
@@ -50,7 +50,7 @@ async def test_user_display_name_empty_raises(db_session):
 async def test_user_display_name_strips_whitespace(db_session):
     user_id = str(uuid.uuid4())
     await room_service.ensure_user_display_name(user_id, "  Alice  ")
-    user = await crud.get_user(user_id)
+    user = await user_repo.get_user(user_id)
     assert user.displayName == "Alice"
 
 
@@ -84,7 +84,7 @@ async def test_ensure_active_membership_creates_new(db_session, init_room):
     """User with no prior membership gets one created."""
     room = await init_room()
     user_id = str(uuid.uuid4())
-    await crud.create_user(user_id, "new_guest")
+    await user_repo.create_user(user_id, "new_guest")
 
     await room_service.ensure_active_membership(user_id, room.roomId)
 
@@ -98,7 +98,7 @@ async def test_ensure_active_membership_reactivates_inactive(db_session, init_ro
     """User who left the room gets reactivated instead of duplicated."""
     room = await init_room()
     user_id = str(uuid.uuid4())
-    await crud.create_user(user_id, "returning_guest")
+    await user_repo.create_user(user_id, "returning_guest")
     await membership_repo.create_room_membership(user_id, room.roomId)
 
     # Simulate leaving
@@ -119,7 +119,7 @@ async def test_ensure_active_membership_already_active_is_noop(db_session, init_
     """Calling on an already-active member doesn't error or duplicate."""
     room = await init_room()
     user_id = str(uuid.uuid4())
-    await crud.create_user(user_id, "active_guest")
+    await user_repo.create_user(user_id, "active_guest")
     await membership_repo.create_room_membership(user_id, room.roomId)
 
     # Should not raise
@@ -141,7 +141,7 @@ async def test_queue_add_remove(db_session, init_room):
     """Test adding and removing items from the queue."""
     room = await init_room()
     user_id = str(uuid.uuid4())
-    await crud.create_user(user_id, "queue_guest")
+    await user_repo.create_user(user_id, "queue_guest")
     await membership_repo.create_room_membership(user_id, room.roomId)
 
     track_id = str(uuid.uuid4())
@@ -327,8 +327,8 @@ async def test_vote_multiple_users_score_aggregated(db_session, init_room):
 
     user2_id = str(uuid.uuid4())
     user3_id = str(uuid.uuid4())
-    await crud.create_user(user2_id, "voter2")
-    await crud.create_user(user3_id, "voter3")
+    await user_repo.create_user(user2_id, "voter2")
+    await user_repo.create_user(user3_id, "voter3")
 
     await room_service.vote_queue_entry(
         room.roomId, queue_entry_id, room.hostedBy, "upvote"
@@ -466,14 +466,14 @@ async def test_queue_sort_order(db_session, init_room):
     async def _vote(entry_id: str, vote: str, count: int = 1) -> None:
         for _ in range(count):
             uid = str(uuid.uuid4())
-            await crud.create_user(uid, uid)
+            await user_repo.create_user(uid, uid)
             await room_service.vote_queue_entry(room.roomId, entry_id, uid, vote)
 
     # C is added first → gets status=playing, always sorts first
-    c = await _enqueue("C")
+    await _enqueue("C")
     b = await _enqueue("B")
     e = await _enqueue("E")
-    d = await _enqueue("D")
+    await _enqueue("D")
     a = await _enqueue("A")
 
     await _vote(a, "upvote", count=2)  # score +2
@@ -512,9 +512,9 @@ async def test_vote_reflected_in_room_state(db_session, init_room):
     voter1 = str(uuid.uuid4())
     voter2 = str(uuid.uuid4())
     voter3 = str(uuid.uuid4())
-    await crud.create_user(voter1, "voter1")
-    await crud.create_user(voter2, "voter2")
-    await crud.create_user(voter3, "voter3")
+    await user_repo.create_user(voter1, "voter1")
+    await user_repo.create_user(voter2, "voter2")
+    await user_repo.create_user(voter3, "voter3")
 
     await room_service.vote_queue_entry(room.roomId, entry_id, voter1, "upvote")
     await room_service.vote_queue_entry(room.roomId, entry_id, voter2, "upvote")
@@ -577,7 +577,7 @@ async def test_playback_state_mapping_in_room_state(db_session, init_room):
 async def test_playback_non_host_raises_403(db_session, init_room):
     room = await init_room()
     other_user = str(uuid.uuid4())
-    await crud.create_user(other_user, "guest")
+    await user_repo.create_user(other_user, "guest")
 
     with pytest.raises(HTTPException) as exc_info:
         await room_service.set_playback_state(room.roomId, other_user, "pause")
@@ -683,7 +683,7 @@ async def test_user_list_exclude_users_who_left(db_session, init_room):
     room = await init_room()
     guest_id = str(uuid.uuid4())
 
-    await crud.create_user(guest_id, "guest")
+    await user_repo.create_user(guest_id, "guest")
     await membership_repo.create_room_membership(guest_id, room.roomId)
     await membership_repo.leave_room(guest_id, room.roomId)
 
@@ -713,7 +713,7 @@ async def test_user_list_host_not_dublicated(db_session, init_room):
 async def test_leave_room_success(db_session, init_room):
     room = await init_room()
     guest_id = str(uuid.uuid4())
-    await crud.create_user(guest_id, "guest")
+    await user_repo.create_user(guest_id, "guest")
     await membership_repo.create_room_membership(guest_id, room.roomId)
 
     await room_service.leave_room_service(room.roomId, guest_id)
@@ -733,7 +733,7 @@ async def test_leave_room_host_raises_403(db_session, init_room):
 @pytest.mark.asyncio
 async def test_leave_room_unknown_user_raises_error(db_session, init_room):
     room = await init_room()
-    # crud.get_user raises ResourceNotFoundError for unknown users, which the
+    # user_repo.get_user raises ResourceNotFoundError for unknown users, which the
     # service wraps in a 500 (the 404 branch is unreachable via this path).
     with pytest.raises(HTTPException) as exc_info:
         await room_service.leave_room_service(room.roomId, str(uuid.uuid4()))
@@ -800,7 +800,7 @@ async def test_rename_participant_success(db_session, init_room):
     room = await init_room()
     await room_service.rename_participant(room.roomId, room.hostedBy, "NewName")
 
-    user = await crud.get_user(room.hostedBy)
+    user = await user_repo.get_user(room.hostedBy)
     assert user.displayName == "NewName"
 
 
@@ -808,7 +808,7 @@ async def test_rename_participant_success(db_session, init_room):
 async def test_rename_participant_non_member_raises_403(db_session, init_room):
     room = await init_room()
     outsider = str(uuid.uuid4())
-    await crud.create_user(outsider, "outsider")
+    await user_repo.create_user(outsider, "outsider")
 
     with pytest.raises(HTTPException) as exc_info:
         await room_service.rename_participant(room.roomId, outsider, "Hacker")
@@ -892,7 +892,7 @@ async def test_sync_playback_position_non_host_is_noop(db_session, init_room):
     await room_service.refresh_room_state(room.roomId)
 
     other = str(uuid.uuid4())
-    await crud.create_user(other, "other")
+    await user_repo.create_user(other, "other")
     await room_service.sync_playback_position(room.roomId, other, 99_000)
 
     cached = room_service.room_state_cache.get(room.roomId)

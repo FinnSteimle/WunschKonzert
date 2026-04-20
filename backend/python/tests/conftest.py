@@ -11,7 +11,7 @@ from testcontainers.postgres import PostgresContainer
 
 import core.database
 from models.domain import Base
-from repositories import crud, membership_repo, room_repo
+from repositories import crud, membership_repo, room_repo, user_repo
 from services import room_service
 
 """
@@ -109,7 +109,7 @@ def init_room(db_session):
         provider_name = provider_name or f"provider_{str(uuid.uuid4())[:8]}"
         user_id = user_id or str(uuid.uuid4())
 
-        await crud.create_user(user_id, "test_host", db_session)
+        await user_repo.create_user(user_id, "test_host", db_session)
         await crud.create_music_provider(provider_id, provider_name, db_session)
         await db_session.commit()
 

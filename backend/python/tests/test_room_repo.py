@@ -3,14 +3,14 @@ import uuid
 import pytest
 
 from core.exceptions import ResourceNotFoundError
-from repositories import crud, room_repo
+from repositories import crud, room_repo, user_repo
 
 
 @pytest.mark.asyncio
 async def test_create_room(db_session):
     user_id = str(uuid.uuid4())
     provider_id = str(uuid.uuid4())
-    await crud.create_user(user_id, "host", db_session)
+    await user_repo.create_user(user_id, "host", db_session)
     await crud.create_music_provider(provider_id, "Spotify", db_session)
     await db_session.flush()
 
@@ -28,7 +28,7 @@ async def test_create_room(db_session):
 async def test_create_room_with_default_name(db_session):
     user_id = str(uuid.uuid4())
     provider_id = str(uuid.uuid4())
-    await crud.create_user(user_id, "host", db_session)
+    await user_repo.create_user(user_id, "host", db_session)
     await crud.create_music_provider(provider_id, "Spotify", db_session)
     await db_session.flush()
 

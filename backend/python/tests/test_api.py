@@ -3,7 +3,7 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 
-from repositories import crud, membership_repo
+from repositories import crud, membership_repo, user_repo
 from services.providers.base import ProviderTrack
 
 
@@ -26,7 +26,7 @@ async def test_create_room_success(client, db_session):
     # Seed provider
     provider_id = "spotify"
     user_id = str(uuid.uuid4())
-    await crud.create_user(user_id, "Host User", db_session)
+    await user_repo.create_user(user_id, "Host User", db_session)
     await crud.create_music_provider(provider_id, "Spotify", db_session)
     await db_session.commit()
     await crud.create_or_update_provider_account_tokens(
@@ -113,7 +113,7 @@ async def test_leave_room_success(client, db_session, init_room):
     host_id = str(uuid.uuid4())
     room = await init_room(user_id=host_id)
     guest_id = str(uuid.uuid4())
-    await crud.create_user(guest_id, "Guest", db_session)
+    await user_repo.create_user(guest_id, "Guest", db_session)
     await db_session.commit()
     await membership_repo.create_room_membership(guest_id, room.roomId)
 

@@ -2,7 +2,7 @@ import uuid
 
 import pytest
 
-from repositories import crud, membership_repo
+from repositories import membership_repo, user_repo
 
 
 @pytest.mark.asyncio
@@ -21,7 +21,7 @@ async def test_adding_user_to_room(db_session, init_room):
     room = await init_room(user_id=host_id)
 
     user_id = str(uuid.uuid4())
-    await crud.create_user(user_id, "guest")
+    await user_repo.create_user(user_id, "guest")
     await membership_repo.create_room_membership(user_id, room.roomId)
 
     memberships_list = await membership_repo.get_room_memberships(room.roomId)
@@ -43,7 +43,7 @@ async def test_adding_multiple_users_to_room(db_session, init_room):
     for i in range(total_users - 1):
         user_id = str(uuid.uuid4())
         members.append(user_id)
-        await crud.create_user(user_id, f"guest{i + 1}")
+        await user_repo.create_user(user_id, f"guest{i + 1}")
         await membership_repo.create_room_membership(user_id, room.roomId)
 
     memberships_list = await membership_repo.get_room_memberships(room.roomId)

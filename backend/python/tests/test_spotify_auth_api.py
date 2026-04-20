@@ -5,7 +5,7 @@ from urllib.parse import parse_qs, urlparse
 import pytest
 
 from api.routers import spotify_auth
-from repositories import crud
+from repositories import crud, user_repo
 
 
 class _FakeResponse:
@@ -144,7 +144,7 @@ async def test_spotify_callback_token_exchange_failure_redirects(
     client, db_session, monkeypatch
 ):
     user_id = str(uuid.uuid4())
-    await crud.create_user(user_id, "Host User", db_session)
+    await user_repo.create_user(user_id, "Host User", db_session)
     await crud.create_music_provider("spotify", "Spotify", db_session)
     await db_session.commit()
 
@@ -177,7 +177,7 @@ async def test_spotify_callback_profile_fetch_failure_redirects(
     client, db_session, monkeypatch
 ):
     user_id = str(uuid.uuid4())
-    await crud.create_user(user_id, "Host User", db_session)
+    await user_repo.create_user(user_id, "Host User", db_session)
     await crud.create_music_provider("spotify", "Spotify", db_session)
     await db_session.commit()
 
@@ -220,7 +220,7 @@ async def test_spotify_callback_success_stores_tokens_and_redirects(
     client, db_session, monkeypatch
 ):
     user_id = str(uuid.uuid4())
-    await crud.create_user(user_id, "Host User", db_session)
+    await user_repo.create_user(user_id, "Host User", db_session)
     await crud.create_music_provider("spotify", "Spotify", db_session)
     await db_session.commit()
 
@@ -274,7 +274,7 @@ async def test_spotify_token_without_linked_account_returns_404(client):
 @pytest.mark.asyncio
 async def test_spotify_token_returns_cached_valid_access_token(client, db_session):
     user_id = str(uuid.uuid4())
-    await crud.create_user(user_id, "Host User", db_session)
+    await user_repo.create_user(user_id, "Host User", db_session)
     await crud.create_music_provider("spotify", "Spotify", db_session)
     await db_session.commit()
     await crud.create_or_update_provider_account_tokens(
@@ -297,7 +297,7 @@ async def test_spotify_token_refresh_success_updates_tokens(
     client, db_session, monkeypatch
 ):
     user_id = str(uuid.uuid4())
-    await crud.create_user(user_id, "Host User", db_session)
+    await user_repo.create_user(user_id, "Host User", db_session)
     await crud.create_music_provider("spotify", "Spotify", db_session)
     await db_session.commit()
     await crud.create_or_update_provider_account_tokens(
@@ -338,7 +338,7 @@ async def test_spotify_token_refresh_failure_returns_502(
     client, db_session, monkeypatch
 ):
     user_id = str(uuid.uuid4())
-    await crud.create_user(user_id, "Host User", db_session)
+    await user_repo.create_user(user_id, "Host User", db_session)
     await crud.create_music_provider("spotify", "Spotify", db_session)
     await db_session.commit()
     await crud.create_or_update_provider_account_tokens(

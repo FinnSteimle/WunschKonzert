@@ -7,6 +7,7 @@ from fastapi import HTTPException
 import repositories.crud as crud
 import repositories.membership_repo as membership_repo
 import repositories.room_repo as room_repo
+import repositories.user_repo as user_repo
 from core.exceptions import ResourceNotFoundError
 from models.domain import (
     FeedbackType,
@@ -50,7 +51,7 @@ async def _build_room_state(room_id: str) -> dict[str, object] | None:
     # Get room and host
     try:
         room = await room_repo.get_room(room_id)
-        host = await crud.get_user(room.hostedBy)
+        host = await user_repo.get_user(room.hostedBy)
     except ResourceNotFoundError:
         return None
 
@@ -110,7 +111,7 @@ async def _build_room_state(room_id: str) -> dict[str, object] | None:
     queue: list[dict[str, object]] = []
     for queue_entry in queue_entries:
         track = await crud.get_track(queue_entry.trackId)
-        added_by_user = await crud.get_user(queue_entry.addedBy)
+        added_by_user = await user_repo.get_user(queue_entry.addedBy)
 
         if not track or not added_by_user:
             continue
@@ -264,7 +265,7 @@ async def add_to_queue(
 
     # Get user
     try:
-        await crud.get_user(user_id)
+        await user_repo.get_user(user_id)
     except ResourceNotFoundError:
         raise HTTPException(status_code=404, detail="User not found")
 
@@ -481,7 +482,7 @@ async def _advance_to_next(room_id: str) -> dict[str, object]:
 async def leave_room_service(room_id: str, user_id: str) -> dict[str, object]:
     try:
         try:
-            await crud.get_user(user_id)
+            await user_repo.get_user(user_id)
         except ResourceNotFoundError:
             raise HTTPException(status_code=404, detail="User not found")
 
@@ -633,19 +634,19 @@ async def ensure_user_display_name(user_id: str, display_name: str) -> None:
 
     user_exists = True
     try:
-        await crud.get_user(user_id)
+        await user_repo.get_user(user_id)
     except ResourceNotFoundError:
         user_exists = False
 
     if not user_exists:
         try:
-            await crud.create_user(user_id, trimmed)
+            await user_repo.create_user(user_id, trimmed)
             return
         except ValueError as e:
             if "already exists" not in str(e):
                 raise HTTPException(status_code=400, detail=str(e)) from e
     try:
-        await crud.update_user_display_name(user_id, trimmed)
+        await user_repo.update_user_display_name(user_id, trimmed)
     except ResourceNotFoundError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
 

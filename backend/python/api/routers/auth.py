@@ -1,6 +1,7 @@
 from fastapi import APIRouter, HTTPException
 
 import repositories.crud as crud
+import repositories.user_repo as user_repo
 from models.schemas import (
     AddMusicProviderRequest,
     AddMusicProviderResponse,
@@ -24,7 +25,7 @@ async def auth_account(auth_data: AuthRequest) -> dict[str, object]:
 async def add_music_provider(
     provider_data: AddMusicProviderRequest,
 ) -> dict[str, object]:
-    user = await crud.get_user(provider_data.user_id)
+    user = await user_repo.get_user(provider_data.user_id)
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
 

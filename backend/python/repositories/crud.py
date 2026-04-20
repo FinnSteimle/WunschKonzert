@@ -1,92 +1,26 @@
 import uuid
 from collections.abc import Sequence
-from datetime import UTC, datetime
+from datetime import datetime
 
-from sqlalchemy import Row, func, select, text
+from sqlalchemy import func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+import repositories.user_repo as user_repo
 from core.database import get_session_factory
 from core.exceptions import (
     ResourceExistsError,
     ResourceNotFoundError,
 )
-from core.identifiers import generate_join_code, generate_room_id
 from models.domain import (
     AccountStatus,
-    MembershipStatus,
     MusicProvider,
     PlaybackSession,
     ProviderAccount,
     QueueEntry,
     QueueEntryStatus,
-    Room,
-    RoomMembership,
-    RoomStatus,
     SongFeedback,
     Track,
-    User,
 )
-
-
-async def create_user(
-    user_id: str, display_name: str, session: AsyncSession | None = None
-) -> User:
-    # Create a session recursively, to avoid duplicating the method logic or burying it in an if/else
-    # for both cases (session has been created and needs to be created)
-    if session is None:
-        session_factory = get_session_factory()
-        # Closes the newly opened session after finishing the recursive call
-        async with session_factory() as new_session:
-            user = await create_user(user_id, display_name, session=new_session)
-            await new_session.commit()
-            return user
-    # Check if user already exists
-    try:
-        await get_user(user_id, session=session)
-        raise ResourceExistsError("User already exists in database.")
-    except ResourceNotFoundError:
-        pass
-
-    user = User(userId=user_id, displayName=display_name)
-    session.add(user)
-    # call flush here so the final commit is back in the function where the session was created
-    await session.flush()
-    await session.refresh(user)
-    return user
-
-
-async def get_user(user_id: str, session: AsyncSession | None = None) -> User:
-    if session is None:
-        session_factory = get_session_factory()
-        async with session_factory() as new_session:
-            return await get_user(user_id, session=new_session)
-
-    user: User | None = await session.get(User, user_id)
-    if user is None:
-        raise ResourceNotFoundError("User not found in database.")
-    return user
-
-
-async def update_user_display_name(
-    user_id: str, display_name: str, session: AsyncSession | None = None
-) -> User:
-    if session is None:
-        session_factory = get_session_factory()
-        async with session_factory() as new_session:
-            updated_user = await update_user_display_name(
-                user_id, display_name, session=new_session
-            )
-            await new_session.commit()
-            return updated_user
-
-    result = await session.execute(select(User).where(User.userId == user_id))
-    user: User | None = result.scalar_one_or_none()
-    if not user:
-        raise ResourceNotFoundError("User not found in database.")
-    user.displayName = display_name
-    await session.flush()
-    await session.refresh(user)
-    return user
 
 
 async def create_music_provider(
@@ -127,277 +61,12 @@ async def get_music_provider(
     return provider
 
 
-# helper methods to make sure room_id and join_code are unique
-async def _get_unique_room_id(session: AsyncSession) -> str:
-    while True:
-        new_id = generate_room_id()
-        if await session.get(Room, new_id) is None:
-            return new_id
-
-
-async def _get_unique_join_code(session: AsyncSession) -> str:
-    while True:
-        new_code = generate_join_code()
-        result = await session.execute(select(Room).where(Room.joinCode == new_code))
-        if result.scalar_one_or_none() is None:
-            return new_code
-
-
-async def create_room(
-    user_id: str,
-    supported_provider_id: str,
-    name: str | None = None,
-    session: AsyncSession | None = None,
-) -> Room:
-    if session is None:
-        session_factory = get_session_factory()
-        async with session_factory() as new_session:
-            room = await create_room(
-                user_id, supported_provider_id, name, session=new_session
-            )
-            await new_session.commit()
-            return room
-
-    join_code = await _get_unique_join_code(session)
-
-    if name is None:
-        name = f"Room_{join_code}"
-
-    room = Room(
-        roomId=await _get_unique_room_id(session),
-        joinCode=join_code,
-        name=name,
-        hostedBy=user_id,
-        supportedProviderId=supported_provider_id,
-        status=RoomStatus.ACTIVE,
-    )
-    session.add(room)
-    await session.flush()
-    await session.refresh(room)
-    return room
-
-
-async def get_room(room_id: str, session: AsyncSession | None = None) -> Room:
-    if session is None:
-        session_factory = get_session_factory()
-        async with session_factory() as new_session:
-            return await get_room(room_id, session=new_session)
-
-    room: Room | None = await session.get(Room, room_id)
-    if room is None:
-        raise ResourceNotFoundError("Room not found in database.")
-    return room
-
-
-async def get_room_by_join_code(
-    join_code: str, session: AsyncSession | None = None
-) -> Room:
-    if session is None:
-        session_factory = get_session_factory()
-        async with session_factory() as new_session:
-            return await get_room_by_join_code(join_code, session=new_session)
-
-    result = await session.execute(select(Room).where(Room.joinCode == join_code))
-    room: Room | None = result.scalar_one_or_none()
-    if room is None:
-        raise ResourceNotFoundError("Room not found in database.")
-    return room
-
-
-async def get_all_active_rooms_by_join_codes(
-    join_codes: Sequence[str], session: AsyncSession | None = None
-) -> list[str]:
-    if session is None:
-        session_factory = get_session_factory()
-        async with session_factory() as new_session:
-            return await get_all_active_rooms_by_join_codes(
-                join_codes, session=new_session
-            )
-
-    normalized = [code.strip().upper() for code in join_codes if code.strip()]
-    if not normalized:
-        return []
-
-    result = await session.execute(
-        select(Room.joinCode).where(
-            Room.joinCode.in_(normalized),
-            Room.status == RoomStatus.ACTIVE,
-        )
-    )
-    # Keep order stable by preserving first appearance in input.
-    available = set(result.scalars().all())
-    return [code for code in normalized if code in available]
-
-
-async def update_room_status(
-    room_id: str, status: RoomStatus, session: AsyncSession | None = None
-) -> Room:
-    if session is None:
-        session_factory = get_session_factory()
-        async with session_factory() as new_session:
-            room = await update_room_status(room_id, status, session=new_session)
-            await new_session.commit()
-            return room
-
-    room = await get_room(room_id, session=session)
-
-    room.status = status
-    await session.flush()
-    await session.refresh(room)
-    return room
-
-
-# refactor to use update_room_membership
-async def leave_room(
-    user_id: str, room_id: str, session: AsyncSession | None = None
-) -> RoomMembership:
-    if session is None:
-        session_factory = get_session_factory()
-        async with session_factory() as new_session:
-            updated_membership = await leave_room(user_id, room_id, session=new_session)
-            await new_session.commit()
-            return updated_membership
-
-    result = await session.execute(
-        select(RoomMembership).where(
-            RoomMembership.userId == user_id, RoomMembership.roomId == room_id
-        )
-    )
-
-    membership: RoomMembership | None = result.scalar_one_or_none()
-
-    if not membership:
-        raise ResourceNotFoundError(
-            "Membership between this user and the room was not found in the database."
-        )
-
-    membership.leftAt = datetime.now(UTC)
-    membership.membershipStatus = MembershipStatus.INACTIVE
-    await session.flush()
-    await session.refresh(membership)
-    return membership
-
-
-async def create_room_membership(
-    user_id: str, room_id: str, session: AsyncSession | None = None
-) -> RoomMembership:
-    if session is None:
-        session_factory = get_session_factory()
-        async with session_factory() as new_session:
-            membership = await create_room_membership(
-                user_id, room_id, session=new_session
-            )
-            await new_session.commit()
-            return membership
-
-    try:
-        await get_room_membership(user_id, room_id, session=session)
-        raise ResourceExistsError("User is already a member of this room.")
-    except ResourceNotFoundError:
-        pass
-
-    membership = RoomMembership(userId=user_id, roomId=room_id)
-    session.add(membership)
-    await session.flush()
-    await session.refresh(membership)
-    return membership
-
-
-async def get_room_membership(
-    user_id: str, room_id: str, session: AsyncSession | None = None
-) -> RoomMembership:
-    if session is None:
-        session_factory = get_session_factory()
-        async with session_factory() as new_session:
-            return await get_room_membership(user_id, room_id, session=new_session)
-
-    result = await session.execute(
-        select(RoomMembership).where(
-            RoomMembership.userId == user_id, RoomMembership.roomId == room_id
-        )
-    )
-    membership: RoomMembership | None = result.scalar_one_or_none()
-    if membership is None:
-        raise ResourceNotFoundError("Room-Membership not found in database.")
-    return membership
-
-
-async def get_room_memberships(room_id: str) -> Sequence[RoomMembership]:
-    session_factory = get_session_factory()
-    async with session_factory() as session:
-        result = await session.execute(
-            select(RoomMembership).where(RoomMembership.roomId == room_id)
-        )
-        return result.scalars().all()
-
-
-async def get_room_active_memberships(
-    room_id: str, session: AsyncSession | None = None
-) -> Sequence[Row[tuple[RoomMembership, User]]]:
-    """Get all active members of a room with their user data"""
-    if session is None:
-        session_factory = get_session_factory()
-        async with session_factory() as new_session:
-            return await get_room_active_memberships(room_id, session=new_session)
-
-    result = await session.execute(
-        select(RoomMembership, User)
-        .join(User)
-        .where(
-            RoomMembership.roomId == room_id,
-            RoomMembership.membershipStatus == MembershipStatus.ACTIVE,
-        )
-    )
-    return result.all()
-
-
-async def update_room_membership_status(
-    user_id: str,
-    room_id: str,
-    status: MembershipStatus,
-    session: AsyncSession | None = None,
-) -> RoomMembership:
-    if session is None:
-        session_factory = get_session_factory()
-        async with session_factory() as new_session:
-            updated_membership = await update_room_membership_status(
-                user_id, room_id, status, session=new_session
-            )
-            await new_session.commit()
-            return updated_membership
-
-    result = await session.execute(
-        select(RoomMembership).where(
-            RoomMembership.userId == user_id,
-            RoomMembership.roomId == room_id,
-        )
-    )
-
-    membership: RoomMembership | None = result.scalar_one_or_none()
-    if membership is None:
-        raise ResourceNotFoundError("Room Membership not found in database.")
-
-    membership.membershipStatus = status
-    if status == MembershipStatus.ACTIVE:
-        membership.leftAt = None
-        membership.joinedAt = datetime.now(UTC)
-
-    if (
-        status == MembershipStatus.INACTIVE
-        or status == MembershipStatus.KICKED
-        or status == MembershipStatus.BANNED
-    ):
-        membership.leftAt = datetime.now(UTC)
-
-    return membership
-
-
 async def create_provider_account(
     user_id: str, provider_id: str, external_user_id: str
 ) -> ProviderAccount:
     """Create a new provider account for a user"""
     # Check if user exists
-    user = await get_user(user_id)
+    user = await user_repo.get_user(user_id)
     if not user:
         raise ValueError("User not found")
 
