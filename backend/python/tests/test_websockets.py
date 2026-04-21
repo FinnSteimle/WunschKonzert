@@ -9,6 +9,7 @@ from api.websockets import (
     handle_room_events,
     send_room_state,
 )
+from repositories import membership_repo, user_repo
 from services import room_service
 
 
@@ -57,6 +58,156 @@ async def test_websocket_rename_event(db_session, init_room, websocket_client):
         )
         assert updated_data["lastEvent"]["type"] == "participant_renamed"
 
+
+
+@pytest.mark.asyncio
+async def test_websocket_non_host_playback_rejected_no_state_change(
+    db_session, init_room, websocket_client
+):
+    host_id = str(uuid.uuid4())
+    room = await init_room(user_id=host_id)
+
+    guest_id = str(uuid.uuid4())
+    await user_repo.create_user(guest_id, "Guest", db_session)
+    await membership_repo.create_room_membership(guest_id, room.roomId, session=db_session)
+    await db_session.commit()
+
+    track = {
+        "trackId": str(uuid.uuid4()),
+        "providerTrackId": "spotify:track:test",
+        "title": "Song",
+        "artist": "Artist",
+        "album": "",
+        "duration": 180,
+        "coverUrl": "",
+        "deepLink": "",
+    }
+
+    await room_service.add_to_queue(room.roomId, track, guest_id)
+
+    with websocket_client.websocket_connect(f"/ws/{room.roomId}") as websocket:
+        start_state = websocket.receive_json()
+        assert start_state["playback"]["state"] == "playing"
+
+        websocket.send_json({
+            "type": "playback",
+            "user_id": guest_id,
+            "action": "pause",
+        })
+
+        after_state = websocket.receive_json()
+
+        assert after_state["playback"]["state"] == start_state["playback"]["state"]
+        assert after_state["queue"] == start_state["queue"]
+        assert after_state.get("lastEvent", {}).get("type") != "playback_updated"
+
+
+@pytest.mark.asyncio
+async def test_websocket_vote_updates_vote_score_and_feedback(
+    db_session, init_room, websocket_client
+):
+    host_id = str(uuid.uuid4())
+    room = await init_room(user_id=host_id)
+
+    guest_id = str(uuid.uuid4())
+    await user_repo.create_user(guest_id, "Guest", db_session)
+    await membership_repo.create_room_membership(guest_id, room.roomId, session=db_session)
+    await db_session.commit()
+
+    i = 0
+    while i <= 1:
+        track = {
+            "trackId": str(uuid.uuid4()),
+            "providerTrackId": "spotify:track:test",
+            "title": "Song",
+            "artist": "Artist",
+            "album": "",
+            "duration": 180,
+            "coverUrl": "",
+            "deepLink": "",
+        }
+        await room_service.add_to_queue(room.roomId, track, guest_id)
+        i+=1
+
+    with websocket_client.websocket_connect(f"/ws/{room.roomId}") as ws:
+        start_state = ws.receive_json()
+
+        ws.send_json({
+            "type": "vote",
+            "queue_entry_id": start_state["queue"][0]["queueEntryId"],
+            "user_id": guest_id,
+            "vote_type": "upvote",
+        })
+
+        after_state = ws.receive_json()
+
+        assert after_state["queue"][0]["voteScore"] == 1
+        feedback = after_state["queue"][0]["feedback"]
+        assert len(feedback) == 1
+        assert feedback[0]["userId"] == guest_id
+        assert feedback[0]["type"] == "upvote"
+        assert after_state.get("lastEvent", {}).get("type") == "vote_updated"
+        
+
+@pytest.mark.asyncio
+async def test_websocket_addqueue_updates_state_for_all_clients( db_session, init_room, websocket_client):
+    host_id = str(uuid.uuid4())
+    room = await init_room(user_id=host_id)
+
+    guest_id = str(uuid.uuid4())
+    await user_repo.create_user(guest_id, "Guest", db_session)
+    await membership_repo.create_room_membership(guest_id, room.roomId, session=db_session)
+    await db_session.commit()
+
+    with (
+        websocket_client.websocket_connect(f"/ws/{room.roomId}") as ws1,
+        websocket_client.websocket_connect(f"/ws/{room.roomId}") as ws2,
+    ):
+        start_state_1 = ws1.receive_json()
+        start_state_2 = ws2.receive_json()
+
+        base_len_1 = len(start_state_1["queue"])
+        base_len_2 = len(start_state_2["queue"])
+
+        track_id = str(uuid.uuid4())
+        ws1.send_json(
+            {
+                "type": "addqueue",
+                "track": {
+                    "trackId": track_id,
+                    "providerTrackId": f"spotify:track:{track_id[:8]}",
+                    "title": "Added From WS",
+                    "artist": "Artist",
+                    "album": "",
+                    "duration": 180,
+                    "coverUrl": "",
+                    "deepLink": "",
+                },
+                "user_id": guest_id,
+            }
+        )
+
+        def _receive_queue_updated(ws):
+            last = None
+            for _ in range(3):
+                last = ws.receive_json()
+                if last.get("lastEvent", {}).get("type") == "queue_updated":
+                    return last
+            return last
+
+        after_state_1 = _receive_queue_updated(ws1)
+        after_state_2 = _receive_queue_updated(ws2)
+
+        assert len(after_state_1["queue"]) == base_len_1 + 1
+        assert len(after_state_2["queue"]) == base_len_2 + 1
+        assert any(
+            item["track"]["trackId"] == track_id for item in after_state_1["queue"]
+        )
+        assert any(
+            item["track"]["trackId"] == track_id for item in after_state_2["queue"]
+        )
+        assert after_state_1.get("lastEvent", {}).get("type") == "queue_updated"
+        assert after_state_2.get("lastEvent", {}).get("type") == "queue_updated"
 
 @pytest.mark.asyncio
 async def test_websocket_broadcast_to_multiple_clients(
