@@ -59,7 +59,6 @@ async def test_websocket_rename_event(db_session, init_room, websocket_client):
         assert updated_data["lastEvent"]["type"] == "participant_renamed"
 
 
-
 @pytest.mark.asyncio
 async def test_websocket_non_host_playback_rejected_no_state_change(
     db_session, init_room, websocket_client
@@ -69,7 +68,9 @@ async def test_websocket_non_host_playback_rejected_no_state_change(
 
     guest_id = str(uuid.uuid4())
     await user_repo.create_user(guest_id, "Guest", db_session)
-    await membership_repo.create_room_membership(guest_id, room.roomId, session=db_session)
+    await membership_repo.create_room_membership(
+        guest_id, room.roomId, session=db_session
+    )
     await db_session.commit()
 
     track = {
@@ -89,11 +90,13 @@ async def test_websocket_non_host_playback_rejected_no_state_change(
         start_state = websocket.receive_json()
         assert start_state["playback"]["state"] == "playing"
 
-        websocket.send_json({
-            "type": "playback",
-            "user_id": guest_id,
-            "action": "pause",
-        })
+        websocket.send_json(
+            {
+                "type": "playback",
+                "user_id": guest_id,
+                "action": "pause",
+            }
+        )
 
         after_state = websocket.receive_json()
 
@@ -111,7 +114,9 @@ async def test_websocket_vote_updates_vote_score_and_feedback(
 
     guest_id = str(uuid.uuid4())
     await user_repo.create_user(guest_id, "Guest", db_session)
-    await membership_repo.create_room_membership(guest_id, room.roomId, session=db_session)
+    await membership_repo.create_room_membership(
+        guest_id, room.roomId, session=db_session
+    )
     await db_session.commit()
 
     i = 0
@@ -127,17 +132,19 @@ async def test_websocket_vote_updates_vote_score_and_feedback(
             "deepLink": "",
         }
         await room_service.add_to_queue(room.roomId, track, guest_id)
-        i+=1
+        i += 1
 
     with websocket_client.websocket_connect(f"/ws/{room.roomId}") as ws:
         start_state = ws.receive_json()
 
-        ws.send_json({
-            "type": "vote",
-            "queue_entry_id": start_state["queue"][0]["queueEntryId"],
-            "user_id": guest_id,
-            "vote_type": "upvote",
-        })
+        ws.send_json(
+            {
+                "type": "vote",
+                "queue_entry_id": start_state["queue"][0]["queueEntryId"],
+                "user_id": guest_id,
+                "vote_type": "upvote",
+            }
+        )
 
         after_state = ws.receive_json()
 
@@ -147,16 +154,20 @@ async def test_websocket_vote_updates_vote_score_and_feedback(
         assert feedback[0]["userId"] == guest_id
         assert feedback[0]["type"] == "upvote"
         assert after_state.get("lastEvent", {}).get("type") == "vote_updated"
-        
+
 
 @pytest.mark.asyncio
-async def test_websocket_addqueue_updates_state_for_all_clients( db_session, init_room, websocket_client):
+async def test_websocket_addqueue_updates_state_for_all_clients(
+    db_session, init_room, websocket_client
+):
     host_id = str(uuid.uuid4())
     room = await init_room(user_id=host_id)
 
     guest_id = str(uuid.uuid4())
     await user_repo.create_user(guest_id, "Guest", db_session)
-    await membership_repo.create_room_membership(guest_id, room.roomId, session=db_session)
+    await membership_repo.create_room_membership(
+        guest_id, room.roomId, session=db_session
+    )
     await db_session.commit()
 
     with (
@@ -208,6 +219,7 @@ async def test_websocket_addqueue_updates_state_for_all_clients( db_session, ini
         )
         assert after_state_1.get("lastEvent", {}).get("type") == "queue_updated"
         assert after_state_2.get("lastEvent", {}).get("type") == "queue_updated"
+
 
 @pytest.mark.asyncio
 async def test_websocket_broadcast_to_multiple_clients(
