@@ -45,7 +45,9 @@ def create_room_helper(
     page: Page, frontend_url: str, display_name: str = "Host"
 ) -> str:
     """Helper to create a room and return join code"""
-    page.goto(f"{frontend_url}/create?spotify_linked=true", wait_until="domcontentloaded")
+    page.goto(
+        f"{frontend_url}/create?spotify_linked=true", wait_until="domcontentloaded"
+    )
     page.wait_for_selector('input[name="displayName"]', state="visible")
     page.wait_for_selector('input[name="name"]', state="visible")
     user_id = page.evaluate(

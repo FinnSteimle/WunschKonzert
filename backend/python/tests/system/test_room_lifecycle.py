@@ -60,7 +60,10 @@ def test_sc3_invalid_join_code_shows_error(browser: Browser, test_environment):
     context = browser.new_context()
     page = context.new_page()
 
-    page.goto(f"{test_environment['frontend_url']}/join/INVALID", wait_until="domcontentloaded")
+    page.goto(
+        f"{test_environment['frontend_url']}/join/INVALID",
+        wait_until="domcontentloaded",
+    )
     page.wait_for_selector('input[name="displayName"]', state="visible")
     page.fill('input[name="displayName"]', "User")
     page.click('button:has-text("Join")')

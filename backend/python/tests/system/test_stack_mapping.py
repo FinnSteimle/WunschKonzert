@@ -22,10 +22,15 @@ def test_system_mapping_create_and_join(browser: Browser, test_environment):
 
 
 @pytest.mark.system
-def test_system_mapping_invalid_room_slug_shows_error(browser: Browser, test_environment):
+def test_system_mapping_invalid_room_slug_shows_error(
+    browser: Browser, test_environment
+):
     """Frontend route mapping works and surfaces invalid room slug errors."""
     page = browser.new_page()
-    page.goto(f"{test_environment['frontend_url']}/room/INVALID", wait_until="domcontentloaded")
+    page.goto(
+        f"{test_environment['frontend_url']}/room/INVALID",
+        wait_until="domcontentloaded",
+    )
     assert page.locator("text=This link is not a valid room or join code.").is_visible(
         timeout=10000
     )
@@ -38,7 +43,9 @@ def test_system_mapping_nonexistent_join_code_shows_backend_error(
 ):
     """Frontend reaches backend and surfaces backend room-not-found response."""
     page = browser.new_page()
-    page.goto(f"{test_environment['frontend_url']}/room/ABCDEF", wait_until="domcontentloaded")
+    page.goto(
+        f"{test_environment['frontend_url']}/room/ABCDEF", wait_until="domcontentloaded"
+    )
     page.wait_for_selector('input[name="displayName"]', state="visible")
     page.fill('input[name="displayName"]', "User")
     page.click('button:has-text("Join room")')
