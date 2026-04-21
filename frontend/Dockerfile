@@ -16,6 +16,10 @@ RUN npm run prepare
 # 3) Build stage
 FROM base AS build
 ENV DOCKER_BUILD=true
+ARG PUBLIC_API_URL=http://localhost:8000
+ARG PUBLIC_WS_URL=ws://localhost:8000
+ENV PUBLIC_API_URL=${PUBLIC_API_URL}
+ENV PUBLIC_WS_URL=${PUBLIC_WS_URL}
 COPY . .
 RUN npm run prepare && npm run build
 
