@@ -2,6 +2,8 @@ import uuid
 
 import pytest
 
+pytestmark = pytest.mark.integration
+
 from core.exceptions import ResourceNotFoundError
 from repositories import crud, room_repo, user_repo
 

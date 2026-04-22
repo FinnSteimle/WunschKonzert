@@ -23,6 +23,7 @@ asyncio_default_test_loop_scope = "session"
 asyncio_default_fixture_loop_scope = "session"
 addopts = "--cov=. --cov-report=term-missing --cov-report=xml:cobertura.xml --cov-fail-under=80"
 markers = [
+    "unit: mark a test as a unit test",
     "integration: mark a test as an integration test",
     "system: mark a test as a system/e2e test",
 ]

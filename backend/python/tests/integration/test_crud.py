@@ -2,6 +2,8 @@ import uuid
 
 import pytest
 
+pytestmark = pytest.mark.integration
+
 from core.exceptions import ResourceExistsError
 from models import domain
 from repositories import crud

@@ -2,6 +2,9 @@ import uuid
 from typing import cast
 
 import pytest
+
+pytestmark = pytest.mark.integration
+
 from fastapi import HTTPException
 
 from models import domain

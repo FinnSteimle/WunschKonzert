@@ -4,6 +4,8 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
+pytestmark = pytest.mark.integration
+
 from api.websockets import (
     active_room_connections,
     handle_room_events,

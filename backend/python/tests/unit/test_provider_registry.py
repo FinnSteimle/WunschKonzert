@@ -1,4 +1,7 @@
 import pytest
+
+pytestmark = pytest.mark.unit
+
 from fastapi import HTTPException
 
 from services.providers.registry import get_provider_client

@@ -2,6 +2,8 @@ import uuid
 
 import pytest
 
+pytestmark = pytest.mark.integration
+
 from repositories import membership_repo, user_repo
 
 

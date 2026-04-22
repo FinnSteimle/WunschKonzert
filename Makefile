@@ -96,7 +96,7 @@ type-check:
 # Testing targets (Docker-based)
 .PHONY: test
 test:
-	docker compose -f compose.yaml exec -T api uv run python -m pytest -m "not integration and not system" -q --junit-xml=junit-unit.xml
+	docker compose -f compose.yaml exec -T api uv run python -m pytest -m "not system" -q --junit-xml=junit-all.xml
 
 .PHONY: test-cov
 test-cov:

@@ -4,6 +4,8 @@ from urllib.parse import parse_qs, urlparse
 
 import pytest
 
+pytestmark = pytest.mark.integration
+
 from repositories import crud, user_repo
 
 

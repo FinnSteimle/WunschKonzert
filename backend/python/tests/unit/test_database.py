@@ -2,6 +2,9 @@ import os
 from unittest.mock import patch
 
 import pytest
+
+pytestmark = pytest.mark.unit
+
 from sqlalchemy.ext.asyncio import AsyncSession
 
 import core.database
