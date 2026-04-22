@@ -1,10 +1,11 @@
-import pytest
 from unittest.mock import patch
+
+import pytest
 from fastapi import HTTPException
 
-pytestmark = pytest.mark.unit
-
 from services.providers.spotify_client import SpotifyProviderClient
+
+pytestmark = pytest.mark.unit
 
 
 class _FakeResponse:
@@ -19,7 +20,9 @@ class _FakeResponse:
 
     def raise_for_status(self) -> None:
         if self.status_code >= 400:
-            detail = self.payload.get("detail") if isinstance(self.payload, dict) else None
+            detail = (
+                self.payload.get("detail") if isinstance(self.payload, dict) else None
+            )
             raise HTTPException(status_code=self.status_code, detail=detail)
 
 

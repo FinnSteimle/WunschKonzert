@@ -2,13 +2,12 @@ import os
 from unittest.mock import patch
 
 import pytest
-
-pytestmark = pytest.mark.unit
-
 from sqlalchemy.ext.asyncio import AsyncSession
 
 import core.database
 from core.database import _get_database_url, get_session_factory
+
+pytestmark = pytest.mark.unit
 
 
 @pytest.mark.parametrize(

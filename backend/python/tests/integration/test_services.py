@@ -2,14 +2,13 @@ import uuid
 from typing import cast
 
 import pytest
-
-pytestmark = pytest.mark.integration
-
 from fastapi import HTTPException
 
 from models import domain
 from repositories import crud, membership_repo, room_repo, user_repo
 from services import room_service
+
+pytestmark = pytest.mark.integration
 
 
 @pytest.mark.asyncio

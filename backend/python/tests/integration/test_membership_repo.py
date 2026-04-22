@@ -2,9 +2,9 @@ import uuid
 
 import pytest
 
-pytestmark = pytest.mark.integration
-
 from repositories import membership_repo, user_repo
+
+pytestmark = pytest.mark.integration
 
 
 @pytest.mark.asyncio

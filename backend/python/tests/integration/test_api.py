@@ -3,11 +3,10 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 
-pytestmark = pytest.mark.integration
-
-
 from repositories import crud, membership_repo, user_repo
 from services.providers.base import ProviderTrack
+
+pytestmark = pytest.mark.integration
 
 
 @pytest.mark.asyncio
