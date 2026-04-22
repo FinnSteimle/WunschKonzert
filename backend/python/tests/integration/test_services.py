@@ -559,7 +559,7 @@ async def test_playback_state_mapping_in_room_state(db_session, init_room):
 
     playing_state = await room_service.refresh_room_state(room.roomId)
     playback = cast(dict, playing_state["playback"])
-    assert playback["state"] == "playing"
+    assert playback["state"] == "paused"  # First song starts paused, host must resume
     assert playback["currentQueueEntryId"] == song_a
 
     # After stop, currentQueueEntryId must be None
@@ -876,6 +876,9 @@ async def test_check_room_availability_deleted_room(db_session, init_room):
 async def test_sync_playback_position_updates_cache(db_session, init_room):
     room = await init_room()
     await _add_track_to_queue(room.roomId, room.hostedBy)
+
+    # First song starts paused, need to resume before syncing position
+    await room_service.set_playback_state(room.roomId, room.hostedBy, "resume")
 
     # Seed cache
     await room_service.refresh_room_state(room.roomId)

@@ -68,13 +68,13 @@ export class SpotifyPlayer implements MusicPlayer {
 			const track = state.track_window.current_track;
 			const playing = !state.paused;
 
-			// Detect natural track end: was playing -> now paused, and either
-			// position wrapped to 0 or reached the end of the track.
+			// Detect natural track end: was playing -> now paused at track end.
+			// Note: position === 0 at track START is not a track end.
 			const ended =
 				this.wasPlaying &&
 				!playing &&
 				state.duration > 0 &&
-				(state.position === 0 || state.position >= state.duration - 500);
+				state.position >= state.duration - 500;
 
 			this.wasPlaying = playing;
 			this.lastTrackId = track?.id ?? null;

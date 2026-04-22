@@ -33,6 +33,12 @@
 
 	onMount(() => {
 		displayName = getOrCreateSessionUser().displayName;
+		// Restore room name if returning from Spotify OAuth
+		const savedName = sessionStorage.getItem('wk_pending_room_name');
+		if (savedName) {
+			name = savedName;
+			sessionStorage.removeItem('wk_pending_room_name');
+		}
 	});
 
 	async function linkSpotify() {
@@ -44,6 +50,10 @@
 		linkBusy = true;
 		try {
 			saveSessionDisplayName(trimmedDisplay);
+			// Save room name so it persists across OAuth redirect
+			if (name.trim()) {
+				sessionStorage.setItem('wk_pending_room_name', name.trim());
+			}
 			const { userId } = getOrCreateSessionUser();
 			const returnTo = window.location.origin + '/create';
 			const { auth_url } = await apiClient.getSpotifyLoginUrl(userId, returnTo);

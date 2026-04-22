@@ -90,7 +90,7 @@ async def test_websocket_non_host_playback_rejected_no_state_change(
 
     with websocket_client.websocket_connect(f"/ws/{room.roomId}") as websocket:
         start_state = websocket.receive_json()
-        assert start_state["playback"]["state"] == "playing"
+        assert start_state["playback"]["state"] == "paused"  # First song starts paused
 
         websocket.send_json(
             {

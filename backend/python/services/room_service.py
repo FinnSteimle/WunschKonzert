@@ -314,14 +314,14 @@ async def add_to_queue(
         }
     )
 
-    # Create playback session if this is the first entry
+    # Create playback session if this is the first entry (paused, host must resume)
     if has_playing is None:
         await crud.create_playback_session(
             {
                 "playbackSessionId": str(uuid.uuid4()),
                 "roomId": room_id,
                 "queueEntryId": queue_entry_id,
-                "state": PlaybackState.PLAYING,
+                "state": PlaybackState.PAUSED,
                 "elapsedTime": 0,
             }
         )

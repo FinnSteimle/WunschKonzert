@@ -185,12 +185,14 @@
 
 	// When the server's current track changes (or the SDK becomes ready), play it.
 	$effect(() => {
-		if (!browser || !musicPlayer) return;
-		const ready = sdkPlayerState?.isReady;
-		if (!ready) return;
+		if (!browser) return;
 
+		const player = musicPlayer;
+		const ready = sdkPlayerState?.isReady;
 		const rs = $roomStore.roomState;
-		if (!rs) return;
+
+		// Wait until player and SDK are ready
+		if (!player || !ready || !rs) return;
 
 		const queueEntryId = rs.playback?.currentQueueEntryId ?? null;
 		const playbackState = rs.playback?.state;
@@ -205,7 +207,7 @@
 		advanceSent = false;
 
 		const resumePos = rs.playback?.positionMs ?? 0;
-		musicPlayer.play(entry.track.providerTrackId, resumePos).catch((err) => {
+		player.play(entry.track.providerTrackId, resumePos).catch((err) => {
 			console.error('[SpotifyPlayer] play failed:', err);
 			lastPlayedQueueEntryId = null;
 		});
@@ -240,10 +242,22 @@
 
 			if (s.trackEnded && !advanceSent) {
 				advanceSent = true;
+				const pos = Math.round(s.positionMs ?? 0);
+				// Send advance with the host's last known position to help the server
+				// compute an accurate start time for the next track.
 				socketClient?.send({
 					type: 'playback',
 					user_id: userId,
-					action: 'advance'
+					action: 'advance',
+					position_ms: pos
+				});
+
+				// Also send an immediate position_sync so the server has the latest
+				// authoritative position (helps newly joining clients sync).
+				socketClient?.send({
+					type: 'position_sync',
+					user_id: userId,
+					position_ms: pos
 				});
 			}
 		});
@@ -254,11 +268,12 @@
 
 		positionSyncInterval = setInterval(() => {
 			if (!socketClient?.isConnected() || !sdkPlayerState?.isPlaying) return;
-			const pos = sdkPlayerState.positionMs;
-			socketClient.send({
-				type: 'position_sync',
-				user_id: userId,
-				position_ms: Math.round(pos)
+			musicPlayer?.getPositionMs().then((pos) => {
+				socketClient?.send({
+					type: 'position_sync',
+					user_id: userId,
+					position_ms: Math.round(pos)
+				});
 			});
 		}, 5000);
 	}
