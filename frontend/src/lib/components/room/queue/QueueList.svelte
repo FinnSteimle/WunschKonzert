@@ -17,15 +17,13 @@
 		onVote?: (queueEntryId: string, vote: VoteRequest['vote_type']) => void;
 	} = $props();
 
-	/** Played songs first (by position), then unplayed sorted by votes (tie-break on position). */
+	/** Show only unplayed songs sorted by votes (tie-break on position). */
 	const sortedEntries = $derived.by(() => {
-		const played = entries.filter((e) => e.status === 'played').sort((a, b) => a.position - b.position);
-		const unplayed = entries
+		return entries
 			.filter((e) => e.status !== 'played')
 			.sort((a, b) =>
 				b.voteScore !== a.voteScore ? b.voteScore - a.voteScore : a.position - b.position
 			);
-		return [...played, ...unplayed];
 	});
 </script>
 

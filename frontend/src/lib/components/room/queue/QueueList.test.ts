@@ -69,7 +69,7 @@ describe('QueueList', () => {
 		expect(items[1].textContent).toContain('Low Score');
 	});
 
-	it('places played songs before unplayed, sorted by position', () => {
+	it('hides played songs and only renders unplayed entries', () => {
 		const entries = [
 			makeEntry({
 				queueEntryId: 'q1',
@@ -96,9 +96,10 @@ describe('QueueList', () => {
 		render(QueueList, { entries, userId: 'user-1', voteBusyId: null });
 
 		const items = screen.getAllByRole('listitem');
-		expect(items[0].textContent).toContain('Played First');
-		expect(items[1].textContent).toContain('Played Second');
-		expect(items[2].textContent).toContain('Unplayed High Vote');
+		expect(items).toHaveLength(1);
+		expect(items[0].textContent).toContain('Unplayed High Vote');
+		expect(screen.queryByText('Played First')).toBeNull();
+		expect(screen.queryByText('Played Second')).toBeNull();
 	});
 
 	it('tie-breaks by position ascending', () => {
