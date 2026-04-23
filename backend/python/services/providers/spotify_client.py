@@ -30,9 +30,13 @@ class SpotifyProviderClient:
             )
 
         auth_value = base64.b64encode(f"{client_id}:{client_secret}".encode()).decode()
+        token_url = os.getenv(
+            "SPOTIFY_TOKEN_URL", "https://accounts.spotify.com/api/token"
+        )
+
         async with httpx.AsyncClient(timeout=15) as client:
             response = await client.post(
-                "https://accounts.spotify.com/api/token",
+                token_url,
                 headers={"Authorization": f"Basic {auth_value}"},
                 data={"grant_type": "client_credentials"},
             )
@@ -55,10 +59,13 @@ class SpotifyProviderClient:
     async def search_tracks(self, query: str) -> list[ProviderTrack]:
         token = await self._get_access_token()
         spotify_market = os.getenv("SPOTIFY_MARKET", "CH")
+        search_url = os.getenv(
+            "SPOTIFY_SEARCH_URL", "https://api.spotify.com/v1/search"
+        )
 
         async with httpx.AsyncClient(timeout=15) as client:
             response = await client.get(
-                "https://api.spotify.com/v1/search",
+                search_url,
                 params={
                     "q": query,
                     "type": "track",

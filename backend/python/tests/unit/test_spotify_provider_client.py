@@ -96,3 +96,39 @@ async def test_spotify_client_missing_credentials_raises_503(monkeypatch):
         await client.search_tracks("anything")
     assert exc_info.value.status_code == 503
     assert "Spotify credentials are not configured" in exc_info.value.detail
+
+
+@pytest.mark.asyncio
+async def test_spotify_client_uses_configurable_urls(monkeypatch):
+    monkeypatch.setenv("SPOTIFY_CLIENT_ID", "client-id")
+    monkeypatch.setenv("SPOTIFY_CLIENT_SECRET", "client-secret")
+    monkeypatch.setenv("SPOTIFY_TOKEN_URL", "http://spotify-mock:9090/api/token")
+    monkeypatch.setenv("SPOTIFY_SEARCH_URL", "http://spotify-mock:9090/v1/search")
+
+    token_response = _FakeResponse(
+        {"access_token": "new-token", "expires_in": 3600, "token_type": "Bearer"}
+    )
+    track_response = _FakeResponse({"tracks": {"items": []}})
+
+    async def mock_post(url, *args, **kwargs):
+        assert url == "http://spotify-mock:9090/api/token"
+        return token_response
+
+    async def mock_get(url, *args, **kwargs):
+        assert url == "http://spotify-mock:9090/v1/search"
+        return track_response
+
+    with (
+        patch(
+            "services.providers.spotify_client.httpx.AsyncClient.post",
+            side_effect=mock_post,
+        ),
+        patch(
+            "services.providers.spotify_client.httpx.AsyncClient.get",
+            side_effect=mock_get,
+        ),
+    ):
+        client = SpotifyProviderClient()
+        tracks = await client.search_tracks("fire")
+
+    assert tracks == []

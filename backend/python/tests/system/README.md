@@ -55,9 +55,14 @@ through Docker service DNS during system tests:
 The frontend URLs are injected as Docker **build args** (not only runtime env), so
 the bundled client code uses the same mapping during tests.
 
-`make test-system` currently executes the mapping smoke suite
-(`tests/system/test_stack_mapping.py`) to validate deterministic frontend/backend wiring
-and end-to-end create/join behavior under Docker.
+System-test Docker runs route Spotify search/token calls to a dedicated local
+mock service, so song search uses deterministic stub results instead of live
+Spotify HTTP calls.
+
+`make test-system` executes the full `tests/system/` suite under Docker.
+Some scenarios may be marked as skipped when the current frontend does not yet
+expose the corresponding behavior or when deterministic playback assertions are
+not available in the system-test environment.
 
 Run specific test file:
 ```bash
