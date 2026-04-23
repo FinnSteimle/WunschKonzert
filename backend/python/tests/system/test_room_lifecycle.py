@@ -5,8 +5,10 @@ from tests.system.conftest import create_room_helper, join_room_helper
 
 
 def member_item(page, name: str):
-    return page.get_by_role("list", name="Room members").get_by_role("listitem").filter(
-        has_text=name
+    return (
+        page.get_by_role("list", name="Room members")
+        .get_by_role("listitem")
+        .filter(has_text=name)
     )
 
 
@@ -28,8 +30,14 @@ def test_sc1_host_creates_room_guest_joins(browser: Browser, test_environment):
     assert guest.locator("text=Alice").is_visible(timeout=5000)
 
     # Verify both see exactly two active members in the room list.
-    assert host.get_by_role("list", name="Room members").get_by_role("listitem").count() == 2
-    assert guest.get_by_role("list", name="Room members").get_by_role("listitem").count() == 2
+    assert (
+        host.get_by_role("list", name="Room members").get_by_role("listitem").count()
+        == 2
+    )
+    assert (
+        guest.get_by_role("list", name="Room members").get_by_role("listitem").count()
+        == 2
+    )
 
     context.close()
 
@@ -53,7 +61,10 @@ def test_sc2_guest_leaves_room_updates_sync(browser: Browser, test_environment):
 
     # Host sees guest left
     member_item(host, "Guest").first.wait_for(state="hidden", timeout=10000)
-    assert host.get_by_role("list", name="Room members").get_by_role("listitem").count() == 1
+    assert (
+        host.get_by_role("list", name="Room members").get_by_role("listitem").count()
+        == 1
+    )
 
     context.close()
 

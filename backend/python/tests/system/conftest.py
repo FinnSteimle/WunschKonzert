@@ -79,7 +79,7 @@ def create_room_helper(
     page.click('button:has-text("Create room")')
     page.wait_for_function("() => window.location.pathname.includes('/room/')")
     page.wait_for_selector('ul[aria-label="Room members"]', state="visible")
-    page.wait_for_selector('#wk-search', state="visible")
+    page.wait_for_selector("#wk-search", state="visible")
     room_path = page.url.split("/room/")[-1]
     return room_path.strip().upper()
 

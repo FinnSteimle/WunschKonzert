@@ -59,7 +59,9 @@ class SpotifyProviderClient:
     async def search_tracks(self, query: str) -> list[ProviderTrack]:
         token = await self._get_access_token()
         spotify_market = os.getenv("SPOTIFY_MARKET", "CH")
-        search_url = os.getenv("SPOTIFY_SEARCH_URL", "https://api.spotify.com/v1/search")
+        search_url = os.getenv(
+            "SPOTIFY_SEARCH_URL", "https://api.spotify.com/v1/search"
+        )
 
         async with httpx.AsyncClient(timeout=15) as client:
             response = await client.get(

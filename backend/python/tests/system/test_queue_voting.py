@@ -5,8 +5,10 @@ from tests.system.conftest import add_song_helper, create_room_helper, join_room
 
 
 def queue_item(page, song_name: str):
-    return page.get_by_role("list", name="Playback queue").get_by_role("listitem").filter(
-        has_text=song_name
+    return (
+        page.get_by_role("list", name="Playback queue")
+        .get_by_role("listitem")
+        .filter(has_text=song_name)
     )
 
 
