@@ -416,6 +416,35 @@ async def test_add_to_queue_duplicate_track_raises_409(db_session, init_room):
 
 
 @pytest.mark.asyncio
+async def test_add_to_queue_allows_readding_track_after_played(db_session, init_room):
+    room = await init_room()
+    track_id = str(uuid.uuid4())
+    track_data = {
+        "trackId": track_id,
+        "providerTrackId": "spotify:track:played",
+        "title": "Replay Me",
+        "artist": "A",
+        "album": "",
+        "duration": 200,
+        "coverUrl": "",
+        "deepLink": "",
+    }
+
+    await room_service.add_to_queue(room.roomId, track_data, room.hostedBy)
+    first_entry = (await crud.get_queue_entries(room.roomId))[0]
+    await crud.update_queue_entry(
+        first_entry.queueEntryId, {"status": domain.QueueEntryStatus.PLAYED}
+    )
+
+    await room_service.add_to_queue(room.roomId, track_data, room.hostedBy)
+    entries = await crud.get_queue_entries(room.roomId)
+
+    assert len(entries) == 2
+    assert sum(1 for entry in entries if entry.trackId == track_id) == 2
+    assert any(entry.status == domain.QueueEntryStatus.PLAYED for entry in entries)
+
+
+@pytest.mark.asyncio
 async def test_add_to_queue_second_track_is_queued_not_playing(db_session, init_room):
     room = await init_room()
 

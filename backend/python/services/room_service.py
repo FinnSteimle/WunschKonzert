@@ -285,11 +285,11 @@ async def add_to_queue(
             }
         )
 
-    # Check if the song is already in the queue
+    # Block duplicates only while an existing entry is still active/unplayed.
     existing_entry = await crud.get_queue_entry_by_track(
         room_id, str(track_data["trackId"])
     )
-    if existing_entry:
+    if existing_entry and existing_entry.status != QueueEntryStatus.PLAYED:
         raise HTTPException(status_code=409, detail="Song is already in the queue")
 
     # Get max position and check for playing entries

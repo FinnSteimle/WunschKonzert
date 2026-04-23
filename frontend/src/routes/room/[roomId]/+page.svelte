@@ -221,7 +221,11 @@
 
 		// Avoid pointless backend 409 errors and show a nicer UX.
 		const currentState = get(roomStore).roomState;
-		if (currentState?.queue.some((entry) => entry.track.trackId === track.trackId)) {
+		if (
+			currentState?.queue.some(
+				(entry) => entry.track.trackId === track.trackId && entry.status !== 'played'
+			)
+		) {
 			throw new Error('Song is already in the queue');
 		}
 
@@ -503,7 +507,9 @@
 			{@const positionMs =
 				isHost && sdkPlayerState ? sdkPlayerState.positionMs : (rs.playback?.positionMs ?? 0)}
 			{@const inviteUrl = rs.room ? `${page.url.origin}/room/${rs.room.joinCode}` : ''}
-			{@const queuedTrackIds = new Set(rs.queue.map((e) => e.track.trackId))}
+			{@const queuedTrackIds = new Set(
+				rs.queue.filter((e) => e.status !== 'played').map((e) => e.track.trackId)
+			)}
 
 			<header
 				class="flex flex-row flex-wrap gap-3 sm:items-center sm:justify-between w-[calc(100%-40px)]"

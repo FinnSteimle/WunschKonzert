@@ -181,12 +181,14 @@ async def update_queue_entry(
 
 
 async def get_queue_entry_by_track(room_id: str, track_id: str) -> QueueEntry | None:
-    """Get queue entry by room ID and track ID"""
+    """Get non-played queue entry by room ID and track ID."""
     session_factory = get_session_factory()
     async with session_factory() as session:
         result = await session.execute(
             select(QueueEntry).where(
-                QueueEntry.roomId == room_id, QueueEntry.trackId == track_id
+                QueueEntry.roomId == room_id,
+                QueueEntry.trackId == track_id,
+                QueueEntry.status != QueueEntryStatus.PLAYED,
             )
         )
         return result.scalar_one_or_none()
