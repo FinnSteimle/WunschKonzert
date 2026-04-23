@@ -5,11 +5,12 @@ from datetime import UTC, datetime, timedelta
 from threading import Thread
 
 import pytest
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+from sqlalchemy.pool import NullPool
 from playwright.sync_api import Browser, BrowserContext, Page, sync_playwright
 
-import repositories.crud as crud
-import repositories.user_repo as user_repo
-from core.exceptions import ResourceNotFoundError
+from models.domain import AccountStatus, ProviderAccount, User
 
 USER_ID_KEY = "wk_user_id"
 DISPLAY_NAME_KEY = "wk_display_name"
@@ -77,6 +78,8 @@ def create_room_helper(
     page.fill('input[name="name"]', "Test Room")
     page.click('button:has-text("Create room")')
     page.wait_for_function("() => window.location.pathname.includes('/room/')")
+    page.wait_for_selector('ul[aria-label="Room members"]', state="visible")
+    page.wait_for_selector('#wk-search', state="visible")
     room_path = page.url.split("/room/")[-1]
     return room_path.strip().upper()
 
@@ -95,9 +98,13 @@ def join_room_helper(page: Page, frontend_url: str, join_code: str, display_name
 
 def add_song_helper(page: Page, song_name: str):
     """Helper to search and add a song to queue"""
-    page.fill('[data-testid="search-input"]', song_name)
-    page.wait_for_selector('[data-testid="search-result-0"]')
-    page.click('[data-testid="search-result-0"] button')
+    page.wait_for_selector("#wk-search", state="visible")
+    page.locator("#wk-search").fill(song_name)
+    page.get_by_role("button", name="Search").click()
+    page.get_by_role("list", name="Search results").wait_for(state="visible")
+    page.get_by_role("list", name="Search results").get_by_role(
+        "button", name="Add to queue"
+    ).first.click()
 
 
 def run_async_in_thread(coro):
@@ -166,16 +173,56 @@ async def seed_spotify_link_for_user(
     token_expires_at: datetime,
 ):
     """Seed the minimum backend state the create-room flow requires."""
-    try:
-        await user_repo.get_user(user_id)
-    except ResourceNotFoundError:
-        await user_repo.create_user(user_id, display_name)
-
-    return await crud.create_or_update_provider_account_tokens(
-        user_id=user_id,
-        provider_id=provider_id,
-        external_user_id=external_user_id,
-        access_token=access_token,
-        refresh_token=refresh_token,
-        token_expires_at=token_expires_at,
+    database_url = os.environ["DATABASE_URL"]
+    if not database_url.startswith("postgresql+asyncpg://"):
+        if "://" in database_url:
+            _, base_url = database_url.split("://", 1)
+            database_url = f"postgresql+asyncpg://{base_url}"
+        else:
+            database_url = f"postgresql+asyncpg://{database_url}"
+    engine = create_async_engine(
+        database_url,
+        poolclass=NullPool,
+        pool_pre_ping=True,
     )
+    session_factory = async_sessionmaker(
+        engine, class_=AsyncSession, expire_on_commit=False
+    )
+
+    try:
+        async with session_factory() as session:
+            user = await session.get(User, user_id)
+            if user is None:
+                session.add(User(userId=user_id, displayName=display_name))
+                await session.flush()
+
+            result = await session.execute(
+                select(ProviderAccount).where(
+                    ProviderAccount.userId == user_id,
+                    ProviderAccount.providerId == provider_id,
+                )
+            )
+            provider_account = result.scalar_one_or_none()
+
+            if provider_account is None:
+                provider_account = ProviderAccount(
+                    providerAccountId=str(uuid.uuid4()),
+                    externalUserId=external_user_id,
+                    userId=user_id,
+                    providerId=provider_id,
+                    status=AccountStatus.ACTIVE,
+                    accessToken=access_token,
+                    refreshToken=refresh_token,
+                    tokenExpiresAt=token_expires_at,
+                )
+                session.add(provider_account)
+            else:
+                provider_account.externalUserId = external_user_id
+                provider_account.status = AccountStatus.ACTIVE
+                provider_account.accessToken = access_token
+                provider_account.refreshToken = refresh_token
+                provider_account.tokenExpiresAt = token_expires_at
+
+            await session.commit()
+    finally:
+        await engine.dispose()

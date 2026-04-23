@@ -138,7 +138,7 @@ test-system:
 	@echo ""
 	@echo "Installing Playwright browsers..."
 	docker compose -f compose.yaml -f compose.system.yaml exec -T api uv run playwright install --with-deps chromium
-	docker compose -f compose.yaml -f compose.system.yaml exec -T api env BACKEND_URL=http://api:8000 FRONTEND_URL=http://frontend:3000 uv run python -m pytest tests/system/test_stack_mapping.py -v -m system --no-cov
+	docker compose -f compose.yaml -f compose.system.yaml exec -T api env BACKEND_URL=http://api:8000 FRONTEND_URL=http://frontend:3000 uv run python -m pytest tests/system/ -v -m system --no-cov
 	@echo "System tests complete. Services still running. Use 'make clean' to stop."
 
 # Cleanup targets (Docker-focused)
