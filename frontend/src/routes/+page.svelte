@@ -64,6 +64,11 @@
 			icon: Share2Icon,
 			title: 'Easy invites',
 			body: 'Share the code or link—no accounts needed for guests to join the room.'
+	},
+	{
+		icon: UsersIcon,
+		title: 'Host controls',
+		body: 'Room hosts steer the session and keep the queue organized during playback.'
 		}
 	];
 </script>
