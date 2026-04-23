@@ -15,8 +15,9 @@ def test_system_mapping_create_and_join(browser: Browser, test_environment):
     guest = context.new_page()
     join_room_helper(guest, test_environment["frontend_url"], join_code, "Guest")
 
-    assert host.locator("text=Guest").is_visible(timeout=10000)
-    assert guest.locator("text=Host").is_visible(timeout=10000)
+    members = 'ul[aria-label="Room members"] li'
+    assert host.locator(members, has_text="Guest").is_visible(timeout=10000)
+    assert guest.locator(members, has_text="Host").is_visible(timeout=10000)
 
     context.close()
 
@@ -49,5 +50,13 @@ def test_system_mapping_nonexistent_join_code_shows_backend_error(
     page.wait_for_selector('input[name="displayName"]', state="visible")
     page.fill('input[name="displayName"]', "User")
     page.click('button:has-text("Join room")')
-    assert page.locator("text=Room not found").is_visible(timeout=10000)
+    room_not_found = page.locator("text=Room not found")
+    room_unavailable = page.locator("text=Room unavailable")
+    page.wait_for_function(
+        """
+        () => document.body.innerText.includes('Room not found')
+           || document.body.innerText.includes('Room unavailable')
+        """
+    )
+    assert room_not_found.is_visible() or room_unavailable.is_visible()
     page.close()

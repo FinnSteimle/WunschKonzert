@@ -1,4 +1,5 @@
 import { render, screen, waitFor } from '@testing-library/svelte';
+import { fireEvent } from '@testing-library/svelte';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { get } from 'svelte/store';
 import RoomPage from './+page.svelte';
@@ -173,6 +174,18 @@ describe('room/[roomId]/+page.svelte', () => {
 			expect(screen.getByText('Code AB2CD3')).toBeTruthy();
 			expect(screen.getByRole('button', { name: 'Join room' })).toBeTruthy();
 			expect(screen.getByRole('link', { name: 'Back home' })).toBeTruthy();
+		});
+
+		it('shows backend join errors inline after manual link join', async () => {
+			vi.mocked(apiClient.joinRoom).mockRejectedValue(new Error('Room not found'));
+
+			render(RoomPage);
+
+			const input = await screen.findByRole('textbox', { name: 'Your display name' });
+			await fireEvent.input(input, { target: { value: 'Guest' } });
+			await fireEvent.click(screen.getByRole('button', { name: 'Join room' }));
+
+			await waitFor(() => expect(screen.getByText('Room not found')).toBeTruthy());
 		});
 	});
 
