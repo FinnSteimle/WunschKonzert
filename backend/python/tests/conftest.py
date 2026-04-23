@@ -21,17 +21,27 @@ It creates a brand new psql-container, creates an engine and session to use for 
 
 
 @pytest.fixture(scope="session")
-def postgres_container():
-    """Spin up a Postgres container for the whole test session."""
+def postgres_connection_url():
+    """
+    Return a database URL for integration tests.
+
+    Prefer an explicitly provided test database when running in CI/containerized
+    environments. Fall back to a disposable Postgres testcontainer for local runs.
+    """
+    external_url = os.getenv("TEST_DATABASE_URL")
+    if external_url:
+        yield external_url
+        return
+
     postgres_image = os.getenv("POSTGRES_TEST_IMAGE", "postgres:17-alpine")
     with PostgresContainer(postgres_image) as postgres:
-        yield postgres
+        yield postgres.get_connection_url()
 
 
 @pytest.fixture(scope="session")
-async def db_engine(postgres_container):
-    """Create a database engine for the test container."""
-    url = postgres_container.get_connection_url()
+async def db_engine(postgres_connection_url):
+    """Create a database engine for the integration test database."""
+    url = postgres_connection_url
 
     # Force the use of asyncpg driver
     if "://" in url:
