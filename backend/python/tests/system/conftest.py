@@ -101,7 +101,7 @@ def add_song_helper(page: Page, song_name: str):
 
 
 def run_async_in_thread(coro):
-    """Run a coroutine in an isolated thread so sync Playwright tests can seed async state."""
+    """Run a coroutine in an isolated thread for sync Playwright helpers."""
     result: Future = Future()
 
     def target():
@@ -118,8 +118,10 @@ def run_async_in_thread(coro):
     return result.result()
 
 
-def set_session_identity(page: Page, frontend_url: str, display_name: str) -> tuple[str, dict[str, str | None]]:
-    """Seed a deterministic browser identity for one page before app code reads localStorage."""
+def set_session_identity(
+    page: Page, frontend_url: str, display_name: str
+) -> tuple[str, dict[str, str | None]]:
+    """Seed a deterministic browser identity before the app reads localStorage."""
     user_id = f"U_{uuid.uuid4().hex[:10].upper()}"
     page.goto(frontend_url, wait_until="domcontentloaded")
     previous_identity = page.evaluate(
@@ -139,7 +141,7 @@ def set_session_identity(page: Page, frontend_url: str, display_name: str) -> tu
 
 
 def restore_session_identity(page: Page, identity: dict[str, str | None]) -> None:
-    """Restore shared localStorage so other pages in the same browser context keep their identity."""
+    """Restore shared localStorage for other pages in the same browser context."""
     page.evaluate(
         f"""
         (identity) => {{
