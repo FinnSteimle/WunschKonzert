@@ -66,6 +66,9 @@
 
 	async function submit(e: Event) {
 		e.preventDefault();
+		if (busy || linkBusy) {
+			return;
+		}
 		const trimmed = name.trim();
 		const trimmedDisplay = displayName.trim();
 		if (!trimmed) {

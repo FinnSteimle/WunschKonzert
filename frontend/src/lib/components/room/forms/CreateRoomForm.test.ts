@@ -195,4 +195,35 @@ describe('CreateRoomForm', () => {
 			)
 		);
 	});
+
+	it('ignores duplicate form submits while request is pending', async () => {
+		const request = deferred<{
+			success: boolean;
+			message: string;
+			room_id: string;
+			join_code: string;
+		}>();
+		vi.mocked(apiClient.createRoom).mockReturnValue(request.promise);
+
+		render(CreateRoomForm, { spotifyLinked: true });
+		await fireEvent.input(screen.getByLabelText('Room name'), { target: { value: 'Friday vibes' } });
+
+		const submitButton = screen.getByRole('button', { name: 'Create room' });
+		const form = submitButton.closest('form');
+		expect(form).not.toBeNull();
+		if (!form) return;
+
+		await fireEvent.submit(form);
+		await fireEvent.submit(form);
+
+		expect(apiClient.createRoom).toHaveBeenCalledTimes(1);
+
+		request.resolve({
+			success: true,
+			message: 'ok',
+			room_id: 'room-1',
+			join_code: 'AB2CD3'
+		});
+		await waitFor(() => expect(toast.success).toHaveBeenCalledWith('Room created'));
+	});
 });
