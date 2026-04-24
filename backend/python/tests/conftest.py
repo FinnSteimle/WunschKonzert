@@ -11,7 +11,13 @@ from testcontainers.postgres import PostgresContainer
 
 import core.database
 from models.domain import Base
-from repositories import crud, membership_repo, room_repo, user_repo
+from repositories import (
+    crud,
+    membership_repo,
+    music_provider_repo,
+    room_repo,
+    user_repo,
+)
 from services import room_service
 
 """
@@ -77,6 +83,9 @@ async def db_session(session_factory):
     """Get a fresh database session for each test."""
     original_get_session_factory = core.database.get_session_factory
     original_crud_get_session_factory = crud.get_session_factory
+    original_music_provider_get_session_factory = (
+        music_provider_repo.get_session_factory
+    )
     original_rooms_get_session_factory = room_repo.get_session_factory
     original_memberships_get_session_factory = membership_repo.get_session_factory
     original_session_factory_singleton = core.database._session_factory
@@ -87,6 +96,7 @@ async def db_session(session_factory):
     core.database._session_factory = session_factory
     core.database.get_session_factory = lambda: session_factory
     crud.get_session_factory = lambda: session_factory
+    music_provider_repo.get_session_factory = lambda: session_factory
     room_repo.get_session_factory = lambda: session_factory
     membership_repo.get_session_factory = lambda: session_factory
 
@@ -102,6 +112,9 @@ async def db_session(session_factory):
         core.database._engine = original_engine_singleton
         core.database._session_factory = original_session_factory_singleton
         crud.get_session_factory = original_crud_get_session_factory
+        music_provider_repo.get_session_factory = (
+            original_music_provider_get_session_factory
+        )
         room_repo.get_session_factory = original_rooms_get_session_factory
         membership_repo.get_session_factory = original_memberships_get_session_factory
         core.database.get_session_factory = original_get_session_factory
@@ -120,10 +133,12 @@ def init_room(db_session):
         user_id = user_id or str(uuid.uuid4())
 
         await user_repo.create_user(user_id, "test_host", db_session)
-        await crud.create_music_provider(provider_id, provider_name, db_session)
+        await music_provider_repo.create_music_provider(
+            provider_id, provider_name, db_session
+        )
         await db_session.commit()
 
-        provider = await crud.get_music_provider(provider_id, db_session)
+        provider = await music_provider_repo.get_music_provider(provider_id, db_session)
 
         room = await room_repo.create_room(
             user_id, provider.providerId, room_name, session=db_session

@@ -5,7 +5,13 @@ import pytest
 from fastapi import HTTPException
 
 from models import domain
-from repositories import crud, membership_repo, room_repo, user_repo
+from repositories import (
+    crud,
+    membership_repo,
+    music_provider_repo,
+    room_repo,
+    user_repo,
+)
 from services import room_service
 
 pytestmark = pytest.mark.integration
@@ -62,7 +68,7 @@ async def test_user_display_name_strips_whitespace(db_session):
 @pytest.mark.asyncio
 async def test_ensure_provider_exists_with_seeded_provider(db_session):
     provider_id = str(uuid.uuid4())
-    await crud.create_music_provider(provider_id, "Spotify")
+    await music_provider_repo.create_music_provider(provider_id, "Spotify")
 
     # Should not raise
     await room_service.ensure_provider_exists(provider_id)

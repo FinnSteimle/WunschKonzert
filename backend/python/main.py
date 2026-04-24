@@ -9,6 +9,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 import repositories.crud as crud
+import repositories.music_provider_repo as music_provider_repo
 from api import websockets
 from api.routers import auth, playback, provider_search, rooms, spotify_auth
 from core.exceptions import ResourceNotFoundError
@@ -22,11 +23,11 @@ async def initialize_music_providers() -> None:
 
     for provider_id, name in default_providers:
         try:
-            await crud.get_music_provider(provider_id)
+            await music_provider_repo.get_music_provider(provider_id)
             # Provider already exists
         except ResourceNotFoundError:
             # Provider doesn't exist, create it
-            await crud.create_music_provider(provider_id, name)
+            await music_provider_repo.create_music_provider(provider_id, name)
 
 
 def run_migrations() -> None:

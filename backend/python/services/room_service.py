@@ -6,6 +6,7 @@ from fastapi import HTTPException
 
 import repositories.crud as crud
 import repositories.membership_repo as membership_repo
+import repositories.music_provider_repo as music_provider_repo
 import repositories.room_repo as room_repo
 import repositories.user_repo as user_repo
 from core.exceptions import ResourceNotFoundError
@@ -514,7 +515,9 @@ async def create_room_service(
     await ensure_user_display_name(user_id, display_name)
     await ensure_provider_exists(supported_provider_id)
 
-    pa = await crud.get_provider_account_by_user(user_id, supported_provider_id)
+    pa = await music_provider_repo.get_provider_account_by_user(
+        user_id, supported_provider_id
+    )
     if not pa or not pa.refreshToken:
         raise HTTPException(
             status_code=403,
@@ -655,7 +658,7 @@ async def ensure_provider_exists(provider_id: str) -> None:
     from core.exceptions import ResourceNotFoundError
 
     try:
-        await crud.get_music_provider(provider_id)
+        await music_provider_repo.get_music_provider(provider_id)
     except ResourceNotFoundError:
         raise HTTPException(
             status_code=400, detail=f"Unsupported music provider: {provider_id}. "

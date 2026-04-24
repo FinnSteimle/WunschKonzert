@@ -4,7 +4,7 @@ from urllib.parse import parse_qs, urlparse
 
 import pytest
 
-from repositories import crud, user_repo
+from repositories import music_provider_repo, user_repo
 
 pytestmark = pytest.mark.integration
 
@@ -157,7 +157,7 @@ async def test_spotify_callback_token_exchange_failure_redirects(
 ):
     user_id = str(uuid.uuid4())
     await user_repo.create_user(user_id, "Host User", db_session)
-    await crud.create_music_provider("spotify", "Spotify", db_session)
+    await music_provider_repo.create_music_provider("spotify", "Spotify", db_session)
     await db_session.commit()
 
     state = await _login_and_get_state(client, user_id)
@@ -186,7 +186,7 @@ async def test_spotify_callback_profile_fetch_failure_redirects(
 ):
     user_id = str(uuid.uuid4())
     await user_repo.create_user(user_id, "Host User", db_session)
-    await crud.create_music_provider("spotify", "Spotify", db_session)
+    await music_provider_repo.create_music_provider("spotify", "Spotify", db_session)
     await db_session.commit()
 
     state = await _login_and_get_state(client, user_id)
@@ -225,7 +225,7 @@ async def test_spotify_callback_success_stores_tokens_and_redirects(
 ):
     user_id = str(uuid.uuid4())
     await user_repo.create_user(user_id, "Host User", db_session)
-    await crud.create_music_provider("spotify", "Spotify", db_session)
+    await music_provider_repo.create_music_provider("spotify", "Spotify", db_session)
     await db_session.commit()
 
     state = await _login_and_get_state(client, user_id)
@@ -253,7 +253,9 @@ async def test_spotify_callback_success_stores_tokens_and_redirects(
     assert response.status_code == 307
     assert response.headers["location"] == "http://localhost/create?spotify_linked=true"
 
-    provider_account = await crud.get_provider_account_by_user(user_id, "spotify")
+    provider_account = await music_provider_repo.get_provider_account_by_user(
+        user_id, "spotify"
+    )
     assert provider_account is not None
     assert provider_account.externalUserId == "spotify-external-id"
     assert provider_account.accessToken == "access-token"
@@ -295,9 +297,9 @@ async def test_spotify_token_without_linked_account_returns_404(client):
 async def test_spotify_token_returns_cached_valid_access_token(client, db_session):
     user_id = str(uuid.uuid4())
     await user_repo.create_user(user_id, "Host User", db_session)
-    await crud.create_music_provider("spotify", "Spotify", db_session)
+    await music_provider_repo.create_music_provider("spotify", "Spotify", db_session)
     await db_session.commit()
-    await crud.create_or_update_provider_account_tokens(
+    await music_provider_repo.create_or_update_provider_account_tokens(
         user_id=user_id,
         provider_id="spotify",
         external_user_id="spotify-external-id",
@@ -318,9 +320,9 @@ async def test_spotify_token_refresh_success_updates_tokens(
 ):
     user_id = str(uuid.uuid4())
     await user_repo.create_user(user_id, "Host User", db_session)
-    await crud.create_music_provider("spotify", "Spotify", db_session)
+    await music_provider_repo.create_music_provider("spotify", "Spotify", db_session)
     await db_session.commit()
-    await crud.create_or_update_provider_account_tokens(
+    await music_provider_repo.create_or_update_provider_account_tokens(
         user_id=user_id,
         provider_id="spotify",
         external_user_id="spotify-external-id",
@@ -347,7 +349,9 @@ async def test_spotify_token_refresh_success_updates_tokens(
     assert response.status_code == 200
     assert response.json() == {"access_token": "new-access-token"}
 
-    provider_account = await crud.get_provider_account_by_user(user_id, "spotify")
+    provider_account = await music_provider_repo.get_provider_account_by_user(
+        user_id, "spotify"
+    )
     assert provider_account is not None
     assert provider_account.accessToken == "new-access-token"
     assert provider_account.refreshToken == "new-refresh-token"
@@ -359,9 +363,9 @@ async def test_spotify_token_refresh_failure_returns_502(
 ):
     user_id = str(uuid.uuid4())
     await user_repo.create_user(user_id, "Host User", db_session)
-    await crud.create_music_provider("spotify", "Spotify", db_session)
+    await music_provider_repo.create_music_provider("spotify", "Spotify", db_session)
     await db_session.commit()
-    await crud.create_or_update_provider_account_tokens(
+    await music_provider_repo.create_or_update_provider_account_tokens(
         user_id=user_id,
         provider_id="spotify",
         external_user_id="spotify-external-id",
