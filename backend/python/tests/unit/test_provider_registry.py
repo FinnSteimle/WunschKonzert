@@ -3,6 +3,8 @@ from fastapi import HTTPException
 
 from services.providers.registry import get_provider_client
 
+pytestmark = pytest.mark.unit
+
 
 def test_get_provider_client_spotify_exists():
     client = get_provider_client("spotify")

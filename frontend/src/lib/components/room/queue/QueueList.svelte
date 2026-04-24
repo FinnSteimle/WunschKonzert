@@ -17,12 +17,14 @@
 		onVote?: (queueEntryId: string, vote: VoteRequest['vote_type']) => void;
 	} = $props();
 
-	/** Highest score first (best → worst); tie-break on server position. */
-	const sortedEntries = $derived(
-		[...entries].sort((a, b) =>
-			b.voteScore !== a.voteScore ? b.voteScore - a.voteScore : a.position - b.position
-		)
-	);
+	/** Show only unplayed songs sorted by votes (tie-break on position). */
+	const sortedEntries = $derived.by(() => {
+		return entries
+			.filter((e) => e.status !== 'played')
+			.sort((a, b) =>
+				b.voteScore !== a.voteScore ? b.voteScore - a.voteScore : a.position - b.position
+			);
+	});
 </script>
 
 {#if sortedEntries.length === 0}

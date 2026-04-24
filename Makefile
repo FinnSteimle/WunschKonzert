@@ -24,6 +24,7 @@ help:
 	@echo "Testing (via Docker):"
 	@echo "  test          - Run tests in container"
 	@echo "  test-cov      - Run tests with coverage in container"
+	@echo "  test-system   - Run end-to-end system tests with Playwright"
 	@echo ""
 
 	@echo "Cleanup (Docker):"
@@ -95,11 +96,50 @@ type-check:
 # Testing targets (Docker-based)
 .PHONY: test
 test:
-	docker compose -f compose.yaml exec -T api uv run python -m pytest -m "not integration" -q --junit-xml=junit-unit.xml
+	docker compose -f compose.yaml exec -T api uv run python -m pytest -m "not system" -q --junit-xml=junit-all.xml
 
 .PHONY: test-cov
 test-cov:
 	docker compose -f compose.yaml exec -T api uv run python -m pytest --cov=./ --cov-report=term-missing
+
+.PHONY: test-system
+test-system:
+	@echo "Starting services for system tests..."
+	docker compose -f compose.yaml -f compose.system.yaml up -d --build
+	@echo "Waiting for backend health at http://api:8000/health..."
+	@MAX_RETRIES=45; COUNT=0; \
+	until docker compose -f compose.yaml -f compose.system.yaml exec -T api uv run python -c "import urllib.request; urllib.request.urlopen('http://api:8000/health', timeout=5)"; do \
+		printf '.'; \
+		sleep 2; \
+		COUNT=$$((COUNT+1)); \
+		if [ $$COUNT -ge $$MAX_RETRIES ]; then \
+			echo ""; \
+			echo "Backend did not become healthy in time."; \
+			docker compose -f compose.yaml -f compose.system.yaml logs api; \
+			docker compose -f compose.yaml -f compose.system.yaml logs frontend; \
+			exit 1; \
+		fi; \
+	done
+	@echo ""
+	@echo "Waiting for frontend readiness at http://frontend:3000..."
+	@MAX_RETRIES=45; COUNT=0; \
+	until docker compose -f compose.yaml -f compose.system.yaml exec -T api uv run python -c "import urllib.request; urllib.request.urlopen('http://frontend:3000', timeout=5)"; do \
+		printf '.'; \
+		sleep 2; \
+		COUNT=$$((COUNT+1)); \
+		if [ $$COUNT -ge $$MAX_RETRIES ]; then \
+			echo ""; \
+			echo "Frontend did not become ready in time."; \
+			docker compose -f compose.yaml -f compose.system.yaml logs frontend; \
+			docker compose -f compose.yaml -f compose.system.yaml logs api; \
+			exit 1; \
+		fi; \
+	done
+	@echo ""
+	@echo "Installing Playwright browsers..."
+	docker compose -f compose.yaml -f compose.system.yaml exec -T api uv run playwright install --with-deps chromium
+	docker compose -f compose.yaml -f compose.system.yaml exec -T api env BACKEND_URL=http://api:8000 FRONTEND_URL=http://frontend:3000 uv run python -m pytest tests/system/ -v -m system --no-cov
+	@echo "System tests complete. Services still running. Use 'make clean' to stop."
 
 # Cleanup targets (Docker-focused)
 .PHONY: clean

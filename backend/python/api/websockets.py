@@ -58,7 +58,14 @@ async def handle_room_events(room_id: str, data: str) -> None:
                 room_id=room_id,
                 user_id=event.get("user_id"),
                 action=event.get("action"),
+                position_ms=event.get("position_ms"),
             )
+        elif event_type == "position_sync":
+            pos = event.get("position_ms")
+            if isinstance(pos, (int, float)):
+                await room_service.sync_playback_position(
+                    room_id, event.get("user_id", ""), int(pos)
+                )
         elif event_type == "rename":
             await room_service.rename_participant(
                 room_id=room_id,

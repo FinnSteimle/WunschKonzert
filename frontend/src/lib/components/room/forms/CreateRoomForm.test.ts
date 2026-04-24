@@ -55,7 +55,7 @@ describe('CreateRoomForm', () => {
 	});
 
 	it('shows an error when room name is empty', async () => {
-		render(CreateRoomForm);
+		render(CreateRoomForm, { spotifyLinked: true });
 
 		await fireEvent.click(screen.getByRole('button', { name: 'Create room' }));
 
@@ -69,7 +69,7 @@ describe('CreateRoomForm', () => {
 			displayName: ''
 		});
 
-		render(CreateRoomForm);
+		render(CreateRoomForm, { spotifyLinked: true });
 
 		await fireEvent.input(screen.getByLabelText('Room name'), { target: { value: 'Friday vibes' } });
 		await fireEvent.click(screen.getByRole('button', { name: 'Create room' }));
@@ -85,7 +85,7 @@ describe('CreateRoomForm', () => {
 			room_id: 'room-1',
 			join_code: 'AB2CD3'
 		});
-		render(CreateRoomForm);
+		render(CreateRoomForm, { spotifyLinked: true });
 
 		const roomName = 'A'.repeat(40);
 		await fireEvent.input(screen.getByLabelText('Room name'), { target: { value: roomName } });
@@ -100,7 +100,7 @@ describe('CreateRoomForm', () => {
 	});
 
 	it('shows an error when room name exceeds max length', async () => {
-		render(CreateRoomForm);
+		render(CreateRoomForm, { spotifyLinked: true });
 
 		await fireEvent.input(screen.getByLabelText('Room name'), { target: { value: 'B'.repeat(41) } });
 		await fireEvent.click(screen.getByRole('button', { name: 'Create room' }));
@@ -109,8 +109,8 @@ describe('CreateRoomForm', () => {
 		expect(apiClient.createRoom).not.toHaveBeenCalled();
 	});
 
-	it('shows an error for unsupported provider values', async () => {
-		render(CreateRoomForm);
+	it('disables submit button for unsupported provider values', async () => {
+		render(CreateRoomForm, { spotifyLinked: true });
 		const providerSelect = screen.getByLabelText('Music provider') as HTMLSelectElement;
 		const unsupportedOption = document.createElement('option');
 		unsupportedOption.value = 'invalid-provider';
@@ -119,9 +119,9 @@ describe('CreateRoomForm', () => {
 
 		await fireEvent.input(screen.getByLabelText('Room name'), { target: { value: 'Friday vibes' } });
 		await fireEvent.change(providerSelect, { target: { value: 'invalid-provider' } });
-		await fireEvent.click(screen.getByRole('button', { name: 'Create room' }));
 
-		expect(toast.error).toHaveBeenCalledWith('Please choose a supported music provider.');
+		const submitButton = screen.getByRole('button', { name: 'Create room' }) as HTMLButtonElement;
+		expect(submitButton.disabled).toBe(true);
 		expect(apiClient.createRoom).not.toHaveBeenCalled();
 	});
 
@@ -133,7 +133,7 @@ describe('CreateRoomForm', () => {
 			join_code: 'AB2CD3'
 		});
 		const onSuccess = vi.fn();
-		render(CreateRoomForm, { onsuccess: onSuccess });
+		render(CreateRoomForm, { onsuccess: onSuccess, spotifyLinked: true });
 
 		const displayNameInput = screen.getByLabelText('Your display name');
 		const roomNameInput = screen.getByLabelText('Room name');
@@ -169,7 +169,7 @@ describe('CreateRoomForm', () => {
 		}>();
 		vi.mocked(apiClient.createRoom).mockReturnValue(request.promise);
 
-		render(CreateRoomForm);
+		render(CreateRoomForm, { spotifyLinked: true });
 
 		const displayNameInput = screen.getByLabelText('Your display name');
 		const roomNameInput = screen.getByLabelText('Room name');
@@ -194,5 +194,36 @@ describe('CreateRoomForm', () => {
 				false
 			)
 		);
+	});
+
+	it('ignores duplicate form submits while request is pending', async () => {
+		const request = deferred<{
+			success: boolean;
+			message: string;
+			room_id: string;
+			join_code: string;
+		}>();
+		vi.mocked(apiClient.createRoom).mockReturnValue(request.promise);
+
+		render(CreateRoomForm, { spotifyLinked: true });
+		await fireEvent.input(screen.getByLabelText('Room name'), { target: { value: 'Friday vibes' } });
+
+		const submitButton = screen.getByRole('button', { name: 'Create room' });
+		const form = submitButton.closest('form');
+		expect(form).not.toBeNull();
+		if (!form) return;
+
+		await fireEvent.submit(form);
+		await fireEvent.submit(form);
+
+		expect(apiClient.createRoom).toHaveBeenCalledTimes(1);
+
+		request.resolve({
+			success: true,
+			message: 'ok',
+			room_id: 'room-1',
+			join_code: 'AB2CD3'
+		});
+		await waitFor(() => expect(toast.success).toHaveBeenCalledWith('Room created'));
 	});
 });

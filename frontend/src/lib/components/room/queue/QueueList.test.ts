@@ -45,19 +45,21 @@ describe('QueueList', () => {
 		expect(screen.getByText('Song B')).toBeTruthy();
 	});
 
-	it('sorts entries by vote score descending', () => {
+	it('sorts unplayed entries by vote score descending', () => {
 		const entries = [
 			makeEntry({
 				queueEntryId: 'q1',
 				track: { ...makeEntry().track, title: 'Low Score' },
 				voteScore: 1,
-				position: 0
+				position: 0,
+				status: 'queued'
 			}),
 			makeEntry({
 				queueEntryId: 'q2',
 				track: { ...makeEntry().track, title: 'High Score' },
 				voteScore: 10,
-				position: 1
+				position: 1,
+				status: 'queued'
 			})
 		];
 		render(QueueList, { entries, userId: 'user-1', voteBusyId: null });
@@ -65,6 +67,39 @@ describe('QueueList', () => {
 		const items = screen.getAllByRole('listitem');
 		expect(items[0].textContent).toContain('High Score');
 		expect(items[1].textContent).toContain('Low Score');
+	});
+
+	it('hides played songs and only renders unplayed entries', () => {
+		const entries = [
+			makeEntry({
+				queueEntryId: 'q1',
+				track: { ...makeEntry().track, title: 'Played Second' },
+				status: 'played',
+				position: 2,
+				voteScore: 100
+			}),
+			makeEntry({
+				queueEntryId: 'q2',
+				track: { ...makeEntry().track, title: 'Played First' },
+				status: 'played',
+				position: 1,
+				voteScore: 0
+			}),
+			makeEntry({
+				queueEntryId: 'q3',
+				track: { ...makeEntry().track, title: 'Unplayed High Vote' },
+				status: 'queued',
+				position: 3,
+				voteScore: 50
+			})
+		];
+		render(QueueList, { entries, userId: 'user-1', voteBusyId: null });
+
+		const items = screen.getAllByRole('listitem');
+		expect(items).toHaveLength(1);
+		expect(items[0].textContent).toContain('Unplayed High Vote');
+		expect(screen.queryByText('Played First')).toBeNull();
+		expect(screen.queryByText('Played Second')).toBeNull();
 	});
 
 	it('tie-breaks by position ascending', () => {

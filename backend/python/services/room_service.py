@@ -5,6 +5,10 @@ from datetime import UTC, datetime
 from fastapi import HTTPException
 
 import repositories.crud as crud
+import repositories.membership_repo as membership_repo
+import repositories.music_provider_repo as music_provider_repo
+import repositories.room_repo as room_repo
+import repositories.user_repo as user_repo
 from core.exceptions import ResourceNotFoundError
 from models.domain import (
     FeedbackType,
@@ -46,16 +50,14 @@ def _ui_to_feedback(vote_type: str) -> FeedbackType | None:
 
 async def _build_room_state(room_id: str) -> dict[str, object] | None:
     # Get room and host
-    room = await crud.get_room(room_id)
-    if not room:
-        return None
-
-    host = await crud.get_user(room.hostedBy)
-    if not host:
+    try:
+        room = await room_repo.get_room(room_id)
+        host = await user_repo.get_user(room.hostedBy)
+    except ResourceNotFoundError:
         return None
 
     # Get room members
-    memberships = await crud.get_room_members(room_id)
+    memberships_list = await membership_repo.get_room_active_memberships(room_id)
 
     users: list[dict[str, object]] = [
         {
@@ -72,7 +74,7 @@ async def _build_room_state(room_id: str) -> dict[str, object] | None:
         }
     ]
     seen_user_ids = {host.userId}
-    for membership, user in memberships:
+    for membership, user in memberships_list:
         if user.userId in seen_user_ids:
             continue
         seen_user_ids.add(user.userId)
@@ -110,7 +112,7 @@ async def _build_room_state(room_id: str) -> dict[str, object] | None:
     queue: list[dict[str, object]] = []
     for queue_entry in queue_entries:
         track = await crud.get_track(queue_entry.trackId)
-        added_by_user = await crud.get_user(queue_entry.addedBy)
+        added_by_user = await user_repo.get_user(queue_entry.addedBy)
 
         if not track or not added_by_user:
             continue
@@ -221,6 +223,32 @@ async def refresh_room_state(
     return room_state
 
 
+async def sync_playback_position(room_id: str, user_id: str, position_ms: int) -> None:
+    """Lightweight position sync: update DB + patch cache without full rebuild."""
+    try:
+        room = await room_repo.get_room(room_id)
+    except ResourceNotFoundError:
+        return
+
+    if room.hostedBy != user_id:
+        return
+
+    session = await crud.get_current_playback_session(room_id)
+    if not session or _enum_value(session.state) != "playing":
+        return
+
+    elapsed = max(0, position_ms // 1000)
+    await crud.update_playback_session(
+        session.playbackSessionId, {"elapsedTime": elapsed}
+    )
+
+    cached = room_state_cache.get(room_id)
+    if cached:
+        playback = cached.get("playback")
+        if isinstance(playback, dict):
+            playback["positionMs"] = elapsed * 1000
+
+
 async def add_to_queue(
     room_id: str, track_data: dict[str, object], user_id: str
 ) -> dict[str, object]:
@@ -228,15 +256,18 @@ async def add_to_queue(
         raise HTTPException(status_code=400, detail="No track data provided")
 
     # Get room and validate
-    room = await crud.get_room(room_id)
-    if not room:
+    try:
+        room = await room_repo.get_room(room_id)
+    except ResourceNotFoundError:
         raise HTTPException(status_code=404, detail="Room not found")
+
     if room.status != RoomStatus.ACTIVE:
         raise HTTPException(status_code=400, detail="Room is not active")
 
     # Get user
-    user = await crud.get_user(user_id)
-    if not user:
+    try:
+        await user_repo.get_user(user_id)
+    except ResourceNotFoundError:
         raise HTTPException(status_code=404, detail="User not found")
 
     # Get or create track
@@ -255,11 +286,11 @@ async def add_to_queue(
             }
         )
 
-    # Check if the song is already in the queue
+    # Block duplicates only while an existing entry is still active/unplayed.
     existing_entry = await crud.get_queue_entry_by_track(
         room_id, str(track_data["trackId"])
     )
-    if existing_entry:
+    if existing_entry and existing_entry.status != QueueEntryStatus.PLAYED:
         raise HTTPException(status_code=409, detail="Song is already in the queue")
 
     # Get max position and check for playing entries
@@ -284,14 +315,14 @@ async def add_to_queue(
         }
     )
 
-    # Create playback session if this is the first entry
+    # Create playback session if this is the first entry (paused, host must resume)
     if has_playing is None:
         await crud.create_playback_session(
             {
                 "playbackSessionId": str(uuid.uuid4()),
                 "roomId": room_id,
                 "queueEntryId": queue_entry_id,
-                "state": PlaybackState.PLAYING,
+                "state": PlaybackState.PAUSED,
                 "elapsedTime": 0,
             }
         )
@@ -349,36 +380,39 @@ async def vote_queue_entry(
 
 
 async def set_playback_state(
-    room_id: str, user_id: str, action: str
+    room_id: str,
+    user_id: str,
+    action: str,
+    position_ms: int | None = None,
 ) -> dict[str, object]:
-    if action not in {"pause", "resume", "stop"}:
+    if action not in {"pause", "resume", "stop", "advance"}:
         raise HTTPException(status_code=400, detail="Invalid playback action")
 
-    # Get room and validate
-    room = await crud.get_room(room_id)
-    if not room:
+    try:
+        room = await room_repo.get_room(room_id)
+    except ResourceNotFoundError:
         raise HTTPException(status_code=404, detail="Room not found")
+
     if room.hostedBy != user_id:
         raise HTTPException(
             status_code=403, detail="Only the host can control playback"
         )
 
-    # Get or create playback session
+    if action == "advance":
+        return await _advance_to_next(room_id)
+
     playback_session = await crud.get_current_playback_session(room_id)
 
     if not playback_session:
-        # Get first queued entry
         current_queue_entry = await crud.get_first_queued_entry(room_id)
 
         if not current_queue_entry:
             raise HTTPException(status_code=400, detail="No queued songs")
 
-        # Update queue entry status
         await crud.update_queue_entry(
             current_queue_entry.queueEntryId, {"status": QueueEntryStatus.PLAYING}
         )
 
-        # Create playback session
         playback_session = await crud.create_playback_session(
             {
                 "playbackSessionId": str(uuid.uuid4()),
@@ -389,7 +423,10 @@ async def set_playback_state(
             }
         )
 
-    # Update playback session state
+    elapsed_seconds = (
+        max(0, int(position_ms) // 1000) if position_ms is not None else None
+    )
+
     updates: dict[str, object] = {"state": PlaybackState.PLAYING, "pausedAt": None}
     if action == "pause":
         updates = {
@@ -402,56 +439,193 @@ async def set_playback_state(
             "pausedAt": datetime.now(UTC).replace(tzinfo=None),
         }
 
+    if elapsed_seconds is not None:
+        updates["elapsedTime"] = elapsed_seconds
+
     await crud.update_playback_session(playback_session.playbackSessionId, updates)
 
     return await refresh_room_state(room_id, "playback_updated")
 
 
-async def leave_room_service(room_id: str, user_id: str) -> dict[str, object]:
-    user = await crud.get_user(user_id)
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found")
-
-    room = await crud.get_room(room_id)
-    if not room:
-        raise HTTPException(status_code=404, detail="Room not found")
-
-    if room.hostedBy == user_id:
-        raise HTTPException(
-            status_code=403,
-            detail="Hosts cannot leave the room. Please delete the room instead.",
+async def _advance_to_next(room_id: str) -> dict[str, object]:
+    """Mark the current song as played and start the next highest-voted song."""
+    current_session = await crud.get_current_playback_session(room_id)
+    if current_session:
+        await crud.update_playback_session(
+            current_session.playbackSessionId,
+            {
+                "state": PlaybackState.STOPPED,
+                "pausedAt": datetime.now(UTC).replace(tzinfo=None),
+            },
+        )
+        await crud.update_queue_entry(
+            current_session.queueEntryId, {"status": QueueEntryStatus.PLAYED}
         )
 
-    await crud.leave_room(user_id, room_id)
-    return await refresh_room_state(room_id, "participant_left")
+    next_entry = await crud.get_next_queued_entry(room_id)
+    if next_entry:
+        await crud.update_queue_entry(
+            next_entry.queueEntryId, {"status": QueueEntryStatus.PLAYING}
+        )
+        await crud.create_playback_session(
+            {
+                "playbackSessionId": str(uuid.uuid4()),
+                "roomId": room_id,
+                "queueEntryId": next_entry.queueEntryId,
+                "state": PlaybackState.PLAYING,
+                "elapsedTime": 0,
+            }
+        )
+
+    return await refresh_room_state(room_id, "playback_advanced")
+
+
+async def leave_room_service(room_id: str, user_id: str) -> dict[str, object]:
+    try:
+        try:
+            await user_repo.get_user(user_id)
+        except ResourceNotFoundError:
+            raise HTTPException(status_code=404, detail="User not found")
+
+        try:
+            room = await room_repo.get_room(room_id)
+        except ResourceNotFoundError:
+            raise HTTPException(status_code=404, detail="Room not found")
+
+        if room.hostedBy == user_id:
+            raise HTTPException(
+                status_code=403,
+                detail="Hosts cannot leave the room. Please delete the room instead.",
+            )
+
+        await membership_repo.leave_room(user_id, room_id)
+        return await refresh_room_state(room_id, "participant_left")
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        if isinstance(e, HTTPException):
+            raise
+        raise HTTPException(status_code=500, detail=f"Failed to leave room: {str(e)}")
+
+
+async def create_room_service(
+    name: str, user_id: str, display_name: str, supported_provider_id: str
+) -> dict[str, object]:
+    """Create a new room, validating user and provider."""
+    await ensure_user_display_name(user_id, display_name)
+    await ensure_provider_exists(supported_provider_id)
+
+    pa = await music_provider_repo.get_provider_account_by_user(
+        user_id, supported_provider_id
+    )
+    if not pa or not pa.refreshToken:
+        raise HTTPException(
+            status_code=403,
+            detail="You must link your Spotify account before creating a room",
+        )
+
+    try:
+        room = await room_repo.create_room(
+            user_id,
+            supported_provider_id,
+            name,
+        )
+        await ensure_active_membership(user_id, room.roomId)
+        await refresh_room_state(room.roomId, "room_created")
+        return {
+            "success": True,
+            "message": f"Successfully created room {room.roomId}",
+            "room_id": room.roomId,
+            "join_code": room.joinCode,
+        }
+    except ValueError as e:
+        if "already exists" in str(e):
+            raise HTTPException(status_code=400, detail="Room already exists")
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        # Re-raise HTTPExceptions, wrap others in 500
+        if isinstance(e, HTTPException):
+            raise
+        raise HTTPException(status_code=500, detail=f"Failed to create room: {str(e)}")
+
+
+async def join_room_service(
+    join_code: str, user_id: str, display_name: str
+) -> dict[str, object]:
+    """Validate and join a room by its join code."""
+    if display_name is None or not display_name.strip():
+        raise HTTPException(status_code=400, detail="Display name is required")
+
+    normalized_code = join_code.strip().upper()
+    if not JOIN_CODE_RE.match(normalized_code):
+        raise HTTPException(
+            status_code=422,
+            detail="Join code must be exactly 6 characters (A-Z, 2-9, no I/O/0/1).",
+        )
+
+    await ensure_user_display_name(user_id, display_name)
+
+    try:
+        room = await room_repo.get_room_by_join_code(normalized_code)
+    except ResourceNotFoundError:
+        raise HTTPException(status_code=404, detail="Room not found")
+
+    if room.status != RoomStatus.ACTIVE:
+        raise HTTPException(
+            status_code=410,
+            detail="This session has ended and is no longer available.",
+        )
+
+    try:
+        await ensure_active_membership(user_id, room.roomId)
+        await refresh_room_state(room.roomId, "participant_joined")
+        return {
+            "success": True,
+            "message": f"Successfully joined room {room.roomId}",
+            "room_id": room.roomId,
+            "join_code": room.joinCode,
+        }
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        if isinstance(e, HTTPException):
+            raise
+        raise HTTPException(status_code=500, detail=f"Failed to join room: {str(e)}")
 
 
 async def delete_room_service(room_id: str, user_id: str) -> dict[str, object]:
-    # Get room and validate
-    room = await crud.get_room(room_id)
-    if not room:
+    try:
+        # Get room and validate
+        room = await room_repo.get_room(room_id)
+        if room.hostedBy != user_id:
+            raise HTTPException(status_code=403, detail="Only host can delete room")
+
+        # Update room status
+        await room_repo.update_room_status(room_id, RoomStatus.DELETED)
+
+        # Update all memberships
+        memberships_list = await membership_repo.get_room_memberships(room_id)
+        from core.database import get_session_factory
+
+        session_factory = get_session_factory()
+        async with session_factory() as session:
+            for membership in memberships_list:
+                # Re-fetch or merge into session if needed, but here we can just update
+                membership = await session.merge(membership)
+                membership.membershipStatus = MembershipStatus.INACTIVE
+                if membership.leftAt is None:
+                    membership.leftAt = datetime.now(UTC).replace(tzinfo=None)
+            await session.commit()
+
+        return await refresh_room_state(room_id, "room_deleted")
+    except ResourceNotFoundError:
         raise HTTPException(status_code=404, detail="Room not found")
-    if room.hostedBy != user_id:
-        raise HTTPException(status_code=403, detail="Only host can delete room")
-
-    # Update room status
-    await crud.update_room_status(room_id, RoomStatus.DELETED)
-
-    # Update all memberships
-    memberships = await crud.get_room_memberships(room_id)
-    from core.database import get_session_factory
-
-    session_factory = get_session_factory()
-    async with session_factory() as session:
-        for membership in memberships:
-            # Re-fetch or merge into session if needed, but here we can just update
-            membership = await session.merge(membership)
-            membership.membershipStatus = MembershipStatus.INACTIVE
-            if membership.leftAt is None:
-                membership.leftAt = datetime.now(UTC).replace(tzinfo=None)
-        await session.commit()
-
-    return await refresh_room_state(room_id, "room_deleted")
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        if isinstance(e, HTTPException):
+            raise
+        raise HTTPException(status_code=500, detail=f"Failed to delete room: {str(e)}")
 
 
 async def ensure_user_display_name(user_id: str, display_name: str) -> None:
@@ -463,20 +637,20 @@ async def ensure_user_display_name(user_id: str, display_name: str) -> None:
 
     user_exists = True
     try:
-        await crud.get_user(user_id)
+        await user_repo.get_user(user_id)
     except ResourceNotFoundError:
         user_exists = False
 
     if not user_exists:
         try:
-            await crud.create_user(user_id, trimmed)
+            await user_repo.create_user(user_id, trimmed)
             return
         except ValueError as e:
             if "already exists" not in str(e):
                 raise HTTPException(status_code=400, detail=str(e)) from e
     try:
-        await crud.update_user_display_name(user_id, trimmed)
-    except ValueError as e:
+        await user_repo.update_user_display_name(user_id, trimmed)
+    except ResourceNotFoundError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
 
 
@@ -484,7 +658,7 @@ async def ensure_provider_exists(provider_id: str) -> None:
     from core.exceptions import ResourceNotFoundError
 
     try:
-        await crud.get_music_provider(provider_id)
+        await music_provider_repo.get_music_provider(provider_id)
     except ResourceNotFoundError:
         raise HTTPException(
             status_code=400, detail=f"Unsupported music provider: {provider_id}. "
@@ -493,27 +667,45 @@ async def ensure_provider_exists(provider_id: str) -> None:
 
 async def ensure_active_membership(user_id: str, room_id: str) -> None:
     try:
-        await crud.update_membership_status(user_id, room_id, MembershipStatus.ACTIVE)
-    except ValueError:
+        await membership_repo.update_room_membership_status(
+            user_id, room_id, MembershipStatus.ACTIVE
+        )
+    except ResourceNotFoundError:
         # Membership doesn't exist, create it
-        await crud.create_room_membership(user_id, room_id)
+        await membership_repo.create_room_membership(user_id, room_id)
 
 
 async def rename_participant(
     room_id: str, user_id: str, display_name: str
 ) -> dict[str, object]:
-    room = await crud.get_room(room_id)
-    if not room:
-        raise HTTPException(status_code=404, detail="Room not found")
+    try:
+        try:
+            await room_repo.get_room(room_id)
+        except ResourceNotFoundError:
+            raise HTTPException(status_code=404, detail="Room not found")
 
-    membership = await crud.get_room_membership(user_id, room_id)
-    if not membership or membership.membershipStatus != MembershipStatus.ACTIVE:
+        try:
+            membership = await membership_repo.get_room_membership(user_id, room_id)
+        except ResourceNotFoundError:
+            raise HTTPException(
+                status_code=403, detail="Only active room participants can rename"
+            )
+
+        if membership.membershipStatus != MembershipStatus.ACTIVE:
+            raise HTTPException(
+                status_code=403, detail="Only active room participants can rename"
+            )
+
+        await ensure_user_display_name(user_id, display_name)
+        return await refresh_room_state(room_id, "participant_renamed")
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        if isinstance(e, HTTPException):
+            raise
         raise HTTPException(
-            status_code=403, detail="Only active room participants can rename"
+            status_code=500, detail=f"Failed to rename participant: {str(e)}"
         )
-
-    await ensure_user_display_name(user_id, display_name)
-    return await refresh_room_state(room_id, "participant_renamed")
 
 
 async def check_room_availability(
@@ -523,7 +715,7 @@ async def check_room_availability(
     Check availability of rooms by join codes.
 
     Returns a tuple of (available_codes, unavailable_codes).
-    Unavailable codes include invalid, duplicate, and non-existent/inactive rooms.
+    Unavailable codes include invalid, duplicate, and non-existent/inactive room_repo.
     """
     unique_codes: list[str] = []
     seen_codes: set[str] = set()
@@ -540,7 +732,7 @@ async def check_room_availability(
         seen_codes.add(normalized_code)
         unique_codes.append(normalized_code)
 
-    available = await crud.get_active_join_codes(unique_codes)
+    available = await room_repo.get_all_active_rooms_by_join_codes(unique_codes)
     available_set = set(available)
     unavailable = [
         code for code in unique_codes if code not in available_set

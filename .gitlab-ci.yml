@@ -2,6 +2,7 @@ stages:
   - lint
   - unit_test
   - integration_test
+  - system_test
   - modularity
   - build
   - docker
@@ -178,13 +179,13 @@ backend:unit:
     - uv sync --frozen
   script:
     # Use --allow-hosts to whitelist docker and localhost while blocking the internet
-    - uv run --with pytest pytest --allow-hosts=docker,localhost,127.0.0.1 --allow-unix-socket -m "not integration" -q --junit-xml=junit-unit.xml
+    - uv run --with pytest pytest --allow-hosts=docker,localhost,127.0.0.1 --allow-unix-socket -m "not system" -q --junit-xml=junit-all.xml
   coverage: '/TOTAL.*\s+(\d+\%)/'
   artifacts:
     when: always
     expire_in: 7 days
     reports:
-      junit: backend/python/junit-unit.xml
+      junit: backend/python/junit-all.xml
       coverage_report:
         coverage_format: cobertura
         path: backend/python/cobertura.xml
@@ -204,6 +205,41 @@ backend:integration:
   after_script:
     - cd backend
     - docker compose -f compose.test.yaml down -v
+
+system:e2e:
+  stage: system_test
+  image: docker:24
+  services:
+    - name: docker:24-dind
+  allow_failure: true
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      changes:
+        - backend/**/*
+        - frontend/**/*
+        - compose.yaml
+        - compose.system.yaml
+        - backend/compose.yaml
+        - frontend/compose.yaml
+        - Makefile
+      when: manual
+    - if: $CI_COMMIT_BRANCH
+      changes:
+        - backend/**/*
+        - frontend/**/*
+        - compose.yaml
+        - compose.system.yaml
+        - backend/compose.yaml
+        - frontend/compose.yaml
+        - Makefile
+      when: manual
+  before_script:
+    - *dockerhub_auth
+    - apk add --no-cache docker-compose bash
+    - chmod +x ./scripts/setup_backend_env.sh
+    - ./scripts/setup_backend_env.sh
+  script:
+    - make test-system
 
 # -----------------------
 # Frontend, SvelteKit (Vite)

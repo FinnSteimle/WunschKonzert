@@ -27,12 +27,12 @@ describe('PlaybackProgress', () => {
 	});
 
 	it('shows playback state when provided', () => {
-		render(PlaybackProgress, { positionMs: 0, durationMs: 60_000, state: 'playing' });
+		render(PlaybackProgress, { positionMs: 0, durationMs: 60_000, playbackState: 'playing' });
 		expect(screen.getByText('playing')).toBeTruthy();
 	});
 
 	it('shows paused state', () => {
-		render(PlaybackProgress, { positionMs: 30_000, durationMs: 60_000, state: 'paused' });
+		render(PlaybackProgress, { positionMs: 30_000, durationMs: 60_000, playbackState: 'paused' });
 		expect(screen.getByText('paused')).toBeTruthy();
 	});
 

@@ -1,9 +1,12 @@
 import uuid
+from datetime import UTC, datetime, timedelta
 
 import pytest
 
-from repositories import crud
+from repositories import membership_repo, music_provider_repo, user_repo
 from services.providers.base import ProviderTrack
+
+pytestmark = pytest.mark.integration
 
 
 @pytest.mark.asyncio
@@ -24,12 +27,22 @@ async def test_hello_world(client):
 async def test_create_room_success(client, db_session):
     # Seed provider
     provider_id = "spotify"
-    await crud.create_music_provider(provider_id, "Spotify", db_session)
+    user_id = str(uuid.uuid4())
+    await user_repo.create_user(user_id, "Host User", db_session)
+    await music_provider_repo.create_music_provider(provider_id, "Spotify", db_session)
     await db_session.commit()
+    await music_provider_repo.create_or_update_provider_account_tokens(
+        user_id=user_id,
+        provider_id=provider_id,
+        external_user_id="spotify-user",
+        access_token="access-token",
+        refresh_token="refresh-token",
+        token_expires_at=datetime.now(UTC) + timedelta(hours=1),
+    )
 
     payload = {
         "name": "My Awesome Room",
-        "user_id": str(uuid.uuid4()),
+        "user_id": user_id,
         "display_name": "Host User",
         "supported_provider_id": provider_id,
     }
@@ -102,9 +115,9 @@ async def test_leave_room_success(client, db_session, init_room):
     host_id = str(uuid.uuid4())
     room = await init_room(user_id=host_id)
     guest_id = str(uuid.uuid4())
-    await crud.create_user(guest_id, "Guest", db_session)
+    await user_repo.create_user(guest_id, "Guest", db_session)
     await db_session.commit()
-    await crud.create_room_membership(guest_id, room.roomId)
+    await membership_repo.create_room_membership(guest_id, room.roomId)
 
     payload = {"room_id": room.roomId, "user_id": guest_id}
     response = await client.post("/leave_room", json=payload)

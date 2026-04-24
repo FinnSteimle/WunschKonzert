@@ -11,7 +11,13 @@ from testcontainers.postgres import PostgresContainer
 
 import core.database
 from models.domain import Base
-from repositories import crud
+from repositories import (
+    crud,
+    membership_repo,
+    music_provider_repo,
+    room_repo,
+    user_repo,
+)
 from services import room_service
 
 """
@@ -21,17 +27,27 @@ It creates a brand new psql-container, creates an engine and session to use for 
 
 
 @pytest.fixture(scope="session")
-def postgres_container():
-    """Spin up a Postgres container for the whole test session."""
+def postgres_connection_url():
+    """
+    Return a database URL for integration tests.
+
+    Prefer an explicitly provided test database when running in CI/containerized
+    environments. Fall back to a disposable Postgres testcontainer for local runs.
+    """
+    external_url = os.getenv("TEST_DATABASE_URL")
+    if external_url:
+        yield external_url
+        return
+
     postgres_image = os.getenv("POSTGRES_TEST_IMAGE", "postgres:17-alpine")
     with PostgresContainer(postgres_image) as postgres:
-        yield postgres
+        yield postgres.get_connection_url()
 
 
 @pytest.fixture(scope="session")
-async def db_engine(postgres_container):
-    """Create a database engine for the test container."""
-    url = postgres_container.get_connection_url()
+async def db_engine(postgres_connection_url):
+    """Create a database engine for the integration test database."""
+    url = postgres_connection_url
 
     # Force the use of asyncpg driver
     if "://" in url:
@@ -42,7 +58,12 @@ async def db_engine(postgres_container):
 
     # NullPool: no connection pooling — prevents deadlocks when db_session
     # holds a connection while CRUD functions check out additional ones.
-    engine = create_async_engine(url, poolclass=NullPool)
+    engine = create_async_engine(
+        url,
+        poolclass=NullPool,
+        pool_pre_ping=True,
+        connect_args={"timeout": 120, "command_timeout": 120},
+    )
 
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
@@ -62,30 +83,41 @@ async def db_session(session_factory):
     """Get a fresh database session for each test."""
     original_get_session_factory = core.database.get_session_factory
     original_crud_get_session_factory = crud.get_session_factory
+    original_music_provider_get_session_factory = (
+        music_provider_repo.get_session_factory
+    )
+    original_rooms_get_session_factory = room_repo.get_session_factory
+    original_memberships_get_session_factory = membership_repo.get_session_factory
     original_session_factory_singleton = core.database._session_factory
     original_engine_singleton = core.database._engine
 
     # Keep all DB access on the real test factory for this test case.
+    core.database._engine = db_engine
     core.database._session_factory = session_factory
     core.database.get_session_factory = lambda: session_factory
     crud.get_session_factory = lambda: session_factory
+    music_provider_repo.get_session_factory = lambda: session_factory
+    room_repo.get_session_factory = lambda: session_factory
+    membership_repo.get_session_factory = lambda: session_factory
 
-    async with session_factory() as session:
-        yield session
-        # Truncate all tables after each test — rollback alone cannot undo
-        # commits made by CRUD functions that open their own sessions
-        await session.rollback()
-        for table in reversed(Base.metadata.sorted_tables):
-            await session.execute(table.delete())
-        await session.commit()
-
-    # Clear the room state cache to prevent memory accumulation across tests
-    room_service.room_state_cache.clear()
-
-    core.database._engine = original_engine_singleton
-    core.database._session_factory = original_session_factory_singleton
-    crud.get_session_factory = original_crud_get_session_factory
-    core.database.get_session_factory = original_get_session_factory
+    try:
+        async with session_factory() as session:
+            yield session
+            await session.rollback()
+            for table in reversed(Base.metadata.sorted_tables):
+                await session.execute(table.delete())
+            await session.commit()
+    finally:
+        room_service.room_state_cache.clear()
+        core.database._engine = original_engine_singleton
+        core.database._session_factory = original_session_factory_singleton
+        crud.get_session_factory = original_crud_get_session_factory
+        music_provider_repo.get_session_factory = (
+            original_music_provider_get_session_factory
+        )
+        room_repo.get_session_factory = original_rooms_get_session_factory
+        membership_repo.get_session_factory = original_memberships_get_session_factory
+        core.database.get_session_factory = original_get_session_factory
 
 
 @pytest.fixture
@@ -96,19 +128,26 @@ def init_room(db_session):
         room_name="test_room",
         user_id=None,
     ):
-
         provider_id = provider_id or str(uuid.uuid4())
         provider_name = provider_name or f"provider_{str(uuid.uuid4())[:8]}"
         user_id = user_id or str(uuid.uuid4())
 
-        await crud.create_user(user_id, "test_host", db_session)
-        await crud.create_music_provider(provider_id, provider_name, db_session)
+        await user_repo.create_user(user_id, "test_host", db_session)
+        await music_provider_repo.create_music_provider(
+            provider_id, provider_name, db_session
+        )
         await db_session.commit()
 
-        provider = await crud.get_music_provider(provider_id, db_session)
+        provider = await music_provider_repo.get_music_provider(provider_id, db_session)
 
-        room = await crud.create_room(room_name, user_id, provider.providerId)
-        await crud.create_room_membership(user_id, room.roomId)
+        room = await room_repo.create_room(
+            user_id, provider.providerId, room_name, session=db_session
+        )
+        await membership_repo.create_room_membership(
+            user_id, room.roomId, session=db_session
+        )
+
+        await db_session.commit()
         return room
 
     return _factory
@@ -129,8 +168,8 @@ async def client(db_session):
             yield ac
 
 
-@pytest.fixture
-def websocket_client(db_session):
+@pytest.fixture(scope="session")
+def websocket_client():
     """
     Get a fresh FastAPI TestClient for websocket testing.
     We mock lifespan activities like migrations and seeding to avoid side effects.
@@ -140,4 +179,4 @@ def websocket_client(db_session):
     from main import app
 
     with patch("main.run_migrations"), patch("main.initialize_music_providers"):
-        return TestClient(app)
+        yield TestClient(app)

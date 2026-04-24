@@ -166,11 +166,30 @@ class ProviderAccount(Base):
     status: Mapped[AccountStatus] = mapped_column(
         _db_enum(AccountStatus, "accountstatus"), default=AccountStatus.ACTIVE
     )
+    accessToken: Mapped[str | None] = mapped_column(String, nullable=True)
+    refreshToken: Mapped[str | None] = mapped_column(String, nullable=True)
+    tokenExpiresAt: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
 
     # Relationships
     user: Mapped["User"] = relationship("User", back_populates="provider_accounts")
     provider: Mapped["MusicProvider"] = relationship(
         "MusicProvider", back_populates="provider_accounts"
+    )
+
+
+class OAuthStateNonce(Base):
+    __tablename__ = "oauth_state_nonces"
+
+    nonce: Mapped[str] = mapped_column(String, primary_key=True)
+    providerId: Mapped[str] = mapped_column(String, nullable=False)
+    issuedAt: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=lambda: datetime.now(UTC)
+    )
+    expiresAt: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    consumedAt: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
     )
 
 
