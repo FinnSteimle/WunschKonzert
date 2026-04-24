@@ -1,7 +1,11 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/svelte';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import RoomCodeJoinForm from './RoomCodeJoinForm.svelte';
-import { getOrCreateSessionUser, saveSessionDisplayName } from '$lib/session/userSession';
+import {
+	generateRandomDisplayName,
+	getOrCreateSessionUser,
+	saveSessionDisplayName
+} from '$lib/session/userSession';
 import { toast } from 'svelte-sonner';
 import { goto } from '$app/navigation';
 import { resolve } from '$app/paths';
@@ -69,6 +73,19 @@ describe('RoomCodeJoinForm', () => {
 		expect((screen.getByLabelText('Your display name') as HTMLInputElement).value).toBe('Alice');
 	});
 
+	it('auto-generates and persists a display name when no name is stored yet', () => {
+		vi.mocked(getOrCreateSessionUser).mockReturnValue({
+			userId: 'U_JOIN12345',
+			displayName: ''
+		});
+		vi.mocked(generateRandomDisplayName).mockReturnValue('DJ Fox');
+
+		render(RoomCodeJoinForm);
+
+		expect((screen.getByLabelText('Your display name') as HTMLInputElement).value).toBe('DJ Fox');
+		expect(saveSessionDisplayName).toHaveBeenCalledWith('DJ Fox');
+	});
+
 	it('shows an error for invalid room code and does not navigate', async () => {
 		render(RoomCodeJoinForm);
 
@@ -103,13 +120,10 @@ describe('RoomCodeJoinForm', () => {
 	});
 
 	it('shows an error when display name is empty', async () => {
-		vi.mocked(getOrCreateSessionUser).mockReturnValue({
-			userId: 'U_JOIN12345',
-			displayName: ''
-		});
 		render(RoomCodeJoinForm);
 
 		await typeRoomCode('ab2cd3');
+		await fireEvent.input(screen.getByLabelText('Your display name'), { target: { value: '' } });
 		await fireEvent.click(screen.getByRole('button', { name: 'Join room' }));
 
 		expect(toast.error).toHaveBeenCalledWith('Please enter your display name.');

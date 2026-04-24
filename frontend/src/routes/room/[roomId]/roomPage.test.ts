@@ -5,7 +5,7 @@ import { get } from 'svelte/store';
 import RoomPage from './+page.svelte';
 import { roomStore } from '$lib/stores/room';
 import { apiClient } from '$lib/api/client';
-import { getOrCreateSessionUser } from '$lib/session/userSession';
+import { getOrCreateSessionUser, saveSessionDisplayName } from '$lib/session/userSession';
 import { isJoinFailureForRemovedRoom, removeRecentRoom } from '$lib/session/recentRooms';
 import { page } from '$app/state';
 
@@ -174,6 +174,10 @@ describe('room/[roomId]/+page.svelte', () => {
 			expect(screen.getByText('Code AB2CD3')).toBeTruthy();
 			expect(screen.getByRole('button', { name: 'Join room' })).toBeTruthy();
 			expect(screen.getByRole('link', { name: 'Back home' })).toBeTruthy();
+			expect((screen.getByRole('textbox', { name: 'Your display name' }) as HTMLInputElement).value).toBe(
+				'DJ Fox'
+			);
+			expect(saveSessionDisplayName).toHaveBeenCalledWith('DJ Fox');
 		});
 
 		it('shows backend join errors inline after manual link join', async () => {

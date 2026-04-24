@@ -7,7 +7,11 @@
 	import { apiClient } from '$lib/api/client';
 	import { roomStore, getCurrentSong, queueWithoutCurrent } from '$lib/stores/room';
 	import { RoomSocketClient } from '$lib/realtime/roomSocket';
-	import { getOrCreateSessionUser, saveSessionDisplayName } from '$lib/session/userSession';
+	import {
+		generateRandomDisplayName,
+		getOrCreateSessionUser,
+		saveSessionDisplayName
+	} from '$lib/session/userSession';
 	import {
 		isJoinFailureForRemovedRoom,
 		recordRecentRoom,
@@ -435,7 +439,9 @@
 
 			roomStore.setLoading(false);
 			linkJoinCode = parsed.joinCode;
-			linkJoinDisplayName = '';
+			const generatedDisplayName = generateRandomDisplayName();
+			linkJoinDisplayName = generatedDisplayName;
+			saveSessionDisplayName(generatedDisplayName);
 			linkJoinError = null;
 			return () => {
 				linkJoinLifecycle.cancelled = true;
