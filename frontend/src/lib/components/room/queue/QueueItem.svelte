@@ -39,12 +39,17 @@
 		<p class="text-muted-foreground line-clamp-1 text-xs">{entry.track.artist}</p>
 		<p class="text-muted-foreground mt-1 text-[11px]">by {entry.addedBy.displayName}</p>
 		<div class="mt-2 flex flex-wrap items-center gap-2">
-			<Badge variant="secondary" class="tabular-nums">Score {entry.voteScore}</Badge>
-			<span class="text-muted-foreground text-xs tabular-nums">+{upvotes} / −{downvotes}</span>
+			<Badge variant="secondary" class="text-sm tabular-nums">Score {entry.voteScore}</Badge>
 			{#if entry.status}
 				<Badge variant="outline" class="text-[10px] capitalize">{entry.status}</Badge>
 			{/if}
 		</div>
 	</div>
 </div>
-<VoteButtons state={personalVote} {busy} onVote={(v) => onVote?.(entry.queueEntryId, v)} />
+<VoteButtons
+	state={personalVote}
+	{upvotes}
+	{downvotes}
+	{busy}
+	onVote={(v) => onVote?.(entry.queueEntryId, v)}
+/>

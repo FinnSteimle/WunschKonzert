@@ -91,21 +91,21 @@ describe('VoteButtons', () => {
 
 	it('disables buttons when disabled prop is set', () => {
 		render(VoteButtons, { state: 'neutral', disabled: true });
-		expect(
-			(screen.getByRole('button', { name: 'Upvote' }) as HTMLButtonElement).disabled
-		).toBe(true);
-		expect(
-			(screen.getByRole('button', { name: 'Downvote' }) as HTMLButtonElement).disabled
-		).toBe(true);
+		expect((screen.getByRole('button', { name: 'Upvote' }) as HTMLButtonElement).disabled).toBe(
+			true
+		);
+		expect((screen.getByRole('button', { name: 'Downvote' }) as HTMLButtonElement).disabled).toBe(
+			true
+		);
 	});
 
 	it('disables buttons when busy prop is set', () => {
 		render(VoteButtons, { state: 'neutral', busy: true });
-		expect(
-			(screen.getByRole('button', { name: 'Upvote' }) as HTMLButtonElement).disabled
-		).toBe(true);
-		expect(
-			(screen.getByRole('button', { name: 'Downvote' }) as HTMLButtonElement).disabled
-		).toBe(true);
+		expect((screen.getByRole('button', { name: 'Upvote' }) as HTMLButtonElement).disabled).toBe(
+			true
+		);
+		expect((screen.getByRole('button', { name: 'Downvote' }) as HTMLButtonElement).disabled).toBe(
+			true
+		);
 	});
 });
