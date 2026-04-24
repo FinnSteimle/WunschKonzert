@@ -38,6 +38,20 @@ function deferred<T>() {
 	return { promise, resolvePromise, rejectPromise };
 }
 
+function getCodeInputs() {
+	return Array.from({ length: 6 }, (_, index) =>
+		screen.getByLabelText(`Room code character ${index + 1}`)
+	) as HTMLInputElement[];
+}
+
+async function typeRoomCode(rawCode: string) {
+	const codeInputs = getCodeInputs();
+	const normalized = rawCode.replace(/\s/g, '').toUpperCase().slice(0, 6);
+	for (const [index, char] of normalized.split('').entries()) {
+		await fireEvent.input(codeInputs[index], { target: { value: char } });
+	}
+}
+
 describe('RoomCodeJoinForm', () => {
 	beforeEach(() => {
 		localStorage.clear();
@@ -58,7 +72,7 @@ describe('RoomCodeJoinForm', () => {
 	it('shows an error for invalid room code and does not navigate', async () => {
 		render(RoomCodeJoinForm);
 
-		await fireEvent.input(screen.getByLabelText('Room code'), { target: { value: 'abc12' } });
+		await typeRoomCode('abc12');
 		await fireEvent.click(screen.getByRole('button', { name: 'Join room' }));
 
 		expect(toast.error).toHaveBeenCalledWith('Enter a valid 6-character room code.');
@@ -69,7 +83,7 @@ describe('RoomCodeJoinForm', () => {
 		render(RoomCodeJoinForm);
 
 		for (const code of ['AB1CD3', 'AB0CD3', 'ABICD3', 'ABOCD3']) {
-			await fireEvent.input(screen.getByLabelText('Room code'), { target: { value: code } });
+			await typeRoomCode(code);
 			await fireEvent.click(screen.getByRole('button', { name: 'Join room' }));
 		}
 
@@ -81,7 +95,7 @@ describe('RoomCodeJoinForm', () => {
 	it('rejects whitespace-only room codes', async () => {
 		render(RoomCodeJoinForm);
 
-		await fireEvent.input(screen.getByLabelText('Room code'), { target: { value: '      ' } });
+		await typeRoomCode('      ');
 		await fireEvent.click(screen.getByRole('button', { name: 'Join room' }));
 
 		expect(toast.error).toHaveBeenCalledWith('Enter a valid 6-character room code.');
@@ -95,7 +109,7 @@ describe('RoomCodeJoinForm', () => {
 		});
 		render(RoomCodeJoinForm);
 
-		await fireEvent.input(screen.getByLabelText('Room code'), { target: { value: 'ab2cd3' } });
+		await typeRoomCode('ab2cd3');
 		await fireEvent.click(screen.getByRole('button', { name: 'Join room' }));
 
 		expect(toast.error).toHaveBeenCalledWith('Please enter your display name.');
@@ -105,7 +119,7 @@ describe('RoomCodeJoinForm', () => {
 	it('rejects whitespace-only display names', async () => {
 		render(RoomCodeJoinForm);
 
-		await fireEvent.input(screen.getByLabelText('Room code'), { target: { value: 'AB2CD3' } });
+		await typeRoomCode('AB2CD3');
 		await fireEvent.input(screen.getByLabelText('Your display name'), { target: { value: '    ' } });
 		await fireEvent.click(screen.getByRole('button', { name: 'Join room' }));
 
@@ -116,7 +130,7 @@ describe('RoomCodeJoinForm', () => {
 	it('normalizes code and navigates to room route on submit', async () => {
 		render(RoomCodeJoinForm);
 
-		await fireEvent.input(screen.getByLabelText('Room code'), { target: { value: ' ab 2cd3 ' } });
+		await typeRoomCode(' ab 2cd3 ');
 		await fireEvent.input(screen.getByLabelText('Your display name'), {
 			target: { value: '  Alice Cooper  ' }
 		});
@@ -129,13 +143,24 @@ describe('RoomCodeJoinForm', () => {
 		expect(getOrCreateSessionUser).toHaveBeenCalledTimes(2);
 	});
 
-	it('normalizes pasted room codes in the input field', async () => {
+	it('normalizes pasted room codes in the multi-field input', async () => {
 		render(RoomCodeJoinForm);
-		const codeInput = screen.getByLabelText('Room code') as HTMLInputElement;
+		const codeInputs = getCodeInputs();
+		await fireEvent.paste(codeInputs[0], {
+			clipboardData: { getData: () => '  ab 2cd3  ' }
+		});
 
-		await fireEvent.input(codeInput, { target: { value: '  ab 2cd3  ' } });
+		expect(codeInputs.map((input) => input.value).join('')).toBe('AB2CD3');
+	});
 
-		expect(codeInput.value).toBe('AB2CD3');
+	it('always pastes room code from the first field', async () => {
+		render(RoomCodeJoinForm);
+		const codeInputs = getCodeInputs();
+		await fireEvent.paste(codeInputs[3], {
+			clipboardData: { getData: () => 'CD2EF3' }
+		});
+
+		expect(codeInputs.map((input) => input.value).join('')).toBe('CD2EF3');
 	});
 
 	it('shows busy state while navigation is in flight', async () => {
@@ -143,11 +168,13 @@ describe('RoomCodeJoinForm', () => {
 		vi.mocked(goto).mockReturnValue(navigation.promise);
 		render(RoomCodeJoinForm);
 
-		await fireEvent.input(screen.getByLabelText('Room code'), { target: { value: 'ab2cd3' } });
+		await typeRoomCode('ab2cd3');
 		await fireEvent.click(screen.getByRole('button', { name: 'Join room' }));
 
 		expect((screen.getByRole('button', { name: 'Joining…' }) as HTMLButtonElement).disabled).toBe(true);
-		expect((screen.getByLabelText('Room code') as HTMLInputElement).disabled).toBe(true);
+		for (const input of getCodeInputs()) {
+			expect(input.disabled).toBe(true);
+		}
 		expect((screen.getByLabelText('Your display name') as HTMLInputElement).disabled).toBe(true);
 
 		navigation.resolvePromise();

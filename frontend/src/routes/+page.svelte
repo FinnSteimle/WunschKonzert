@@ -10,6 +10,7 @@
 	import RoomCodeJoinForm from '$lib/components/room/forms/RoomCodeJoinForm.svelte';
 	import RecentRoomsPanel from '$lib/components/home/RecentRoomsPanel.svelte';
 	import ListMusicIcon from '@lucide/svelte/icons/list-music';
+	import PlusIcon from '@lucide/svelte/icons/plus';
 	import RadioIcon from '@lucide/svelte/icons/radio';
 	import Share2Icon from '@lucide/svelte/icons/share-2';
 	import UsersIcon from '@lucide/svelte/icons/users';
@@ -64,11 +65,11 @@
 			icon: Share2Icon,
 			title: 'Easy invites',
 			body: 'Share the code or link—no accounts needed for guests to join the room.'
-	},
-	{
-		icon: UsersIcon,
-		title: 'Host controls',
-		body: 'Room hosts steer the session and keep the queue organized during playback.'
+		},
+		{
+			icon: UsersIcon,
+			title: 'Host controls',
+			body: 'Room hosts steer the session and keep the queue organized during playback.'
 		}
 	];
 </script>
@@ -200,7 +201,10 @@
 					>
 						Hosting a session?
 					</p>
-					<Button href="/create" class="w-full sm:w-auto lg:w-full xl:w-auto">Create a room</Button>
+					<Button href="/create" class="w-full sm:w-auto lg:w-full xl:w-auto">
+						<PlusIcon class="h-4 w-4" aria-hidden="true" />
+						Create a room
+					</Button>
 				</div>
 			</div>
 		</div>
