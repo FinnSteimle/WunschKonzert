@@ -39,6 +39,7 @@
 	import InvitePanelDialog from '$lib/components/room/invite/InvitePanelDialog.svelte';
 	import LoadingState from '$lib/components/room/states/LoadingState.svelte';
 	import EmptyState from '$lib/components/room/states/EmptyState.svelte';
+	import SongHistoryModal from '$lib/components/room/history/SongHistoryModal.svelte';
 	import * as Dialog from '$lib/components/ui/dialog';
 	import { Button } from '$lib/components/ui/button';
 	import { Input } from '$lib/components/ui/input';
@@ -561,7 +562,10 @@
 				</section>
 
 				<section class="flex min-w-0 flex-col gap-3 lg:col-span-8" aria-labelledby="wk-queue">
-					<h2 id="wk-queue" class="text-sm font-medium">Queue</h2>
+					<div class="flex items-center justify-between">
+						<h2 id="wk-queue" class="text-sm font-medium">Queue</h2>
+						<SongHistoryModal roomState={rs} />
+					</div>
 					<QueueList
 						entries={queueWithoutCurrent(rs)}
 						userId={sessionUser.userId}
