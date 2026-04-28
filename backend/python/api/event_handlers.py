@@ -54,7 +54,7 @@ from typing import Callable
 import services.room_service as room_service
 
 # Type alias: every handler takes (room_id, event_dict) and returns nothing (async)
-EventHandler = Callable[[str, dict], Awaitable[None]]
+EventHandler = Callable[[str, dict[str, object]], Awaitable[None]]
 
 _HANDLERS: dict[str, EventHandler] = {}
 
@@ -70,72 +70,77 @@ def register(event_type: str) -> Callable[[EventHandler], EventHandler]:
 
 
 @register("addqueue")
-async def _handle_addqueue(room_id: str, event: dict) -> None:
-    await room_service.add_to_queue(room_id, event.get("track"), event.get("user_id"))
+async def _handle_addqueue(room_id: str, event: dict[str, object]) -> None:
+    track = event.get("track")
+    user_id = str(event.get("user_id", ""))
+    if not isinstance(track, dict):
+        return
+    await room_service.add_to_queue(room_id, track, user_id)
 
 
 @register("remove_queue_entry")
-async def _handle_remove_queue_entry(room_id: str, event: dict) -> None:
+async def _handle_remove_queue_entry(room_id: str, event: dict[str, object]) -> None:
     await room_service.remove_queue_entry(
         room_id=room_id,
-        queue_entry_id=event.get("queue_entry_id"),
-        user_id=event.get("user_id"),
+        queue_entry_id=str(event.get("queue_entry_id", "")),
+        user_id=str(event.get("user_id", "")),
     )
 
 
 @register("vote")
-async def _handle_vote(room_id: str, event: dict) -> None:
+async def _handle_vote(room_id: str, event: dict[str, object]) -> None:
     await room_service.vote_queue_entry(
         room_id=room_id,
-        queue_entry_id=event.get("queue_entry_id"),
-        user_id=event.get("user_id"),
-        vote_type=event.get("vote_type", "neutral"),
+        queue_entry_id=str(event.get("queue_entry_id", "")),
+        user_id=str(event.get("user_id", "")),
+        vote_type=str(event.get("vote_type", "neutral")),
     )
 
 
 @register("playback")
-async def _handle_playback(room_id: str, event: dict) -> None:
+async def _handle_playback(room_id: str, event: dict[str, object]) -> None:
+    position_ms = event.get("position_ms")
     await room_service.set_playback_state(
         room_id=room_id,
-        user_id=event.get("user_id"),
-        action=event.get("action"),
-        position_ms=event.get("position_ms"),
+        user_id=str(event.get("user_id", "")),
+        action=str(event.get("action", "")),
+        position_ms=int(position_ms) if isinstance(position_ms, (int, float)) else None,
     )
 
 
 @register("position_sync")
-async def _handle_position_sync(room_id: str, event: dict) -> None:
+async def _handle_position_sync(room_id: str, event: dict[str, object]) -> None:
     pos = event.get("position_ms")
     if isinstance(pos, (int, float)):
         await room_service.sync_playback_position(
-            room_id, event.get("user_id", ""), int(pos)
+            room_id, str(event.get("user_id", "")), int(pos)
         )
 
 
 @register("rename")
-async def _handle_rename(room_id: str, event: dict) -> None:
+async def _handle_rename(room_id: str, event: dict[str, object]) -> None:
     await room_service.rename_participant(
         room_id=room_id,
-        user_id=event.get("user_id"),
-        display_name=event.get("display_name", ""),
+        user_id=str(event.get("user_id", "")),
+        display_name=str(event.get("display_name", "")),
     )
 
 
 @register("leave")
-async def _handle_leave(room_id: str, event: dict) -> None:
-    await room_service.leave_room_service(room_id, event.get("user_id"))
+async def _handle_leave(room_id: str, event: dict[str, object]) -> None:
+    await room_service.leave_room_service(room_id, str(event.get("user_id", "")))
 
 
 async def dispatch(room_id: str, data: str) -> None:
     """Parse an incoming WebSocket message and dispatch to the registered handler."""
     try:
-        event = json.loads(data)
+        event: dict[str, object] = json.loads(data)
     except json.JSONDecodeError:
         print(f"Invalid JSON received: {data}")
         return
 
     event_type = event.get("type")
-    handler = _HANDLERS.get(event_type)
+    handler = _HANDLERS.get(str(event_type)) if event_type is not None else None
 
     if handler is None:
         print(f"Unknown event type: {event_type}")

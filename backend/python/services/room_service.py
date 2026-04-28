@@ -338,8 +338,8 @@ async def add_to_queue(
 async def remove_queue_entry(
     room_id: str, queue_entry_id: str, user_id: str
 ) -> dict[str, object]:
-    queue_entry = await queue_entry_repo.get_queue_entries(queue_entry_id)
-    if queue_entry.roomId != room_id:
+    queue_entry = await queue_entry_repo.get_queue_entry(queue_entry_id)
+    if not queue_entry or queue_entry.roomId != room_id:
         raise HTTPException(status_code=404, detail="Queue entry not found")
 
     try:
