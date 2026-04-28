@@ -222,7 +222,6 @@ system:e2e:
         - backend/compose.yaml
         - frontend/compose.yaml
         - Makefile
-      when: manual
     - if: $CI_COMMIT_BRANCH
       changes:
         - backend/**/*

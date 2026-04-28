@@ -7,7 +7,7 @@ import httpx
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import RedirectResponse
 
-import repositories.crud as crud
+import repositories.music_provider_repo as music_provider_repo
 import services.room_service as room_service
 from services.providers import spotify_oauth
 
@@ -48,7 +48,7 @@ async def spotify_callback(
         sep = "&" if "?" in return_to else "?"
         return RedirectResponse(f"{return_to}{sep}spotify_error={exc.code}")
 
-    await crud.create_or_update_provider_account_tokens(
+    await music_provider_repo.create_or_update_provider_account_tokens(
         user_id=user_id,
         provider_id="spotify",
         external_user_id=external_user_id,
@@ -64,7 +64,7 @@ async def spotify_callback(
 @router.get("/auth/spotify/token")
 async def spotify_token(user_id: str) -> dict[str, str]:
     """Return a fresh Spotify access token for the Web Playback SDK."""
-    pa = await crud.get_provider_account_by_user(user_id, "spotify")
+    pa = await music_provider_repo.get_provider_account_by_user(user_id, "spotify")
     if not pa or not pa.refreshToken:
         raise HTTPException(
             status_code=404,
@@ -99,7 +99,7 @@ async def spotify_token(user_id: str) -> dict[str, str]:
     expires_in = int(token_data.get("expires_in", 3600))
     new_expires = datetime.now(UTC) + timedelta(seconds=max(60, expires_in - 60))
 
-    await crud.update_provider_account_tokens(
+    await music_provider_repo.update_provider_account_tokens(
         pa.providerAccountId,
         access_token=new_access,
         token_expires_at=new_expires,

@@ -3,7 +3,7 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 
-from repositories import crud, membership_repo, user_repo
+from repositories import membership_repo, music_provider_repo, user_repo
 from services.providers.base import ProviderTrack
 
 pytestmark = pytest.mark.integration
@@ -29,9 +29,9 @@ async def test_create_room_success(client, db_session):
     provider_id = "spotify"
     user_id = str(uuid.uuid4())
     await user_repo.create_user(user_id, "Host User", db_session)
-    await crud.create_music_provider(provider_id, "Spotify", db_session)
+    await music_provider_repo.create_music_provider(provider_id, "Spotify", db_session)
     await db_session.commit()
-    await crud.create_or_update_provider_account_tokens(
+    await music_provider_repo.create_or_update_provider_account_tokens(
         user_id=user_id,
         provider_id=provider_id,
         external_user_id="spotify-user",

@@ -4,9 +4,13 @@ from datetime import UTC, datetime
 
 from fastapi import HTTPException
 
-import repositories.crud as crud
 import repositories.membership_repo as membership_repo
+import repositories.music_provider_repo as music_provider_repo
+import repositories.playback_session_repo as playback_session_repo
+import repositories.queue_entry_repo as queue_entry_repo
 import repositories.room_repo as room_repo
+import repositories.song_feedback_repo as song_feedback_repo
+import repositories.track_repo as track_repo
 import repositories.user_repo as user_repo
 from core.exceptions import ResourceNotFoundError
 from models.domain import (
@@ -95,7 +99,7 @@ async def _build_room_state(room_id: str) -> dict[str, object] | None:
         )
 
     # Get queue entries with tracks and users
-    queue_entries = await crud.get_queue_entries(room_id)
+    queue_entries = await queue_entry_repo.get_queue_entries(room_id)
     queue_entry_ids = [entry.queueEntryId for entry in queue_entries]
 
     # Build feedback map
@@ -104,13 +108,15 @@ async def _build_room_state(room_id: str) -> dict[str, object] | None:
     }
 
     for entry_id in queue_entry_ids:
-        feedback_list = await crud.get_song_feedback_by_queue_entry(entry_id)
+        feedback_list = await song_feedback_repo.get_song_feedback_by_queue_entry(
+            entry_id
+        )
         feedback_map[entry_id].extend(feedback_list)
 
     # Build queue
     queue: list[dict[str, object]] = []
     for queue_entry in queue_entries:
-        track = await crud.get_track(queue_entry.trackId)
+        track = await track_repo.get_track(queue_entry.trackId)
         added_by_user = await user_repo.get_user(queue_entry.addedBy)
 
         if not track or not added_by_user:
@@ -167,7 +173,7 @@ async def _build_room_state(room_id: str) -> dict[str, object] | None:
     )
 
     # Get latest playback session
-    latest_playback = await crud.get_current_playback_session(room_id)
+    latest_playback = await playback_session_repo.get_current_playback_session(room_id)
 
     playback = {
         "state": "stopped",
@@ -232,12 +238,12 @@ async def sync_playback_position(room_id: str, user_id: str, position_ms: int) -
     if room.hostedBy != user_id:
         return
 
-    session = await crud.get_current_playback_session(room_id)
+    session = await playback_session_repo.get_current_playback_session(room_id)
     if not session or _enum_value(session.state) != "playing":
         return
 
     elapsed = max(0, position_ms // 1000)
-    await crud.update_playback_session(
+    await playback_session_repo.update_playback_session(
         session.playbackSessionId, {"elapsedTime": elapsed}
     )
 
@@ -270,9 +276,9 @@ async def add_to_queue(
         raise HTTPException(status_code=404, detail="User not found")
 
     # Get or create track
-    db_track = await crud.get_track(str(track_data["trackId"]))
+    db_track = await track_repo.get_track(str(track_data["trackId"]))
     if not db_track:
-        db_track = await crud.create_track(
+        db_track = await track_repo.create_track(
             {
                 "trackId": track_data["trackId"],
                 "providerTrackId": track_data["providerTrackId"],
@@ -286,20 +292,20 @@ async def add_to_queue(
         )
 
     # Block duplicates only while an existing entry is still active/unplayed.
-    existing_entry = await crud.get_queue_entry_by_track(
+    existing_entry = await queue_entry_repo.get_queue_entry_by_track(
         room_id, str(track_data["trackId"])
     )
     if existing_entry and existing_entry.status != QueueEntryStatus.PLAYED:
         raise HTTPException(status_code=409, detail="Song is already in the queue")
 
     # Get max position and check for playing entries
-    max_position = await crud.get_max_queue_position(room_id)
+    max_position = await queue_entry_repo.get_max_queue_position(room_id)
     next_position = max_position + 1
-    has_playing = await crud.get_playing_queue_entry(room_id)
+    has_playing = await queue_entry_repo.get_playing_queue_entry(room_id)
 
     # Create queue entry
     queue_entry_id = f"QENTRY{uuid.uuid4().hex[:8].upper()}"
-    await crud.create_queue_entry(
+    await queue_entry_repo.create_queue_entry(
         {
             "queueEntryId": queue_entry_id,
             "roomId": room_id,
@@ -316,7 +322,7 @@ async def add_to_queue(
 
     # Create playback session if this is the first entry (paused, host must resume)
     if has_playing is None:
-        await crud.create_playback_session(
+        await playback_session_repo.create_playback_session(
             {
                 "playbackSessionId": str(uuid.uuid4()),
                 "roomId": room_id,
@@ -329,6 +335,40 @@ async def add_to_queue(
     return await refresh_room_state(room_id, "queue_updated")
 
 
+async def remove_queue_entry(
+    room_id: str, queue_entry_id: str, user_id: str
+) -> dict[str, object]:
+    queue_entry = await queue_entry_repo.get_queue_entry(queue_entry_id)
+    if not queue_entry or queue_entry.roomId != room_id:
+        raise HTTPException(status_code=404, detail="Queue entry not found")
+
+    try:
+        room = await room_repo.get_room(room_id)
+    except ResourceNotFoundError:
+        raise HTTPException(status_code=404, detail="Room not found")
+
+    # check if the user is authorized to remove the track with no voting
+    is_adder = queue_entry.addedBy == user_id
+    is_host = room.hostedBy == user_id
+
+    if not is_adder and not is_host:
+        raise HTTPException(
+            status_code=403, detail="Not authorized to remove this track"
+        )
+
+    if queue_entry.status == QueueEntryStatus.PLAYING:
+        await _advance_to_next(room_id)
+        await queue_entry_repo.update_queue_entry(
+            queue_entry_id, {"status": QueueEntryStatus.REMOVED}
+        )
+    else:
+        await queue_entry_repo.update_queue_entry(
+            queue_entry_id, {"status": QueueEntryStatus.REMOVED}
+        )
+
+    return await refresh_room_state(room_id, "queue_entry_removed")
+
+
 async def vote_queue_entry(
     room_id: str, queue_entry_id: str, user_id: str, vote_type: str
 ) -> dict[str, object]:
@@ -336,18 +376,18 @@ async def vote_queue_entry(
         raise HTTPException(status_code=400, detail="Invalid vote type")
 
     # Get queue entry
-    queue_entry = await crud.get_queue_entry(queue_entry_id)
+    queue_entry = await queue_entry_repo.get_queue_entry(queue_entry_id)
     if not queue_entry or queue_entry.roomId != room_id:
         raise HTTPException(status_code=404, detail="Queue entry not found")
 
     if vote_type == "neutral":
-        await crud.delete_song_feedback(queue_entry_id, user_id)
+        await song_feedback_repo.delete_song_feedback(queue_entry_id, user_id)
     else:
         mapped_feedback = _ui_to_feedback(vote_type)
         if mapped_feedback is None:
             raise HTTPException(status_code=400, detail="Invalid vote type")
 
-        await crud.create_or_update_song_feedback(
+        await song_feedback_repo.create_or_update_song_feedback(
             {
                 "queueEntryId": queue_entry_id,
                 "userId": user_id,
@@ -357,7 +397,9 @@ async def vote_queue_entry(
         )
 
     # Recalculate vote score
-    feedback_list = await crud.get_song_feedback_by_queue_entry(queue_entry_id)
+    feedback_list = await song_feedback_repo.get_song_feedback_by_queue_entry(
+        queue_entry_id
+    )
     upvotes = sum(1 for feedback in feedback_list if feedback.type == FeedbackType.LIKE)
     downvotes = sum(
         1 for feedback in feedback_list if feedback.type == FeedbackType.DISLIKE
@@ -367,7 +409,7 @@ async def vote_queue_entry(
     order_rank = float(queue_entry.position) - float(vote_score) / 100.0
 
     # Update queue entry
-    await crud.update_queue_entry(
+    await queue_entry_repo.update_queue_entry(
         queue_entry_id,
         {
             "voteScore": vote_score,
@@ -400,19 +442,19 @@ async def set_playback_state(
     if action == "advance":
         return await _advance_to_next(room_id)
 
-    playback_session = await crud.get_current_playback_session(room_id)
+    playback_session = await playback_session_repo.get_current_playback_session(room_id)
 
     if not playback_session:
-        current_queue_entry = await crud.get_first_queued_entry(room_id)
+        current_queue_entry = await queue_entry_repo.get_first_queued_entry(room_id)
 
         if not current_queue_entry:
             raise HTTPException(status_code=400, detail="No queued songs")
 
-        await crud.update_queue_entry(
+        await queue_entry_repo.update_queue_entry(
             current_queue_entry.queueEntryId, {"status": QueueEntryStatus.PLAYING}
         )
 
-        playback_session = await crud.create_playback_session(
+        playback_session = await playback_session_repo.create_playback_session(
             {
                 "playbackSessionId": str(uuid.uuid4()),
                 "roomId": room_id,
@@ -441,32 +483,34 @@ async def set_playback_state(
     if elapsed_seconds is not None:
         updates["elapsedTime"] = elapsed_seconds
 
-    await crud.update_playback_session(playback_session.playbackSessionId, updates)
+    await playback_session_repo.update_playback_session(
+        playback_session.playbackSessionId, updates
+    )
 
     return await refresh_room_state(room_id, "playback_updated")
 
 
 async def _advance_to_next(room_id: str) -> dict[str, object]:
     """Mark the current song as played and start the next highest-voted song."""
-    current_session = await crud.get_current_playback_session(room_id)
+    current_session = await playback_session_repo.get_current_playback_session(room_id)
     if current_session:
-        await crud.update_playback_session(
+        await playback_session_repo.update_playback_session(
             current_session.playbackSessionId,
             {
                 "state": PlaybackState.STOPPED,
                 "pausedAt": datetime.now(UTC).replace(tzinfo=None),
             },
         )
-        await crud.update_queue_entry(
+        await queue_entry_repo.update_queue_entry(
             current_session.queueEntryId, {"status": QueueEntryStatus.PLAYED}
         )
 
-    next_entry = await crud.get_next_queued_entry(room_id)
+    next_entry = await queue_entry_repo.get_next_queued_entry(room_id)
     if next_entry:
-        await crud.update_queue_entry(
+        await queue_entry_repo.update_queue_entry(
             next_entry.queueEntryId, {"status": QueueEntryStatus.PLAYING}
         )
-        await crud.create_playback_session(
+        await playback_session_repo.create_playback_session(
             {
                 "playbackSessionId": str(uuid.uuid4()),
                 "roomId": room_id,
@@ -514,7 +558,9 @@ async def create_room_service(
     await ensure_user_display_name(user_id, display_name)
     await ensure_provider_exists(supported_provider_id)
 
-    pa = await crud.get_provider_account_by_user(user_id, supported_provider_id)
+    pa = await music_provider_repo.get_provider_account_by_user(
+        user_id, supported_provider_id
+    )
     if not pa or not pa.refreshToken:
         raise HTTPException(
             status_code=403,
@@ -655,7 +701,7 @@ async def ensure_provider_exists(provider_id: str) -> None:
     from core.exceptions import ResourceNotFoundError
 
     try:
-        await crud.get_music_provider(provider_id)
+        await music_provider_repo.get_music_provider(provider_id)
     except ResourceNotFoundError:
         raise HTTPException(
             status_code=400, detail=f"Unsupported music provider: {provider_id}. "
