@@ -1,3 +1,4 @@
+import math
 import re
 import uuid
 from datetime import UTC, datetime
@@ -40,7 +41,11 @@ def _enum_value(value: object) -> str:
 
 
 def _feedback_to_ui(feedback_type: FeedbackType) -> str:
-    return "upvote" if feedback_type == FeedbackType.LIKE else "downvote"
+    if feedback_type == FeedbackType.LIKE:
+        return "upvote"
+    if feedback_type == FeedbackType.SKIP:
+        return "skip"
+    return "downvote"
 
 
 def _ui_to_feedback(vote_type: str) -> FeedbackType | None:
@@ -352,9 +357,8 @@ async def remove_queue_entry(
     is_host = room.hostedBy == user_id
 
     if not is_adder and not is_host:
-        raise HTTPException(
-            status_code=403, detail="Not authorized to remove this track"
-        )
+        # Democratic vote
+        return await vote_queue_entry(room_id, queue_entry_id, user_id, "skip")
 
     if queue_entry.status == QueueEntryStatus.PLAYING:
         await _advance_to_next(room_id)
@@ -372,7 +376,7 @@ async def remove_queue_entry(
 async def vote_queue_entry(
     room_id: str, queue_entry_id: str, user_id: str, vote_type: str
 ) -> dict[str, object]:
-    if vote_type not in {"upvote", "downvote", "neutral"}:
+    if vote_type not in {"upvote", "downvote", "neutral", "skip"}:
         raise HTTPException(status_code=400, detail="Invalid vote type")
 
     # Get queue entry
@@ -382,6 +386,31 @@ async def vote_queue_entry(
 
     if vote_type == "neutral":
         await song_feedback_repo.delete_song_feedback(queue_entry_id, user_id)
+    elif vote_type == "skip":
+        # Democratic removal vote
+        await song_feedback_repo.create_or_update_song_feedback(
+            {
+                "queueEntryId": queue_entry_id,
+                "userId": user_id,
+                "type": FeedbackType.SKIP,
+                "votedAt": datetime.now(UTC).replace(tzinfo=None),
+            }
+        )
+        # Check threshold
+        feedback_list = await song_feedback_repo.get_song_feedback_by_queue_entry(
+            queue_entry_id
+        )
+        skip_count = sum(1 for f in feedback_list if f.type == FeedbackType.SKIP)
+        active_members = await membership_repo.get_room_active_memberships(room_id)
+        required = math.ceil(len(active_members) * 0.5)
+        if skip_count >= required:
+            # Threshold reached — remove the track
+            if queue_entry.status == QueueEntryStatus.PLAYING:
+                await _advance_to_next(room_id)
+            await queue_entry_repo.update_queue_entry(
+                queue_entry_id, {"status": QueueEntryStatus.REMOVED}
+            )
+            return await refresh_room_state(room_id, "queue_entry_removed")
     else:
         mapped_feedback = _ui_to_feedback(vote_type)
         if mapped_feedback is None:
@@ -510,6 +539,9 @@ async def _advance_to_next(room_id: str) -> dict[str, object]:
         await queue_entry_repo.update_queue_entry(
             next_entry.queueEntryId, {"status": QueueEntryStatus.PLAYING}
         )
+        # Playback deadline: once the song reaches the playback all votes to skip it will be removed and the song will play.
+        await song_feedback_repo.delete_skip_feedback(next_entry.queueEntryId)
+
         await playback_session_repo.create_playback_session(
             {
                 "playbackSessionId": str(uuid.uuid4()),

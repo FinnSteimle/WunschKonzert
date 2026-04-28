@@ -92,3 +92,28 @@ async def delete_song_feedback(
     if feedback:
         await session.delete(feedback)
         await session.flush()
+
+
+async def delete_skip_feedback(
+    queue_entry_id: str, session: AsyncSession | None = None
+) -> None:
+    """Delete all skip-type feedback for a queue entry.
+    Called when a song starts playing to close any open removal votes."""
+    if session is None:
+        session_factory = get_session_factory()
+        async with session_factory() as new_session:
+            await delete_skip_feedback(queue_entry_id, session=new_session)
+            await new_session.commit()
+            return
+
+    from models.domain import FeedbackType
+
+    result = await session.execute(
+        select(SongFeedback).where(
+            SongFeedback.queueEntryId == queue_entry_id,
+            SongFeedback.type == FeedbackType.SKIP,
+        )
+    )
+    for feedback in result.scalars().all():
+        await session.delete(feedback)
+    await session.flush()
