@@ -335,6 +335,40 @@ async def add_to_queue(
     return await refresh_room_state(room_id, "queue_updated")
 
 
+async def remove_queue_entry(
+    room_id: str, queue_entry_id: str, user_id: str
+) -> dict[str, object]:
+    queue_entry = await queue_entry_repo.get_queue_entries(queue_entry_id)
+    if queue_entry.roomId != room_id:
+        raise HTTPException(status_code=404, detail="Queue entry not found")
+
+    try:
+        room = await room_repo.get_room(room_id)
+    except ResourceNotFoundError:
+        raise HTTPException(status_code=404, detail="Room not found")
+
+    # check if the user is authorized to remove the track with no voting
+    is_adder = queue_entry.addedBy == user_id
+    is_host = room.hostedBy == user_id
+
+    if not is_adder and not is_host:
+        raise HTTPException(
+            status_code=403, detail="Not authorized to remove this track"
+        )
+
+    if queue_entry.status == QueueEntryStatus.PLAYING:
+        await _advance_to_next(room_id)
+        await queue_entry_repo.update_queue_entry(
+            queue_entry_id, {"status": QueueEntryStatus.REMOVED}
+        )
+    else:
+        await queue_entry_repo.update_queue_entry(
+            queue_entry_id, {"status": QueueEntryStatus.REMOVED}
+        )
+
+    return await refresh_room_state(room_id, "queue_entry_removed")
+
+
 async def vote_queue_entry(
     room_id: str, queue_entry_id: str, user_id: str, vote_type: str
 ) -> dict[str, object]:

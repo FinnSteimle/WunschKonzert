@@ -5,6 +5,7 @@ from fastapi import APIRouter, WebSocket
 from starlette.websockets import WebSocketDisconnect
 
 import services.room_service as room_service
+from api.event_handlers import dispatch
 
 router = APIRouter()
 
@@ -33,51 +34,6 @@ async def send_room_state(room_id: str) -> None:
                 active_room_connections[room_id].discard(websocket)
 
 
-async def handle_room_events(room_id: str, data: str) -> None:
-    try:
-        event = json.loads(data)
-    except json.JSONDecodeError:
-        print(f"Invalid JSON received: {data}")
-        return
-
-    event_type = event.get("type")
-    try:
-        if event_type == "addqueue":
-            await room_service.add_to_queue(
-                room_id, event.get("track"), event.get("user_id")
-            )
-        elif event_type == "vote":
-            await room_service.vote_queue_entry(
-                room_id=room_id,
-                queue_entry_id=event.get("queue_entry_id"),
-                user_id=event.get("user_id"),
-                vote_type=event.get("vote_type", "neutral"),
-            )
-        elif event_type == "playback":
-            await room_service.set_playback_state(
-                room_id=room_id,
-                user_id=event.get("user_id"),
-                action=event.get("action"),
-                position_ms=event.get("position_ms"),
-            )
-        elif event_type == "position_sync":
-            pos = event.get("position_ms")
-            if isinstance(pos, (int, float)):
-                await room_service.sync_playback_position(
-                    room_id, event.get("user_id", ""), int(pos)
-                )
-        elif event_type == "rename":
-            await room_service.rename_participant(
-                room_id=room_id,
-                user_id=event.get("user_id"),
-                display_name=event.get("display_name", ""),
-            )
-        elif event_type == "leave":
-            await room_service.leave_room_service(room_id, event.get("user_id"))
-    except Exception as e:
-        print(f"Error handling room event: {e}")
-
-
 @router.websocket("/ws/{room_id}")
 async def websocket_endpoint_room(websocket: WebSocket, room_id: str) -> None:
     await websocket.accept()
@@ -90,7 +46,7 @@ async def websocket_endpoint_room(websocket: WebSocket, room_id: str) -> None:
                 data = await websocket.receive_text()
             except WebSocketDisconnect:
                 break
-            await handle_room_events(room_id, data)
+            await dispatch(room_id, data)
             await send_room_state(room_id)
     finally:
         active_room_connections[room_id].discard(websocket)

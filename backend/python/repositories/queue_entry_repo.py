@@ -19,7 +19,10 @@ async def get_queue_entries(
 
     result = await session.execute(
         select(QueueEntry)
-        .where(QueueEntry.roomId == room_id)
+        .where(
+            QueueEntry.roomId == room_id,
+            QueueEntry.status != QueueEntryStatus.REMOVED,
+        )
         .order_by(QueueEntry.position.asc())
     )
     return result.scalars().all()
