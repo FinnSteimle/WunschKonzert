@@ -31,9 +31,12 @@ function createRoomStore() {
 
 export const roomStore = createRoomStore();
 
-export function getPersonalVoteState(queueEntry: QueueEntryDto, userId: string): 'upvote' | 'downvote' | 'neutral' {
+export function getPersonalVoteState(queueEntry: QueueEntryDto, userId: string): 'upvote' | 'downvote' | 'neutral' | 'skip' {
 	const vote = queueEntry.feedback.find((feedback) => feedback.userId === userId);
-	return vote?.type ?? 'neutral';
+	if (!vote) return 'neutral';
+	// skip votes are internal removal votes — treat as neutral for the upvote/downvote UI
+	if (vote.type === 'skip') return 'neutral';
+	return vote.type;
 }
 
 export function queueWithoutCurrent(state: RoomStateDto | null): QueueEntryDto[] {
