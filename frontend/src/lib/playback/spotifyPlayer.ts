@@ -43,6 +43,7 @@ export class SpotifyPlayer implements MusicPlayer {
 	private disposed = false;
 	private lastTrackId: string | null = null;
 	private wasPlaying = false;
+	private hasPlayedPastStart = false;
 	private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
 	private reconnectAttempts = 0;
 	private connectionPromise: Promise<boolean> | null = null;
@@ -88,11 +89,27 @@ export class SpotifyPlayer implements MusicPlayer {
 				const track = state.track_window.current_track;
 				const playing = !state.paused;
 
+				// Track whether we've played past the start (position > 1000ms) at least once.
+				// This helps distinguish between:
+				// - Track just started (position === 0, hasn't played yet)
+				// - Track ended and wrapped to next track (position === 0, but we had played)
+				if (playing && state.position > 1000) {
+					this.hasPlayedPastStart = true;
+				}
+
+				// Detect natural track end: was playing -> now paused, and either
+				// position wrapped to 0 (after having played) or reached track end.
 				const ended =
 					this.wasPlaying &&
 					!playing &&
 					state.duration > 0 &&
-					state.position >= state.duration - 500;
+					((state.position === 0 && this.hasPlayedPastStart) ||
+						state.position >= state.duration - 500);
+
+				// Reset hasPlayedPastStart when track changes or playback stops
+				if (!playing || track?.id !== this.lastTrackId) {
+					this.hasPlayedPastStart = false;
+				}
 
 				this.wasPlaying = playing;
 				this.lastTrackId = track?.id ?? null;

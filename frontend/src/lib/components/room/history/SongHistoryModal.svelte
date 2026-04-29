@@ -46,7 +46,7 @@
 		<Dialog.Header>
 			<Dialog.Title>Song History</Dialog.Title>
 			<Dialog.Description>
-				View the last 30 songs that have been played in this room.
+				Recent songs played in this room.
 			</Dialog.Description>
 		</Dialog.Header>
 		<div class="max-h-[60vh] overflow-y-auto">
