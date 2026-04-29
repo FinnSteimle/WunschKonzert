@@ -8,15 +8,19 @@
 	 *
 	 * canRemoveDirectly = true  → "Remove" button (host or adder)
 	 *                             Instantly removes the track, no vote needed.
+	 *                             If others have voted, shows x/n counter as a warning.
 	 *
 	 * canRemoveDirectly = false, skipCount === 0
-	 *                           → "Neutral" button (everyone else, no vote started)
-	 *                             Tapping starts a removal vote.
+	 *                           → "Neutral" button (no vote started yet)
+	 *                             Tapping casts a skip vote.
 	 *
 	 * canRemoveDirectly = false, skipCount > 0
 	 *                           → "Voting" button (vote in progress)
 	 *                             Shows x/n counter. Highlighted if current user voted.
-	 *                             Tapping toggles the user's vote.
+	 *                             Tapping TOGGLES the vote:
+	 *                               - not voted → casts skip vote
+	 *                               - already voted → rescinds (sends neutral)
+	 *                             Toggle logic lives in QueueItem, not here.
 	 */
 	let {
 		canRemoveDirectly,

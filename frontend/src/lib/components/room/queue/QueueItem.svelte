@@ -78,6 +78,14 @@
 		{requiredVotes}
 		{hasVoted}
 		{busy}
-		onRemove={() => onRemove?.(entry.queueEntryId)}
+		onRemove={() => {
+			if (!canRemoveDirectly && hasVoted) {
+				// User already voted — rescind by sending neutral
+				onVote?.(entry.queueEntryId, 'neutral');
+			} else {
+				// Direct remove (host/adder) or cast a new skip vote
+				onRemove?.(entry.queueEntryId);
+			}
+		}}
 	/>
 </div>
