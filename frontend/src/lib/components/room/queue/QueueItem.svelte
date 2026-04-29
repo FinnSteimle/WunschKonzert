@@ -2,22 +2,40 @@
 	import { Badge } from '$lib/components/ui/badge';
 	import type { QueueEntryDto, VoteRequest } from '$lib/types/api';
 	import VoteButtons from '$lib/components/room/queue/VoteButtons.svelte';
+	import RemoveButton from '$lib/components/room/queue/RemoveButton.svelte';
 
 	let {
 		entry,
 		personalVote,
 		voteBusyId,
-		onVote
+		currentUserId,
+		hostId,
+		totalMembers,
+		onVote,
+		onRemove
 	}: {
 		entry: QueueEntryDto;
 		personalVote: 'upvote' | 'downvote' | 'neutral';
 		voteBusyId: string | null;
+		currentUserId: string;
+		hostId: string;
+		totalMembers: number;
 		onVote?: (queueEntryId: string, vote: VoteRequest['vote_type']) => void;
+		onRemove?: (queueEntryId: string) => void;
 	} = $props();
 
 	const upvotes = $derived(entry.feedback.filter((f) => f.type === 'upvote').length);
 	const downvotes = $derived(entry.feedback.filter((f) => f.type === 'downvote').length);
 	const busy = $derived(voteBusyId === entry.queueEntryId);
+
+	// Remove button derived state
+	const canRemoveDirectly = $derived(
+		currentUserId === entry.addedBy.userId || currentUserId === hostId
+	);
+	const skipVotes = $derived(entry.feedback.filter((f) => f.type === 'skip'));
+	const skipCount = $derived(skipVotes.length);
+	const requiredVotes = $derived(Math.ceil(Math.max(1, totalMembers - 1) * 0.5));
+	const hasVoted = $derived(skipVotes.some((f) => f.userId === currentUserId));
 </script>
 
 <div class="flex min-w-0 flex-1 gap-3 sm:items-center">
@@ -46,10 +64,20 @@
 		</div>
 	</div>
 </div>
-<VoteButtons
-	state={personalVote}
-	{upvotes}
-	{downvotes}
-	{busy}
-	onVote={(v) => onVote?.(entry.queueEntryId, v)}
-/>
+<div class="flex items-start gap-2">
+	<VoteButtons
+		state={personalVote}
+		{upvotes}
+		{downvotes}
+		{busy}
+		onVote={(v) => onVote?.(entry.queueEntryId, v)}
+	/>
+	<RemoveButton
+		{canRemoveDirectly}
+		{skipCount}
+		{requiredVotes}
+		{hasVoted}
+		{busy}
+		onRemove={() => onRemove?.(entry.queueEntryId)}
+	/>
+</div>

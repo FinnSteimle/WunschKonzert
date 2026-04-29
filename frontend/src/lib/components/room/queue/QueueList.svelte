@@ -8,13 +8,19 @@
 	let {
 		entries,
 		userId,
+		hostId,
+		totalMembers,
 		voteBusyId,
-		onVote
+		onVote,
+		onRemove
 	}: {
 		entries: QueueEntryDto[];
 		userId: string;
+		hostId: string;
+		totalMembers: number;
 		voteBusyId: string | null;
 		onVote?: (queueEntryId: string, vote: VoteRequest['vote_type']) => void;
+		onRemove?: (queueEntryId: string) => void;
 	} = $props();
 
 	/** Show only unplayed songs sorted by votes (tie-break on position). */
@@ -40,7 +46,11 @@
 					{entry}
 					personalVote={getPersonalVoteState(entry, userId)}
 					{voteBusyId}
+					currentUserId={userId}
+					{hostId}
+					{totalMembers}
 					{onVote}
+					{onRemove}
 				/>
 			</li>
 		{/each}

@@ -82,6 +82,14 @@ export class RoomSocketClient {
 		});
 	}
 
+	removeQueueEntry(queueEntryId: string, userId: string) {
+		return this.send({
+			type: 'remove_queue_entry',
+			queue_entry_id: queueEntryId,
+			user_id: userId
+		});
+	}
+
 	setPlayback(userId: string, action: 'pause' | 'resume', positionMs?: number) {
 		const payload: Record<string, unknown> = {
 			type: 'playback',

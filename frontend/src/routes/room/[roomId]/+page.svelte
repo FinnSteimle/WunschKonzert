@@ -93,6 +93,25 @@
 		}
 	}
 
+	async function handleRemove(queueEntryId: string) {
+		const uid = sessionUser?.userId;
+		if (!uid || !socketClient || !socketClient.isConnected()) {
+			toast.error('Not connected to room');
+			return;
+		}
+		voteBusyId = queueEntryId;
+		try {
+			const sent = socketClient.removeQueueEntry(queueEntryId, uid);
+			if (!sent) {
+				throw new Error('Remove failed');
+			}
+		} catch (err) {
+			toast.error(err instanceof Error ? err.message : 'Remove failed');
+		} finally {
+			voteBusyId = null;
+		}
+	}
+
 	async function handlePlayback(action: 'pause' | 'resume') {
 		const uid = sessionUser?.userId;
 		if (!uid || !socketClient || !socketClient.isConnected()) {
@@ -569,8 +588,11 @@
 					<QueueList
 						entries={queueWithoutCurrent(rs)}
 						userId={sessionUser.userId}
+						hostId={rs.host.userId}
+						totalMembers={rs.users.length}
 						{voteBusyId}
 						onVote={handleVote}
+						onRemove={handleRemove}
 					/>
 				</section>
 

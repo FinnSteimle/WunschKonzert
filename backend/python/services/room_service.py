@@ -402,7 +402,10 @@ async def vote_queue_entry(
         )
         skip_count = sum(1 for f in feedback_list if f.type == FeedbackType.SKIP)
         active_members = await membership_repo.get_room_active_memberships(room_id)
-        required = math.ceil(len(active_members) * 0.5)
+        # Exclude the adder from the eligible voter pool — they can remove directly.
+        # Require 50% of the remaining members, minimum 1.
+        eligible = max(1, len(active_members) - 1)
+        required = math.ceil(eligible * 0.5)
         if skip_count >= required:
             # Threshold reached — remove the track
             if queue_entry.status == QueueEntryStatus.PLAYING:
