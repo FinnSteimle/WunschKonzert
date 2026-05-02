@@ -450,21 +450,28 @@ docker:push_frontend:
     - chmod 700 ~/.ssh
     - eval $(ssh-agent -s)
     - |
-      set -eu
+      set -e
+      KEY="${DEPLOY_SSH_PRIVATE_KEY-}"
+      if [ -z "$KEY" ]; then
+        echo "ERROR: DEPLOY_SSH_PRIVATE_KEY is not set in this job."
+        echo "If it is a Protected variable, add branch \"dev\" under Settings → Repository → Protected branches"
+        echo "(same protection level as variables), or temporarily uncheck Protect on the variable for testing."
+        exit 1
+      fi
       umask 077
       MUST_RM=0
-      case "$DEPLOY_SSH_PRIVATE_KEY" in
+      case "$KEY" in
         -----BEGIN*)
           KEYFILE=$(mktemp)
-          printf '%s\n' "$DEPLOY_SSH_PRIVATE_KEY" | tr -d '\r' > "$KEYFILE"
+          printf '%s\n' "$KEY" | tr -d '\r' > "$KEYFILE"
           MUST_RM=1
           ;;
         *)
-          if [ ! -f "$DEPLOY_SSH_PRIVATE_KEY" ]; then
-            echo "ERROR: DEPLOY_SSH_PRIVATE_KEY must be PEM text (starts with -----BEGIN) or a File-type variable (path under /tmp)."
+          if [ ! -f "$KEY" ]; then
+            echo "ERROR: DEPLOY_SSH_PRIVATE_KEY must be PEM text (starts with -----BEGIN) or a File-type variable (path)."
             exit 1
           fi
-          KEYFILE="$DEPLOY_SSH_PRIVATE_KEY"
+          KEYFILE="$KEY"
           chmod 600 "$KEYFILE"
           ;;
       esac
