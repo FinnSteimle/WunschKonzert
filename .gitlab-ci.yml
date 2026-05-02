@@ -580,7 +580,12 @@ deploy:check_ssh_reachable:
     - |
       set -eu
       PORT="${DEPLOY_SSH_PORT:-22}"
-      echo "=== Runner TCP check: ${DEPLOY_HOST:?}:${PORT} ==="
+      if [ -z "${DEPLOY_HOST:-}" ]; then
+        echo "ERROR: DEPLOY_HOST is not set."
+        echo "Add it under Settings → CI/CD → Variables. If it is Protected, your branch must be Protected too."
+        exit 1
+      fi
+      echo "=== Runner TCP check: ${DEPLOY_HOST}:${PORT} ==="
       if nc -z -w 10 "$DEPLOY_HOST" "$PORT"; then
         echo "OK: TCP connect succeeded (something is listening on that port)."
       else
