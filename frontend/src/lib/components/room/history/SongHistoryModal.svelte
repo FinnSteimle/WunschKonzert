@@ -1,5 +1,5 @@
 <script lang="ts">
-	import type { RoomStateDto } from '$lib/types/api';
+	import type { QueueEntryDto, RoomStateDto } from '$lib/types/api';
 	import * as Dialog from '$lib/components/ui/dialog';
 	import { buttonVariants } from '$lib/components/ui/button';
 	import { cn } from '$lib/utils.js';
@@ -13,9 +13,12 @@
 	const playedSongs = $derived.by(() => {
 		if (!roomState?.queue) return [];
 
+		const playedAtOrQueued = (entry: QueueEntryDto) =>
+			new Date(entry.playedAt ?? entry.queuedAt).getTime();
+
 		return roomState.queue
 			.filter((entry) => entry.status === 'played')
-			.sort((a, b) => new Date(b.queuedAt).getTime() - new Date(a.queuedAt).getTime())
+			.sort((a, b) => playedAtOrQueued(b) - playedAtOrQueued(a))
 			.slice(0, 30);
 	});
 </script>

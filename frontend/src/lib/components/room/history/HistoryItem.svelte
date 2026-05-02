@@ -3,13 +3,13 @@
 
 	let { entry }: { entry: QueueEntryDto } = $props();
 
-	function formatTimestamp(isoString: string): string {
+	function formatPlayedAgo(isoString: string): string {
 		const date = new Date(isoString);
 		const now = new Date();
 		const diffMs = now.getTime() - date.getTime();
 		const diffMins = Math.floor(diffMs / 60000);
 
-		if (diffMins < 1) return 'Just now';
+		if (diffMins < 1) return 'just now';
 		if (diffMins < 60) return `${diffMins}m ago`;
 		if (diffMins < 1440) return `${Math.floor(diffMins / 60)}h ago`;
 		return date.toLocaleDateString();
@@ -34,6 +34,12 @@
 		<p class="line-clamp-2 text-sm font-medium">{entry.track.title}</p>
 		<p class="text-muted-foreground line-clamp-1 text-xs">{entry.track.artist}</p>
 		<p class="text-muted-foreground mt-1 text-[11px]">Added by {entry.addedBy.displayName}</p>
-		<p class="text-muted-foreground mt-1 text-[11px]">{formatTimestamp(entry.queuedAt)}</p>
+		<p class="text-muted-foreground mt-1 text-[11px]">
+			{#if entry.playedAt}
+				Played {formatPlayedAgo(entry.playedAt)}
+			{:else}
+				Played (time unknown)
+			{/if}
+		</p>
 	</div>
 </div>

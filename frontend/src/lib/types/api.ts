@@ -70,6 +70,7 @@ export interface QueueEntryDto {
 		displayName: string;
 	};
 	queuedAt: string;
+	playedAt?: string | null;
 	position: number;
 	status: string;
 	voteScore: number;
