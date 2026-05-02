@@ -560,36 +560,3 @@ deploy:staging:
       docker compose --env-file .env.staging -f compose.staging.yaml pull
       docker compose --env-file .env.staging -f compose.staging.yaml up -d --remove-orphans
       REMOTE
-
-# Manual: Pipeline → deploy:check_ssh_reachable → Play. Tests TCP from *this runner* to your server.
-# REACHABLE ≠ SSH auth works, but if this fails, the runner (e.g. university) likely blocks egress to that host/port.
-deploy:check_ssh_reachable:
-  stage: deploy
-  image: alpine:3.20
-  rules:
-    - if: '$CI_COMMIT_BRANCH == "dev"'
-      when: manual
-      allow_failure: true
-    - if: '$CI_COMMIT_BRANCH == "main"'
-      when: manual
-      allow_failure: true
-  variables:
-    GIT_STRATEGY: none
-  needs: []
-  script:
-    - apk add --no-cache netcat-openbsd
-    - |
-      set -eu
-      PORT="${DEPLOY_SSH_PORT:-22}"
-      if [ -z "${DEPLOY_HOST:-}" ]; then
-        echo "ERROR: DEPLOY_HOST is not set."
-        echo "Add it under Settings → CI/CD → Variables. If it is Protected, your branch must be Protected too."
-        exit 1
-      fi
-      echo "=== Runner TCP check: ${DEPLOY_HOST}:${PORT} ==="
-      if nc -z -w 10 "$DEPLOY_HOST" "$PORT"; then
-        echo "OK: TCP connect succeeded (something is listening on that port)."
-      else
-        echo "FAIL: No TCP connect from this runner (blocked, wrong host, or port not open)."
-        exit 1
-      fi
