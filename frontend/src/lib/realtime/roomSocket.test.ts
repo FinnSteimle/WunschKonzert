@@ -1,6 +1,14 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { RoomSocketClient } from './roomSocket';
 
+vi.mock('$lib/api/client', async (importOriginal) => {
+	const actual = await importOriginal<typeof import('$lib/api/client')>();
+	return {
+		...actual,
+		getWsBaseUrl: () => 'ws://localhost:8000'
+	};
+});
+
 class MockWebSocket {
 	static readonly OPEN = 1;
 	static readonly CLOSED = 3;

@@ -24,6 +24,10 @@ export default defineConfig({
 		environment: 'jsdom',
 		include: ['src/**/*.{test,spec}.{ts,js}'],
 		setupFiles: ['src/test/setup.ts'],
+		env: {
+			PUBLIC_API_URL: 'http://localhost:8000',
+			PUBLIC_WS_URL: 'ws://localhost:8000'
+		},
 		server: {
 			deps: {
 				inline: ['html-encoding-sniffer', '@exodus/bytes', 'jsdom']
