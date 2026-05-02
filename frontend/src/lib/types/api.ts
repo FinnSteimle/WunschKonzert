@@ -77,6 +77,19 @@ export interface QueueEntryDto {
 	feedback: QueueFeedbackDto[];
 }
 
+/** Present while the room may collect votes to replay the last-completed track (backend contract). */
+export type ReplayVoteStatus = 'open' | 'met' | 'expired';
+
+export interface ReplayVoteStateDto {
+	targetQueueEntryId: string;
+	track: TrackDto;
+	voteCount: number;
+	voterUserIds: string[];
+	activeUserCount: number;
+	closesAt: string;
+	status: ReplayVoteStatus;
+}
+
 export interface RoomStateDto {
 	room: {
 		roomId: string;
@@ -110,6 +123,7 @@ export interface RoomStateDto {
 		updatedAt: string;
 		positionMs: number;
 	};
+	replayVote?: ReplayVoteStateDto | null;
 	lastEvent?: {
 		type: string;
 		at: string;

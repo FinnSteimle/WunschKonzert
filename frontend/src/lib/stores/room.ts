@@ -59,3 +59,17 @@ export function getCurrentSong(roomState: RoomStateDto | null): QueueEntryDto | 
 	}
 	return roomState.queue.find((entry) => entry.status === 'playing') ?? roomState.queue[0] ?? null;
 }
+
+/** Members currently in the room (replay majority denominator). */
+export function countActiveRoomMembers(roomState: RoomStateDto | null): number {
+	if (!roomState) return 0;
+	return roomState.users.filter(
+		(u) => u.membership.leftAt === null && u.membership.membershipStatus === 'active'
+	).length;
+}
+
+/** Minimum votes for strict majority (>50%) of active listeners; backend should match. */
+export function replayMajorityThreshold(activeUserCount: number): number {
+	if (activeUserCount <= 0) return 1;
+	return Math.floor(activeUserCount / 2) + 1;
+}
