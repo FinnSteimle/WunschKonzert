@@ -449,7 +449,34 @@ docker:push_frontend:
     - mkdir -p ~/.ssh
     - chmod 700 ~/.ssh
     - eval $(ssh-agent -s)
-    - printf '%s\n' "$DEPLOY_SSH_PRIVATE_KEY" | tr -d '\r' | ssh-add -
+    - |
+      set -eu
+      umask 077
+      MUST_RM=0
+      case "$DEPLOY_SSH_PRIVATE_KEY" in
+        -----BEGIN*)
+          KEYFILE=$(mktemp)
+          printf '%s\n' "$DEPLOY_SSH_PRIVATE_KEY" | tr -d '\r' > "$KEYFILE"
+          MUST_RM=1
+          ;;
+        *)
+          if [ ! -f "$DEPLOY_SSH_PRIVATE_KEY" ]; then
+            echo "ERROR: DEPLOY_SSH_PRIVATE_KEY must be PEM text (starts with -----BEGIN) or a File-type variable (path under /tmp)."
+            exit 1
+          fi
+          KEYFILE="$DEPLOY_SSH_PRIVATE_KEY"
+          chmod 600 "$KEYFILE"
+          ;;
+      esac
+      if ! ssh-keygen -y -f "$KEYFILE" >/dev/null 2>&1; then
+        echo "ERROR: Deploy key is not a valid unencrypted OpenSSH key, or it is truncated/corrupted in GitLab."
+        echo "Fix: re-paste the key, disable Expand variable reference, regenerate with: ssh-keygen -t ed25519 -N \"\" -f key"
+        exit 1
+      fi
+      ssh-add "$KEYFILE"
+      if [ "$MUST_RM" = 1 ]; then
+        rm -f "$KEYFILE"
+      fi
     - ssh-keyscan -H "$DEPLOY_HOST" >> ~/.ssh/known_hosts
 
 deploy:production:
