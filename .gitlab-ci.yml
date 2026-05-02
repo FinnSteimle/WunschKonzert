@@ -27,6 +27,8 @@ variables:
   STAGING_PUBLIC_HOST: "staging-wunschkonzert.jj11.ch"
   DEPLOY_PATH: "/opt/wunschkonzert"
   DEPLOY_PATH_STAGING: "/opt/wunschkonzert-staging"
+  # If outbound 22 from GitLab runner is blocked, run sshd on another port (e.g. 443 or 2222) and set this.
+  DEPLOY_SSH_PORT: "22"
 
 .cache_uv: &cache_uv
   cache:
@@ -451,6 +453,17 @@ docker:push_frontend:
     - eval $(ssh-agent -s)
     - |
       set -e
+      MISSING=
+      [ -z "${DEPLOY_USER:-}" ] && MISSING="${MISSING} DEPLOY_USER"
+      [ -z "${DEPLOY_HOST:-}" ] && MISSING="${MISSING} DEPLOY_HOST"
+      if [ -n "$MISSING" ]; then
+        echo "ERROR: Missing CI/CD variable(s):$MISSING"
+        echo "Add them under Settings → CI/CD → Variables for this project."
+        echo "If they are Protected, the pipeline branch (e.g. dev) must be a Protected branch too."
+        exit 1
+      fi
+    - |
+      set -e
       KEY="${DEPLOY_SSH_PRIVATE_KEY-}"
       if [ -z "$KEY" ]; then
         echo "ERROR: DEPLOY_SSH_PRIVATE_KEY is not set in this job."
@@ -485,17 +498,13 @@ docker:push_frontend:
         rm -f "$KEYFILE"
       fi
     - |
-      if [ -z "${DEPLOY_HOST:-}" ]; then
-        echo "ERROR: DEPLOY_HOST is not set."
-        exit 1
-      fi
       if [ -n "${DEPLOY_SSH_KNOWN_HOSTS:-}" ]; then
         printf '%s\n' "$DEPLOY_SSH_KNOWN_HOSTS" >> ~/.ssh/known_hosts
-      elif ssh-keyscan -H "$DEPLOY_HOST" >> ~/.ssh/known_hosts 2>/dev/null; then
+      elif ssh-keyscan -p "${DEPLOY_SSH_PORT:-22}" -H "$DEPLOY_HOST" >> ~/.ssh/known_hosts 2>/dev/null; then
         :
       else
-        echo "WARN: ssh-keyscan failed (runner may block outbound SSH to $DEPLOY_HOST:22)."
-        echo "INFO: Set CI variable DEPLOY_SSH_KNOWN_HOSTS with output of: ssh-keyscan -H $DEPLOY_HOST"
+        echo "WARN: ssh-keyscan failed (runner may not reach $DEPLOY_HOST port ${DEPLOY_SSH_PORT:-22})."
+        echo "INFO: Set DEPLOY_SSH_KNOWN_HOSTS from your laptop, e.g.: ssh-keyscan -p ${DEPLOY_SSH_PORT:-22} -H $DEPLOY_HOST"
         echo "INFO: Proceeding with StrictHostKeyChecking=accept-new on first SSH connect."
       fi
 
@@ -514,7 +523,7 @@ deploy:production:
       optional: true
   script:
     - |
-      ssh -o StrictHostKeyChecking=accept-new "${DEPLOY_USER}@${DEPLOY_HOST}" bash -s <<REMOTE
+      ssh -p "${DEPLOY_SSH_PORT:-22}" -o StrictHostKeyChecking=accept-new "${DEPLOY_USER}@${DEPLOY_HOST}" bash -s <<REMOTE
       set -euo pipefail
       docker network inspect wunschkonzert_edge >/dev/null 2>&1 || docker network create wunschkonzert_edge
       echo "$CI_JOB_TOKEN" | docker login -u gitlab-ci-token --password-stdin "$CI_REGISTRY"
@@ -540,7 +549,7 @@ deploy:staging:
       optional: true
   script:
     - |
-      ssh -o StrictHostKeyChecking=accept-new "${DEPLOY_USER}@${DEPLOY_HOST}" bash -s <<REMOTE
+      ssh -p "${DEPLOY_SSH_PORT:-22}" -o StrictHostKeyChecking=accept-new "${DEPLOY_USER}@${DEPLOY_HOST}" bash -s <<REMOTE
       set -euo pipefail
       docker network inspect wunschkonzert_edge >/dev/null 2>&1 || docker network create wunschkonzert_edge
       echo "$CI_JOB_TOKEN" | docker login -u gitlab-ci-token --password-stdin "$CI_REGISTRY"
@@ -550,3 +559,31 @@ deploy:staging:
       docker compose --env-file .env.staging -f compose.staging.yaml pull
       docker compose --env-file .env.staging -f compose.staging.yaml up -d --remove-orphans
       REMOTE
+
+# Manual: Pipeline → deploy:check_ssh_reachable → Play. Tests TCP from *this runner* to your server.
+# REACHABLE ≠ SSH auth works, but if this fails, the runner (e.g. university) likely blocks egress to that host/port.
+deploy:check_ssh_reachable:
+  stage: deploy
+  image: alpine:3.20
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "dev"'
+      when: manual
+      allow_failure: true
+    - if: '$CI_COMMIT_BRANCH == "main"'
+      when: manual
+      allow_failure: true
+  variables:
+    GIT_STRATEGY: none
+  needs: []
+  script:
+    - apk add --no-cache netcat-openbsd
+    - |
+      set -eu
+      PORT="${DEPLOY_SSH_PORT:-22}"
+      echo "=== Runner TCP check: ${DEPLOY_HOST:?}:${PORT} ==="
+      if nc -z -w 10 "$DEPLOY_HOST" "$PORT"; then
+        echo "OK: TCP connect succeeded (something is listening on that port)."
+      else
+        echo "FAIL: No TCP connect from this runner (blocked, wrong host, or port not open)."
+        exit 1
+      fi
