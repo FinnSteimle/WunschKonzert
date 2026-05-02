@@ -351,4 +351,38 @@ describe('RoomSocketClient', () => {
 			client.disconnect();
 		});
 	});
+
+	describe('sendReplayVote', () => {
+		it('sends replay_vote for vote', () => {
+			const client = new RoomSocketClient('room-1', { onState: vi.fn() });
+			client.connect();
+			createdSockets[0].simulateOpen();
+
+			client.sendReplayVote('user-1', 'vote');
+
+			expect(JSON.parse(createdSockets[0].sent[0])).toEqual({
+				type: 'replay_vote',
+				user_id: 'user-1',
+				action: 'vote'
+			});
+
+			client.disconnect();
+		});
+
+		it('sends replay_vote for retract', () => {
+			const client = new RoomSocketClient('room-1', { onState: vi.fn() });
+			client.connect();
+			createdSockets[0].simulateOpen();
+
+			client.sendReplayVote('user-1', 'retract');
+
+			expect(JSON.parse(createdSockets[0].sent[0])).toEqual({
+				type: 'replay_vote',
+				user_id: 'user-1',
+				action: 'retract'
+			});
+
+			client.disconnect();
+		});
+	});
 });
