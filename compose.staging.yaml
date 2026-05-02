@@ -1,0 +1,66 @@
+# Staging stack (no Caddy): Postgres + api + frontend. Same host as prod; prod Caddy routes
+# https://staging-wunschkonzert.jj11.ch here via network wunschkonzert_edge.
+#
+# Deploy from e.g. /opt/wunschkonzert-staging with .env.staging (see compose.staging.env.example).
+# Network must exist: docker network create wunschkonzert_edge
+
+networks:
+  internal:
+    driver: bridge
+  edge:
+    name: wunschkonzert_edge
+    external: true
+
+services:
+  api:
+    image: ${BACKEND_IMAGE:?set BACKEND_IMAGE}
+    env_file:
+      - .env.staging
+    environment:
+      DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-wunschkonzert}
+      ENVIRONMENT: staging
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      internal:
+      edge:
+        aliases:
+          - staging-api
+    restart: unless-stopped
+
+  frontend:
+    image: ${FRONTEND_IMAGE:?set FRONTEND_IMAGE}
+    environment:
+      NODE_ENV: production
+    networks:
+      internal:
+      edge:
+        aliases:
+          - staging-frontend
+    restart: unless-stopped
+
+  db:
+    image: postgres:17.9-alpine3.23@sha256:6f30057d31f5861b66f3545d4821f987aacf1dd920765f0acadea0c58ff975b1
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB:-wunschkonzert}
+    volumes:
+      - postgres_data_staging:/var/lib/postgresql/data
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -U postgres -d ${POSTGRES_DB:-wunschkonzert}",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      - internal
+    restart: unless-stopped
+
+volumes:
+  postgres_data_staging:
