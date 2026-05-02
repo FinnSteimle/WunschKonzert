@@ -484,7 +484,20 @@ docker:push_frontend:
       if [ "$MUST_RM" = 1 ]; then
         rm -f "$KEYFILE"
       fi
-    - ssh-keyscan -H "$DEPLOY_HOST" >> ~/.ssh/known_hosts
+    - |
+      if [ -z "${DEPLOY_HOST:-}" ]; then
+        echo "ERROR: DEPLOY_HOST is not set."
+        exit 1
+      fi
+      if [ -n "${DEPLOY_SSH_KNOWN_HOSTS:-}" ]; then
+        printf '%s\n' "$DEPLOY_SSH_KNOWN_HOSTS" >> ~/.ssh/known_hosts
+      elif ssh-keyscan -H "$DEPLOY_HOST" >> ~/.ssh/known_hosts 2>/dev/null; then
+        :
+      else
+        echo "WARN: ssh-keyscan failed (runner may block outbound SSH to $DEPLOY_HOST:22)."
+        echo "INFO: Set CI variable DEPLOY_SSH_KNOWN_HOSTS with output of: ssh-keyscan -H $DEPLOY_HOST"
+        echo "INFO: Proceeding with StrictHostKeyChecking=accept-new on first SSH connect."
+      fi
 
 deploy:production:
   extends: .deploy_ssh_base
@@ -501,7 +514,7 @@ deploy:production:
       optional: true
   script:
     - |
-      ssh -o StrictHostKeyChecking=yes "${DEPLOY_USER}@${DEPLOY_HOST}" bash -s <<REMOTE
+      ssh -o StrictHostKeyChecking=accept-new "${DEPLOY_USER}@${DEPLOY_HOST}" bash -s <<REMOTE
       set -euo pipefail
       docker network inspect wunschkonzert_edge >/dev/null 2>&1 || docker network create wunschkonzert_edge
       echo "$CI_JOB_TOKEN" | docker login -u gitlab-ci-token --password-stdin "$CI_REGISTRY"
@@ -527,7 +540,7 @@ deploy:staging:
       optional: true
   script:
     - |
-      ssh -o StrictHostKeyChecking=yes "${DEPLOY_USER}@${DEPLOY_HOST}" bash -s <<REMOTE
+      ssh -o StrictHostKeyChecking=accept-new "${DEPLOY_USER}@${DEPLOY_HOST}" bash -s <<REMOTE
       set -euo pipefail
       docker network inspect wunschkonzert_edge >/dev/null 2>&1 || docker network create wunschkonzert_edge
       echo "$CI_JOB_TOKEN" | docker login -u gitlab-ci-token --password-stdin "$CI_REGISTRY"
