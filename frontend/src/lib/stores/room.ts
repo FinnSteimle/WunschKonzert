@@ -31,9 +31,15 @@ function createRoomStore() {
 
 export const roomStore = createRoomStore();
 
-export function getPersonalVoteState(queueEntry: QueueEntryDto, userId: string): 'upvote' | 'downvote' | 'neutral' {
+export function getPersonalVoteState(
+	queueEntry: QueueEntryDto,
+	userId: string
+): 'upvote' | 'downvote' | 'neutral' {
 	const vote = queueEntry.feedback.find((feedback) => feedback.userId === userId);
-	return vote?.type ?? 'neutral';
+	if (!vote) return 'neutral';
+	// skip votes are internal removal votes — treat as neutral for the upvote/downvote UI
+	if (vote.type === 'skip') return 'neutral';
+	return vote.type;
 }
 
 export function queueWithoutCurrent(state: RoomStateDto | null): QueueEntryDto[] {
@@ -52,4 +58,18 @@ export function getCurrentSong(roomState: RoomStateDto | null): QueueEntryDto | 
 		if (matching) return matching;
 	}
 	return roomState.queue.find((entry) => entry.status === 'playing') ?? roomState.queue[0] ?? null;
+}
+
+/** Members currently in the room (replay majority denominator). */
+export function countActiveRoomMembers(roomState: RoomStateDto | null): number {
+	if (!roomState) return 0;
+	return roomState.users.filter(
+		(u) => u.membership.leftAt === null && u.membership.membershipStatus === 'active'
+	).length;
+}
+
+/** Minimum votes for strict majority (>50%) of active listeners; backend should match. */
+export function replayMajorityThreshold(activeUserCount: number): number {
+	if (activeUserCount <= 0) return 1;
+	return Math.floor(activeUserCount / 2) + 1;
 }

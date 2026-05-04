@@ -153,7 +153,7 @@ import {
 					autocomplete="one-time-code"
 					autocapitalize="characters"
 					maxlength={1}
-					class="border-input bg-background ring-offset-background placeholder:text-muted-foreground focus-visible:ring-ring flex h-10 w-full rounded-md border text-center font-mono text-lg uppercase shadow-xs transition-[color,box-shadow] outline-none focus-visible:ring-2 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+					class="border-input bg-background ring-offset-background placeholder:text-muted-foreground placeholder:opacity-60 focus-visible:ring-ring flex h-10 w-full rounded-md border text-center font-mono text-lg uppercase shadow-xs transition-[color,box-shadow] outline-none focus-visible:ring-2 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
 					value={char.trim()}
 					oninput={(event) => handleCharInput(index, event)}
 					onkeydown={(event) => handleKeydown(index, event)}

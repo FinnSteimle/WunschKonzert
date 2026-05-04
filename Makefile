@@ -1,4 +1,3 @@
-# Makefile for Wunschkonzert Backend
 # Usage: make <target>
 # Run "make help" to see available targets
 
@@ -9,6 +8,7 @@ help:
 	@echo "Development:"
 	@echo "  install       - Build and start containers"
 	@echo "  run           - Run development server with containers and apply migrations"
+	@echo "  rebuild       - Rebuild without cache and restart containers"
 	@echo ""
 	@echo "Database (via Docker):"
 	@echo "  migrate       - Apply all migrations in container"
@@ -42,21 +42,28 @@ help:
 # Development targets (Docker-based)
 .PHONY: install
 install:
-	docker compose -f compose.yaml build && docker compose -f compose.yaml up -d
+	docker compose -f compose.yaml build --no-cache && docker compose -f compose.yaml up -d
 
 .PHONY: run
 run:
-	docker compose -f compose.yaml up --build -d
+	docker compose -f compose.yaml up --build --force-recreate -d
 	docker compose -f compose.yaml exec -T api uv run python -m alembic upgrade head
 	docker compose -f compose.yaml logs -f api
 
 .PHONY: run-backend
 run-backend:
-	docker compose -f backend/compose.yaml up --build -d
+	docker compose -f backend/compose.yaml up --build --force-recreate -d
 
 .PHONY: run-frontend
 run-frontend:
-	docker compose -f frontend/compose.yaml up --build -d
+	docker compose -f frontend/compose.yaml up --build --force-recreate -d
+
+.PHONY: rebuild
+rebuild:
+	docker compose -f compose.yaml build --no-cache
+	docker compose -f compose.yaml up --force-recreate -d
+	docker compose -f compose.yaml exec -T api uv run python -m alembic upgrade head
+	docker compose -f compose.yaml logs -f api
 
 .PHONY: check-modular
 check-modular:

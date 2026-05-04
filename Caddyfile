@@ -1,0 +1,27 @@
+# TLS is obtained automatically (Let's Encrypt) when 80/443 point to this host
+# and DNS for these names resolve here. Staging is a separate compose stack on
+# the same host on docker network wunschkonzert_edge (aliases staging-api, staging-frontend).
+
+wunschkonzert.jj11.ch {
+	encode gzip
+
+	handle_path /api/* {
+		reverse_proxy api:8000
+	}
+
+	handle {
+		reverse_proxy frontend:3000
+	}
+}
+
+staging-wunschkonzert.jj11.ch {
+	encode gzip
+
+	handle_path /api/* {
+		reverse_proxy staging-api:8000
+	}
+
+	handle {
+		reverse_proxy staging-frontend:3000
+	}
+}

@@ -26,6 +26,14 @@ function ensureSdkScript(): void {
 	document.head.appendChild(script);
 }
 
+function toSpotifyTrackUri(providerTrackId: string): string {
+	if (providerTrackId.startsWith('spotify:track:')) return providerTrackId;
+	if (providerTrackId.startsWith('spotify:')) {
+		return `spotify:track:${providerTrackId.slice('spotify:'.length)}`;
+	}
+	return `spotify:track:${providerTrackId}`;
+}
+
 export class SpotifyPlayer implements MusicPlayer {
 	private player: Spotify.Player | null = null;
 	private deviceId: string | null = null;
@@ -35,6 +43,11 @@ export class SpotifyPlayer implements MusicPlayer {
 	private disposed = false;
 	private lastTrackId: string | null = null;
 	private wasPlaying = false;
+	private hasPlayedPastStart = false;
+	private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+	private reconnectAttempts = 0;
+	private connectionPromise: Promise<boolean> | null = null;
+	private readyWaiters = new Set<() => void>();
 
 	constructor(userId: string) {
 		this.userId = userId;
@@ -45,66 +58,130 @@ export class SpotifyPlayer implements MusicPlayer {
 		if (!sdkReady) await sdkReadyPromise;
 		if (this.disposed) return;
 
-		this.player = new Spotify.Player({
-			name: 'WunschKonzert',
-			getOAuthToken: (cb) => {
-				this.fetchToken().then((token) => cb(token));
-			},
-			volume: 0.5
-		});
-
-		this.player.addListener('ready', ({ device_id }) => {
-			this.deviceId = device_id;
-			this.emitState({ isReady: true });
-		});
-
-		this.player.addListener('not_ready', () => {
-			this.deviceId = null;
-			this.emitState({ isReady: false });
-		});
-
-		this.player.addListener('player_state_changed', (state) => {
-			if (!state) return;
-			const track = state.track_window.current_track;
-			const playing = !state.paused;
-
-			// Detect natural track end: was playing -> now paused at track end.
-			// Note: position === 0 at track START is not a track end.
-			const ended =
-				this.wasPlaying &&
-				!playing &&
-				state.duration > 0 &&
-				state.position >= state.duration - 500;
-
-			this.wasPlaying = playing;
-			this.lastTrackId = track?.id ?? null;
-			this.emitState({
-				isReady: true,
-				isPlaying: playing,
-				trackId: track?.id ?? null,
-				positionMs: state.position,
-				durationMs: state.duration,
-				trackEnded: ended
+		if (!this.player) {
+			this.player = new Spotify.Player({
+				name: 'WunschKonzert',
+				getOAuthToken: (cb) => {
+					this.fetchToken().then((token) => cb(token));
+				},
+				volume: 0.5
 			});
-		});
 
-		const errorEvents = [
-			'initialization_error',
-			'authentication_error',
-			'account_error',
-			'playback_error'
-		] as const;
-		for (const event of errorEvents) {
-			this.player.addListener(event, (err) => {
-				console.error(`[SpotifyPlayer] ${event}:`, err.message);
+			this.player.addListener('ready', ({ device_id }) => {
+				this.deviceId = device_id;
+				this.reconnectAttempts = 0;
+				if (this.reconnectTimer) {
+					clearTimeout(this.reconnectTimer);
+					this.reconnectTimer = null;
+				}
+				this.flushReadyWaiters();
+				this.emitState({ isReady: true });
 			});
+
+			this.player.addListener('not_ready', () => {
+				this.deviceId = null;
+				this.emitState({ isReady: false });
+				this.scheduleReconnect();
+			});
+
+			this.player.addListener('player_state_changed', (state) => {
+				if (!state) return;
+				const track = state.track_window.current_track;
+				const playing = !state.paused;
+
+				// Track whether we've played past the start (position > 1000ms) at least once.
+				// This helps distinguish between:
+				// - Track just started (position === 0, hasn't played yet)
+				// - Track ended and wrapped to next track (position === 0, but we had played)
+				if (playing && state.position > 1000) {
+					this.hasPlayedPastStart = true;
+				}
+
+				// Detect natural track end: was playing -> now paused, and either
+				// position wrapped to 0 (after having played) or reached track end.
+				const ended =
+					this.wasPlaying &&
+					!playing &&
+					state.duration > 0 &&
+					((state.position === 0 && this.hasPlayedPastStart) ||
+						state.position >= state.duration - 500);
+
+				// Reset hasPlayedPastStart when track changes or playback stops
+				if (!playing || track?.id !== this.lastTrackId) {
+					this.hasPlayedPastStart = false;
+				}
+
+				this.wasPlaying = playing;
+				this.lastTrackId = track?.id ?? null;
+				this.emitState({
+					isReady: true,
+					isPlaying: playing,
+					trackId: track?.id ?? null,
+					positionMs: state.position,
+					durationMs: state.duration,
+					trackEnded: ended
+				});
+			});
+
+			const errorEvents = [
+				'initialization_error',
+				'authentication_error',
+				'account_error',
+				'playback_error'
+			] as const;
+			for (const event of errorEvents) {
+				this.player.addListener(event, (err) => {
+					console.error(`[SpotifyPlayer] ${event}:`, err.message);
+				});
+			}
 		}
 
-		await this.player.connect();
+		await this.connectInternal();
+	}
+
+	private async connectInternal(): Promise<boolean> {
+		if (!this.player || this.disposed) return false;
+		if (this.connectionPromise) return this.connectionPromise;
+
+		this.connectionPromise = this.player
+			.connect()
+			.then((connected) => {
+				if (!connected && !this.disposed) {
+					this.scheduleReconnect();
+				}
+				return connected;
+			})
+			.catch((err) => {
+				if (!this.disposed) {
+					console.error('[SpotifyPlayer] connect failed:', err);
+					this.scheduleReconnect();
+				}
+				return false;
+			})
+			.finally(() => {
+				this.connectionPromise = null;
+			});
+
+		return this.connectionPromise;
+	}
+
+	private scheduleReconnect(): void {
+		if (this.disposed || !this.player || this.reconnectTimer) return;
+		const delay = Math.min(1000 * 2 ** this.reconnectAttempts, 10000);
+		this.reconnectAttempts += 1;
+		this.reconnectTimer = setTimeout(() => {
+			this.reconnectTimer = null;
+			void this.connectInternal();
+		}, delay);
 	}
 
 	disconnect(): void {
 		this.disposed = true;
+		if (this.reconnectTimer) {
+			clearTimeout(this.reconnectTimer);
+			this.reconnectTimer = null;
+		}
+		this.readyWaiters.clear();
 		this.player?.disconnect();
 		this.player = null;
 		this.deviceId = null;
@@ -112,10 +189,11 @@ export class SpotifyPlayer implements MusicPlayer {
 
 	async play(providerTrackId: string, positionMs?: number): Promise<void> {
 		const token = await this.fetchToken();
+		await this.waitForReady();
 		if (!this.deviceId) throw new Error('Spotify player not ready');
 
 		const body: Record<string, unknown> = {
-			uris: [`spotify:track:${providerTrackId}`]
+			uris: [toSpotifyTrackUri(providerTrackId)]
 		};
 		if (positionMs !== undefined && positionMs > 0) {
 			body.position_ms = Math.round(positionMs);
@@ -179,5 +257,33 @@ export class SpotifyPlayer implements MusicPlayer {
 			durationMs: partial.durationMs ?? 0,
 			trackEnded: partial.trackEnded ?? false
 		});
+	}
+
+	private async waitForReady(timeoutMs = 10000): Promise<void> {
+		if (this.deviceId) return;
+
+		await this.connectInternal();
+		if (this.deviceId) return;
+
+		await new Promise<void>((resolve, reject) => {
+			let timeout: ReturnType<typeof setTimeout> | null = null;
+			const onReady = () => {
+				if (timeout) clearTimeout(timeout);
+				this.readyWaiters.delete(onReady);
+				resolve();
+			};
+			timeout = setTimeout(() => {
+				this.readyWaiters.delete(onReady);
+				reject(new Error('Spotify player not ready'));
+			}, timeoutMs);
+
+			this.readyWaiters.add(onReady);
+			if (this.deviceId) onReady();
+		});
+	}
+
+	private flushReadyWaiters(): void {
+		for (const resolve of this.readyWaiters) resolve();
+		this.readyWaiters.clear();
 	}
 }

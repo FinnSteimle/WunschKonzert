@@ -29,6 +29,7 @@
 		CardTitle
 	} from '$lib/components/ui/card';
 	import CurrentSongCard from '$lib/components/room/playback/CurrentSongCard.svelte';
+	import ReplayVotePanel from '$lib/components/room/playback/ReplayVotePanel.svelte';
 	import PlaybackProgress from '$lib/components/room/playback/PlaybackProgress.svelte';
 	import PlaybackControls from '$lib/components/room/playback/PlaybackControls.svelte';
 	import QueueList from '$lib/components/room/queue/QueueList.svelte';
@@ -39,6 +40,7 @@
 	import InvitePanelDialog from '$lib/components/room/invite/InvitePanelDialog.svelte';
 	import LoadingState from '$lib/components/room/states/LoadingState.svelte';
 	import EmptyState from '$lib/components/room/states/EmptyState.svelte';
+	import SongHistoryModal from '$lib/components/room/history/SongHistoryModal.svelte';
 	import * as Dialog from '$lib/components/ui/dialog';
 	import { Button } from '$lib/components/ui/button';
 	import { Input } from '$lib/components/ui/input';
@@ -51,6 +53,7 @@
 	let recordedRecentThisMount = false;
 	let socketClient = $state<RoomSocketClient | null>(null);
 	let voteBusyId = $state<string | null>(null);
+	let replayVoteBusy = $state(false);
 	let playbackBusy = $state(false);
 	let renameDisplayName = $state('');
 	let renameBusy = $state(false);
@@ -89,6 +92,63 @@
 			toast.error(err instanceof Error ? err.message : 'Vote failed');
 		} finally {
 			voteBusyId = null;
+		}
+	}
+
+	async function handleRemove(queueEntryId: string) {
+		const uid = sessionUser?.userId;
+		if (!uid || !socketClient || !socketClient.isConnected()) {
+			toast.error('Not connected to room');
+			return;
+		}
+		voteBusyId = queueEntryId;
+		try {
+			const sent = socketClient.removeQueueEntry(queueEntryId, uid);
+			if (!sent) {
+				throw new Error('Remove failed');
+			}
+		} catch (err) {
+			toast.error(err instanceof Error ? err.message : 'Remove failed');
+		} finally {
+			voteBusyId = null;
+		}
+	}
+
+	async function handleReplayVoteCast() {
+		const uid = sessionUser?.userId;
+		if (!uid || !socketClient || !socketClient.isConnected()) {
+			toast.error('Not connected to room');
+			return;
+		}
+		replayVoteBusy = true;
+		try {
+			const sent = socketClient.sendReplayVote(uid, 'vote');
+			if (!sent) {
+				throw new Error('Could not send replay vote');
+			}
+		} catch (err) {
+			toast.error(err instanceof Error ? err.message : 'Could not send replay vote');
+		} finally {
+			replayVoteBusy = false;
+		}
+	}
+
+	async function handleReplayVoteRetract() {
+		const uid = sessionUser?.userId;
+		if (!uid || !socketClient || !socketClient.isConnected()) {
+			toast.error('Not connected to room');
+			return;
+		}
+		replayVoteBusy = true;
+		try {
+			const sent = socketClient.sendReplayVote(uid, 'retract');
+			if (!sent) {
+				throw new Error('Could not remove replay vote');
+			}
+		} catch (err) {
+			toast.error(err instanceof Error ? err.message : 'Could not remove replay vote');
+		} finally {
+			replayVoteBusy = false;
 		}
 	}
 
@@ -185,6 +245,19 @@
 			name: rs.room.name,
 			isHost: rs.host.userId === su.userId
 		});
+	});
+
+	const REPLAY_SCHEDULED_EVENT = 'replay_scheduled';
+	let lastReplayEventSignature = $state<string | undefined>(undefined);
+	$effect(() => {
+		if (!browser) return;
+		const ev = $roomStore.roomState?.lastEvent;
+		const sig = ev ? `${ev.type}:${ev.at}` : '';
+		const prev = lastReplayEventSignature;
+		lastReplayEventSignature = sig;
+		if (ev?.type === REPLAY_SCHEDULED_EVENT && prev !== undefined && sig !== prev) {
+			toast.success('The group voted to replay the last song. It has been added to the queue.');
+		}
 	});
 
 	// When the server's current track changes (or the SDK becomes ready), play it.
@@ -548,6 +621,16 @@
 				<section class="flex min-w-0 flex-col gap-3 lg:col-span-4" aria-labelledby="wk-now-playing">
 					<h2 id="wk-now-playing" class="text-sm font-medium">Now playing</h2>
 					<CurrentSongCard entry={current} />
+					{#if rs.replayVote}
+						<ReplayVotePanel
+							replayVote={rs.replayVote}
+							userId={sessionUser.userId}
+							connected={$roomStore.connected}
+							busy={replayVoteBusy}
+							onVote={handleReplayVoteCast}
+							onRetract={handleReplayVoteRetract}
+						/>
+					{/if}
 					{#if current && durationMs > 0}
 						<PlaybackProgress {positionMs} {durationMs} playbackState={rs.playback?.state} />
 					{/if}
@@ -561,12 +644,18 @@
 				</section>
 
 				<section class="flex min-w-0 flex-col gap-3 lg:col-span-8" aria-labelledby="wk-queue">
-					<h2 id="wk-queue" class="text-sm font-medium">Queue</h2>
+					<div class="flex items-center justify-between">
+						<h2 id="wk-queue" class="text-sm font-medium">Queue</h2>
+						<SongHistoryModal roomState={rs} />
+					</div>
 					<QueueList
 						entries={queueWithoutCurrent(rs)}
 						userId={sessionUser.userId}
+						hostId={rs.host.userId}
+						totalMembers={rs.users.length}
 						{voteBusyId}
 						onVote={handleVote}
+						onRemove={handleRemove}
 					/>
 				</section>
 

@@ -59,8 +59,10 @@ vi.mock('$lib/realtime/roomSocket', () => ({
 		send = vi.fn();
 		sendVote = vi.fn();
 		addToQueue = vi.fn();
+		removeQueueEntry = vi.fn();
 		setPlayback = vi.fn();
 		renameDisplayName = vi.fn();
+		sendReplayVote = vi.fn();
 	}
 }));
 
@@ -227,7 +229,7 @@ describe('room/[roomId]/+page.svelte', () => {
 			});
 		});
 
-		async function renderAndInjectState() {
+		async function renderAndInjectState(options?: { withReplayVote?: boolean }) {
 			render(RoomPage);
 			await waitFor(() => expect(apiClient.joinRoom).toHaveBeenCalled());
 			roomStore.setRoomState({
@@ -280,9 +282,38 @@ describe('room/[roomId]/+page.svelte', () => {
 					currentQueueEntryId: null,
 					updatedAt: '2025-01-01T00:00:00Z',
 					positionMs: 5000
-				}
+				},
+				...(options?.withReplayVote
+					? {
+							replayVote: {
+								targetQueueEntryId: 'q-prev',
+								track: {
+									trackId: 't-prev',
+									providerTrackId: 'spotify:t-prev',
+									title: 'Encore',
+									artist: 'Band',
+									album: 'Album',
+									duration: 200,
+									coverUrl: '',
+									deepLink: ''
+								},
+								voteCount: 0,
+								voterUserIds: [],
+								activeUserCount: 2,
+								closesAt: '2030-01-01T00:00:00Z',
+								status: 'open' as const
+							}
+						}
+					: {})
 			});
 		}
+
+		it('shows replay vote panel when server sends replayVote', async () => {
+			await renderAndInjectState({ withReplayVote: true });
+
+			await waitFor(() => expect(screen.getByText('Replay last track')).toBeTruthy());
+			expect(screen.getByText(/Encore/)).toBeTruthy();
+		});
 
 		it('shows room name and join code in the header', async () => {
 			await renderAndInjectState();
