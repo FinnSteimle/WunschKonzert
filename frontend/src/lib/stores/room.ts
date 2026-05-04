@@ -42,6 +42,12 @@ export function getPersonalVoteState(
 	return vote.type;
 }
 
+/** Track IDs still active in queue (anything not finished as `played`). */
+export function activeQueuedTrackIds(state: RoomStateDto | null): Set<string> {
+	if (!state) return new Set();
+	return new Set(state.queue.filter((e) => e.status !== 'played').map((e) => e.track.trackId));
+}
+
 export function queueWithoutCurrent(state: RoomStateDto | null): QueueEntryDto[] {
 	if (!state) return [];
 	const currentId = state.playback?.currentQueueEntryId;

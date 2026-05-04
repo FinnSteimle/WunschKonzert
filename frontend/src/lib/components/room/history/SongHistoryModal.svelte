@@ -1,14 +1,45 @@
 <script lang="ts">
-	import type { QueueEntryDto, RoomStateDto } from '$lib/types/api';
+	import type { QueueEntryDto, RoomStateDto, TrackDto } from '$lib/types/api';
 	import * as Dialog from '$lib/components/ui/dialog';
 	import { buttonVariants } from '$lib/components/ui/button';
 	import { cn } from '$lib/utils.js';
+	import { activeQueuedTrackIds } from '$lib/stores/room';
 	import HistoryItem from './HistoryItem.svelte';
 	import EmptyState from '$lib/components/room/states/EmptyState.svelte';
+	import { toast } from 'svelte-sonner';
 
-	let { roomState }: { roomState: RoomStateDto | null } = $props();
+	let {
+		roomState,
+		onAddTrack
+	}: {
+		roomState: RoomStateDto | null;
+		onAddTrack?: (track: TrackDto) => Promise<void> | void;
+	} = $props();
 
 	let open = $state(false);
+	let addingTrackId = $state<string | null>(null);
+
+	const queuedTrackIds = $derived(activeQueuedTrackIds(roomState));
+
+	async function readdTrack(track: TrackDto) {
+		addingTrackId = track.trackId;
+		try {
+			if (!onAddTrack) {
+				throw new Error('Add action unavailable');
+			}
+			await onAddTrack(track);
+			toast.success('Added to queue');
+		} catch (err) {
+			const msg = err instanceof Error ? err.message : 'Could not add song';
+			if (msg === 'Song is already in the queue') {
+				toast.message(msg);
+			} else {
+				toast.error(msg);
+			}
+		} finally {
+			addingTrackId = null;
+		}
+	}
 
 	const playedSongs = $derived.by(() => {
 		if (!roomState?.queue) return [];
@@ -61,8 +92,19 @@
 			{:else}
 				<ul class="flex flex-col gap-2" aria-label="Song history">
 					{#each playedSongs as entry (entry.queueEntryId)}
-						<li class="border-border rounded-lg border bg-card px-3 py-3">
-							<HistoryItem {entry} />
+						<li
+							class="border-border rounded-lg border bg-card px-3 py-3 {queuedTrackIds.has(
+								entry.track.trackId
+							)
+								? 'bg-muted/45 border-muted-foreground/20'
+								: ''}"
+						>
+							<HistoryItem
+								{entry}
+								inQueue={queuedTrackIds.has(entry.track.trackId)}
+								adding={addingTrackId === entry.track.trackId}
+								onAdd={onAddTrack ? () => void readdTrack(entry.track) : undefined}
+							/>
 						</li>
 					{/each}
 				</ul>

@@ -5,7 +5,7 @@
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
 	import { apiClient } from '$lib/api/client';
-	import { roomStore, getCurrentSong, queueWithoutCurrent } from '$lib/stores/room';
+	import { roomStore, getCurrentSong, queueWithoutCurrent, activeQueuedTrackIds } from '$lib/stores/room';
 	import { RoomSocketClient } from '$lib/realtime/roomSocket';
 	import {
 		generateRandomDisplayName,
@@ -586,9 +586,7 @@
 			{@const positionMs =
 				isHost && sdkPlayerState ? sdkPlayerState.positionMs : (rs.playback?.positionMs ?? 0)}
 			{@const inviteUrl = rs.room ? `${page.url.origin}/room/${rs.room.joinCode}` : ''}
-			{@const queuedTrackIds = new Set(
-				rs.queue.filter((e) => e.status !== 'played').map((e) => e.track.trackId)
-			)}
+			{@const queuedTrackIds = activeQueuedTrackIds(rs)}
 
 			<header
 				class="flex flex-row flex-wrap gap-3 sm:items-center sm:justify-between w-[calc(100%-40px)]"
@@ -646,7 +644,7 @@
 				<section class="flex min-w-0 flex-col gap-3 lg:col-span-8" aria-labelledby="wk-queue">
 					<div class="flex items-center justify-between">
 						<h2 id="wk-queue" class="text-sm font-medium">Queue</h2>
-						<SongHistoryModal roomState={rs} />
+						<SongHistoryModal roomState={rs} onAddTrack={handleAddTrack} />
 					</div>
 					<QueueList
 						entries={queueWithoutCurrent(rs)}

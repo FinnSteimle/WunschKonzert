@@ -5,6 +5,7 @@ import {
 	getPersonalVoteState,
 	getCurrentSong,
 	queueWithoutCurrent,
+	activeQueuedTrackIds,
 	countActiveRoomMembers,
 	replayMajorityThreshold,
 	type RoomUiState
@@ -172,6 +173,32 @@ describe('getPersonalVoteState', () => {
 			]
 		});
 		expect(getPersonalVoteState(entry, 'user-1')).toBe('downvote');
+	});
+});
+
+describe('activeQueuedTrackIds', () => {
+	it('returns empty set for null state', () => {
+		expect(activeQueuedTrackIds(null)).toEqual(new Set());
+	});
+
+	it('includes playing and queued tracks, excludes played', () => {
+		const played = makeQueueEntry({
+			queueEntryId: 'q-old',
+			status: 'played',
+			track: { ...makeQueueEntry().track, trackId: 't-played' }
+		});
+		const playing = makeQueueEntry({
+			queueEntryId: 'q-now',
+			status: 'playing',
+			track: { ...makeQueueEntry().track, trackId: 't-now' }
+		});
+		const queued = makeQueueEntry({
+			queueEntryId: 'q-next',
+			status: 'queued',
+			track: { ...makeQueueEntry().track, trackId: 't-next' }
+		});
+		const state = makeRoomState({ queue: [played, playing, queued] });
+		expect(activeQueuedTrackIds(state)).toEqual(new Set(['t-now', 't-next']));
 	});
 });
 
