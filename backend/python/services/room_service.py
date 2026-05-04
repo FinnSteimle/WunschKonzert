@@ -58,14 +58,12 @@ def _ui_to_feedback(vote_type: str) -> FeedbackType | None:
 
 
 async def _build_room_state(room_id: str) -> dict[str, object] | None:
-    # Get room and host
     try:
         room = await room_repo.get_room(room_id)
         host = await user_repo.get_user(room.hostedBy)
     except ResourceNotFoundError:
         return None
 
-    # Get room members
     memberships_list = await membership_repo.get_room_active_memberships(room_id)
 
     users: list[dict[str, object]] = [
@@ -198,7 +196,6 @@ async def _build_room_state(room_id: str) -> dict[str, object] | None:
             "positionMs": int(latest_playback.elapsedTime or 0) * 1000,
         }
 
-    # Get history
     history_entries = await playback_history_repo.get_history(room_id, limit=20)
     history: list[dict[str, object]] = []
     for entry in history_entries:
@@ -567,7 +564,6 @@ async def _advance_to_next(room_id: str) -> dict[str, object]:
             current_session.queueEntryId, {"status": QueueEntryStatus.PLAYED}
         )
 
-        # Add to history
         await playback_history_repo.add_history_entry(
             {
                 "roomId": room_id,

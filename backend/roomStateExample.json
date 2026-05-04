@@ -162,5 +162,21 @@
     "currentQueueEntryId": "QENTRY003",
     "updatedAt": "2026-03-20T11:25:00Z",
     "positionMs": 45000
-  }
+  },
+  "history": [
+    {
+      "historyId": 1,
+      "playedAt": "2026-03-20T11:00:00Z",
+      "track": {
+        "trackId": "TRACK_HIST_01",
+        "providerTrackId": "SONG_HIST_01",
+        "title": "One Dance",
+        "artist": "Drake",
+        "album": "Views",
+        "duration": 173,
+        "coverUrl": "https://example.com/one_dance.jpg",
+        "deepLink": ""
+      }
+    }
+  ]
 }
