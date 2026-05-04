@@ -117,6 +117,11 @@ async def _handle_position_sync(room_id: str, event: dict[str, object]) -> None:
         )
 
 
+@register("history")
+async def _handle_get_history(room_id: str, event: dict[str, object]) -> None:
+    await room_service.get_song_history(room_id)
+
+
 @register("rename")
 async def _handle_rename(room_id: str, event: dict[str, object]) -> None:
     await room_service.rename_participant(

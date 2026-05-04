@@ -7,6 +7,7 @@ from fastapi import HTTPException
 
 import repositories.membership_repo as membership_repo
 import repositories.music_provider_repo as music_provider_repo
+import repositories.playback_history_repo as playback_history_repo
 import repositories.playback_session_repo as playback_session_repo
 import repositories.queue_entry_repo as queue_entry_repo
 import repositories.room_repo as room_repo
@@ -197,6 +198,30 @@ async def _build_room_state(room_id: str) -> dict[str, object] | None:
             "positionMs": int(latest_playback.elapsedTime or 0) * 1000,
         }
 
+    # Get history
+    history_entries = await playback_history_repo.get_history(room_id, limit=20)
+    history: list[dict[str, object]] = []
+    for entry in history_entries:
+        if not entry.queue_entry or not entry.queue_entry.track:
+            continue
+        track = entry.queue_entry.track
+        history.append(
+            {
+                "historyId": entry.id,
+                "playedAt": entry.playedAt.isoformat(),
+                "track": {
+                    "trackId": track.trackId,
+                    "providerTrackId": track.providerTrackId,
+                    "title": track.title,
+                    "artist": track.artist,
+                    "album": track.album or "",
+                    "duration": track.duration or 0,
+                    "coverUrl": track.coverUrl or "",
+                    "deepLink": track.deepLink or "",
+                },
+            }
+        )
+
     state: dict[str, object] = {
         "room": {
             "roomId": room.roomId,
@@ -214,6 +239,7 @@ async def _build_room_state(room_id: str) -> dict[str, object] | None:
         "users": users,
         "queue": queue,
         "playback": playback,
+        "history": history,
     }
 
     return state
@@ -231,6 +257,10 @@ async def refresh_room_state(
 
     room_state_cache[room_id] = room_state
     return room_state
+
+
+async def get_song_history(room_id: str) -> dict[str, object]:
+    return await refresh_room_state(room_id, "history_updated")
 
 
 async def sync_playback_position(room_id: str, user_id: str, position_ms: int) -> None:
@@ -535,6 +565,16 @@ async def _advance_to_next(room_id: str) -> dict[str, object]:
         )
         await queue_entry_repo.update_queue_entry(
             current_session.queueEntryId, {"status": QueueEntryStatus.PLAYED}
+        )
+
+        # Add to history
+        await playback_history_repo.add_history_entry(
+            {
+                "roomId": room_id,
+                "queueEntryId": current_session.queueEntryId,
+                "playedAt": current_session.startedAt,
+                "replayCount": 1,
+            }
         )
 
     next_entry = await queue_entry_repo.get_next_queued_entry(room_id)
