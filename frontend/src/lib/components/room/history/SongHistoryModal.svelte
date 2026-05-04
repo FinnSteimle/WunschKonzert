@@ -1,5 +1,5 @@
 <script lang="ts">
-	import type { QueueEntryDto, RoomStateDto, TrackDto } from '$lib/types/api';
+	import type { PlaybackHistoryEntryDto, RoomStateDto, TrackDto } from '$lib/types/api';
 	import * as Dialog from '$lib/components/ui/dialog';
 	import { buttonVariants } from '$lib/components/ui/button';
 	import { cn } from '$lib/utils.js';
@@ -41,16 +41,11 @@
 		}
 	}
 
-	const playedSongs = $derived.by(() => {
-		if (!roomState?.queue) return [];
-
-		const playedAtOrQueued = (entry: QueueEntryDto) =>
-			new Date(entry.playedAt ?? entry.queuedAt).getTime();
-
-		return roomState.queue
-			.filter((entry) => entry.status === 'played')
-			.sort((a, b) => playedAtOrQueued(b) - playedAtOrQueued(a))
-			.slice(0, 30);
+	const historyRows = $derived.by((): PlaybackHistoryEntryDto[] => {
+		const raw = roomState?.history ?? [];
+		return [...raw].sort(
+			(a, b) => new Date(b.playedAt).getTime() - new Date(a.playedAt).getTime()
+		);
 	});
 </script>
 
@@ -84,26 +79,27 @@
 			</Dialog.Description>
 		</Dialog.Header>
 		<div class="max-h-[60vh] overflow-y-auto">
-			{#if playedSongs.length === 0}
+			{#if historyRows.length === 0}
 				<EmptyState
 					title="No songs played yet"
 					description="Songs will appear here once they finish playing."
 				/>
 			{:else}
 				<ul class="flex flex-col gap-2" aria-label="Song history">
-					{#each playedSongs as entry (entry.queueEntryId)}
+					{#each historyRows as row (row.historyId)}
 						<li
 							class="border-border rounded-lg border bg-card px-3 py-3 {queuedTrackIds.has(
-								entry.track.trackId
+								row.track.trackId
 							)
 								? 'bg-muted/45 border-muted-foreground/20'
 								: ''}"
 						>
 							<HistoryItem
-								{entry}
-								inQueue={queuedTrackIds.has(entry.track.trackId)}
-								adding={addingTrackId === entry.track.trackId}
-								onAdd={onAddTrack ? () => void readdTrack(entry.track) : undefined}
+								track={row.track}
+								playedAt={row.playedAt}
+								inQueue={queuedTrackIds.has(row.track.trackId)}
+								adding={addingTrackId === row.track.trackId}
+								onAdd={onAddTrack ? () => void readdTrack(row.track) : undefined}
 							/>
 						</li>
 					{/each}

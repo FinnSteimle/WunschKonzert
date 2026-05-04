@@ -2,15 +2,17 @@
 	import PlusIcon from '@lucide/svelte/icons/plus';
 	import { Button } from '$lib/components/ui/button';
 	import { Badge } from '$lib/components/ui/badge';
-	import type { QueueEntryDto } from '$lib/types/api';
+	import type { TrackDto } from '$lib/types/api';
 
 	let {
-		entry,
+		track,
+		playedAt,
 		inQueue = false,
 		adding = false,
 		onAdd
 	}: {
-		entry: QueueEntryDto;
+		track: TrackDto;
+		playedAt: string | null;
 		inQueue?: boolean;
 		adding?: boolean;
 		onAdd?: () => void;
@@ -31,9 +33,9 @@
 
 <div class="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-center">
 	<div class="flex min-w-0 flex-1 gap-3">
-		{#if entry.track.coverUrl}
+		{#if track.coverUrl}
 			<img
-				src={entry.track.coverUrl}
+				src={track.coverUrl}
 				alt=""
 				class="bg-muted size-14 shrink-0 rounded-md object-cover sm:size-16"
 			/>
@@ -45,12 +47,11 @@
 			</div>
 		{/if}
 		<div class="min-w-0 flex-1">
-			<p class="line-clamp-2 text-sm font-medium">{entry.track.title}</p>
-			<p class="text-muted-foreground line-clamp-1 text-xs">{entry.track.artist}</p>
-			<p class="text-muted-foreground mt-1 text-[11px]">Added by {entry.addedBy.displayName}</p>
+			<p class="line-clamp-2 text-sm font-medium">{track.title}</p>
+			<p class="text-muted-foreground line-clamp-1 text-xs">{track.artist}</p>
 			<p class="text-muted-foreground mt-1 text-[11px]">
-				{#if entry.playedAt}
-					Played {formatPlayedAgo(entry.playedAt)}
+				{#if playedAt}
+					Played {formatPlayedAgo(playedAt)}
 				{:else}
 					Played
 				{/if}
