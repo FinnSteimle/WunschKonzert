@@ -14,6 +14,7 @@ import repositories.room_repo as room_repo
 import repositories.song_feedback_repo as song_feedback_repo
 import repositories.track_repo as track_repo
 import repositories.user_repo as user_repo
+from core import identifiers
 from core.exceptions import ResourceNotFoundError
 from models.domain import (
     FeedbackType,
@@ -44,9 +45,13 @@ def _enum_value(value: object) -> str:
 def _feedback_to_ui(feedback_type: FeedbackType) -> str:
     if feedback_type == FeedbackType.LIKE:
         return "upvote"
+    if feedback_type == FeedbackType.DISLIKE:
+        return "downvote"
     if feedback_type == FeedbackType.SKIP:
         return "skip"
-    return "downvote"
+    if feedback_type == FeedbackType.REPLAY:
+        return "replay"
+    raise RuntimeError("Feedback type not recognized.")
 
 
 def _ui_to_feedback(vote_type: str) -> FeedbackType | None:
@@ -54,6 +59,10 @@ def _ui_to_feedback(vote_type: str) -> FeedbackType | None:
         return FeedbackType.LIKE
     if vote_type == "downvote":
         return FeedbackType.DISLIKE
+    if vote_type == "skip":
+        return FeedbackType.SKIP
+    if vote_type == "replay":
+        return FeedbackType.REPLAY
     return None
 
 
@@ -336,7 +345,7 @@ async def add_to_queue(
     has_playing = await queue_entry_repo.get_playing_queue_entry(room_id)
 
     # Create queue entry
-    queue_entry_id = f"QENTRY{uuid.uuid4().hex[:8].upper()}"
+    queue_entry_id = identifiers.generate_queue_entry_id()
     await queue_entry_repo.create_queue_entry(
         {
             "queueEntryId": queue_entry_id,
@@ -403,7 +412,7 @@ async def remove_queue_entry(
 async def vote_queue_entry(
     room_id: str, queue_entry_id: str, user_id: str, vote_type: str
 ) -> dict[str, object]:
-    if vote_type not in {"upvote", "downvote", "neutral", "skip"}:
+    if vote_type not in {"upvote", "downvote", "neutral", "skip", "replay"}:
         raise HTTPException(status_code=400, detail="Invalid vote type")
 
     # Get queue entry
@@ -411,51 +420,143 @@ async def vote_queue_entry(
     if not queue_entry or queue_entry.roomId != room_id:
         raise HTTPException(status_code=404, detail="Queue entry not found")
 
+    if vote_type == "replay" and queue_entry.status != QueueEntryStatus.PLAYING:
+        raise HTTPException(
+            status_code=400,
+            detail="Replay votes can only be cast on the currently playing song",
+        )
+
+    # Handle "neutral" (explicit deselect)
     if vote_type == "neutral":
+        # Removes all feedback for this user on this song
         await song_feedback_repo.delete_song_feedback(queue_entry_id, user_id)
-    elif vote_type == "skip":
-        # Democratic removal vote
-        await song_feedback_repo.create_or_update_song_feedback(
-            {
-                "queueEntryId": queue_entry_id,
-                "userId": user_id,
-                "type": FeedbackType.SKIP,
-                "votedAt": datetime.now(UTC).replace(tzinfo=None),
-            }
-        )
-        # Check threshold
-        feedback_list = await song_feedback_repo.get_song_feedback_by_queue_entry(
-            queue_entry_id
-        )
-        skip_count = sum(1 for f in feedback_list if f.type == FeedbackType.SKIP)
-        active_members = await membership_repo.get_room_active_memberships(room_id)
-        # Exclude the adder from the eligible voter pool — they can remove directly.
-        # Require 50% of the remaining members, minimum 1.
-        eligible = max(1, len(active_members) - 1)
-        required = math.ceil(eligible * 0.5)
-        if skip_count >= required:
-            # Threshold reached — remove the track
-            if queue_entry.status == QueueEntryStatus.PLAYING:
-                await _advance_to_next(room_id)
-            await queue_entry_repo.update_queue_entry(
-                queue_entry_id, {"status": QueueEntryStatus.REMOVED}
-            )
-            return await refresh_room_state(room_id, "queue_entry_removed")
-    else:
-        mapped_feedback = _ui_to_feedback(vote_type)
-        if mapped_feedback is None:
-            raise HTTPException(status_code=400, detail="Invalid vote type")
+        return await _recalculate_and_refresh(room_id, queue_entry_id, "vote_updated")
 
-        await song_feedback_repo.create_or_update_song_feedback(
-            {
-                "queueEntryId": queue_entry_id,
-                "userId": user_id,
-                "type": mapped_feedback,
-                "votedAt": datetime.now(UTC).replace(tzinfo=None),
-            }
+    mapped_type = _ui_to_feedback(vote_type)
+    if not mapped_type:
+        raise HTTPException(status_code=400, detail="Invalid vote type")
+
+    # Check for existing feedback of the same type (Toggle logic)
+    existing = await song_feedback_repo.get_song_feedback(
+        queue_entry_id, user_id, feedback_type=mapped_type
+    )
+    if existing:
+        await song_feedback_repo.delete_song_feedback(
+            queue_entry_id, user_id, feedback_type=mapped_type
+        )
+        return await _recalculate_and_refresh(room_id, queue_entry_id, "vote_updated")
+
+    # Handle Mutual Exclusivity for Upvote/Downvote
+    if mapped_type in {FeedbackType.LIKE, FeedbackType.DISLIKE}:
+        other_type = (
+            FeedbackType.DISLIKE
+            if mapped_type == FeedbackType.LIKE
+            else FeedbackType.LIKE
+        )
+        await song_feedback_repo.delete_song_feedback(
+            queue_entry_id, user_id, feedback_type=other_type
         )
 
-    # Recalculate vote score
+    # Create/Update the vote
+    await song_feedback_repo.create_or_update_song_feedback(
+        {
+            "queueEntryId": queue_entry_id,
+            "userId": user_id,
+            "type": mapped_type,
+            "votedAt": datetime.now(UTC).replace(tzinfo=None),
+        }
+    )
+
+    # 5. Handle Side Effects (Skip/Replay thresholds)
+    if mapped_type == FeedbackType.SKIP:
+        return await _handle_skip_vote(room_id, queue_entry_id)
+
+    if mapped_type == FeedbackType.REPLAY:
+        return await _handle_replay_vote(room_id, queue_entry_id, user_id)
+
+    return await _recalculate_and_refresh(room_id, queue_entry_id, "vote_updated")
+
+
+async def _handle_skip_vote(room_id: str, queue_entry_id: str) -> dict[str, object]:
+    """Check if skip threshold is met and advance if necessary."""
+    queue_entry = await queue_entry_repo.get_queue_entry(queue_entry_id)
+    if not queue_entry:
+        return await refresh_room_state(room_id, "vote_updated")
+
+    feedback_list = await song_feedback_repo.get_song_feedback_by_queue_entry(
+        queue_entry_id
+    )
+    skip_count = sum(1 for f in feedback_list if f.type == FeedbackType.SKIP)
+    active_members = await membership_repo.get_room_active_memberships(room_id)
+
+    # Exclude the adder from the eligible voter pool
+    eligible = max(1, len(active_members) - 1)
+    required = math.ceil(eligible * 0.5)
+
+    if skip_count >= required:
+        if queue_entry.status == QueueEntryStatus.PLAYING:
+            await _advance_to_next(room_id)
+        await queue_entry_repo.update_queue_entry(
+            queue_entry_id, {"status": QueueEntryStatus.REMOVED}
+        )
+        return await refresh_room_state(room_id, "queue_entry_removed")
+
+    return await _recalculate_and_refresh(room_id, queue_entry_id, "vote_updated")
+
+
+async def _handle_replay_vote(
+    room_id: str, queue_entry_id: str, user_id: str
+) -> dict[str, object]:
+    """Check if replay threshold is met and requeue if necessary."""
+    queue_entry = await queue_entry_repo.get_queue_entry(queue_entry_id)
+    if not queue_entry:
+        return await refresh_room_state(room_id, "vote_updated")
+
+    feedback_list = await song_feedback_repo.get_song_feedback_by_queue_entry(
+        queue_entry_id
+    )
+    replay_count = sum(1 for f in feedback_list if f.type == FeedbackType.REPLAY)
+    active_members = await membership_repo.get_room_active_memberships(room_id)
+
+    eligible = max(1, len(active_members))
+    required = math.ceil(eligible * 0.5)
+
+    if replay_count >= required:
+        # Threshold reached, requeue the track to play next
+        track = await track_repo.get_track(queue_entry.trackId)
+        if not track:
+            raise HTTPException(status_code=404, detail="Track not found")
+
+        new_queue_entry_id = identifiers.generate_queue_entry_id()
+        await queue_entry_repo.create_queue_entry(
+            {
+                "queueEntryId": new_queue_entry_id,
+                "roomId": room_id,
+                "trackId": track.trackId,
+                "addedBy": user_id,
+                "position": 0,
+                "status": QueueEntryStatus.QUEUED,
+                "voteScore": 9999,
+                "orderRank": -1.0,
+            }
+        )
+
+        await song_feedback_repo.delete_song_feedback(
+            queue_entry_id, feedback_type=FeedbackType.REPLAY
+        )
+        return await refresh_room_state(room_id, "playback_replayed")
+
+    return await _recalculate_and_refresh(room_id, queue_entry_id, "vote_updated")
+
+
+async def _recalculate_and_refresh(
+    room_id: str, queue_entry_id: str, event_type: str
+) -> dict[str, object]:
+    """Helper to recalculate vote scores and return the fresh room state."""
+    queue_entry = await queue_entry_repo.get_queue_entry(queue_entry_id)
+    if not queue_entry:
+        return await refresh_room_state(room_id, event_type)
+
     feedback_list = await song_feedback_repo.get_song_feedback_by_queue_entry(
         queue_entry_id
     )
@@ -467,7 +568,6 @@ async def vote_queue_entry(
     vote_score = upvotes - downvotes
     order_rank = float(queue_entry.position) - float(vote_score) / 100.0
 
-    # Update queue entry
     await queue_entry_repo.update_queue_entry(
         queue_entry_id,
         {
@@ -476,7 +576,7 @@ async def vote_queue_entry(
         },
     )
 
-    return await refresh_room_state(room_id, "vote_updated")
+    return await refresh_room_state(room_id, event_type)
 
 
 async def set_playback_state(
@@ -579,7 +679,9 @@ async def _advance_to_next(room_id: str) -> dict[str, object]:
             next_entry.queueEntryId, {"status": QueueEntryStatus.PLAYING}
         )
         # Playback deadline: once the song reaches the playback all votes to skip it will be removed and the song will play.
-        await song_feedback_repo.delete_skip_feedback(next_entry.queueEntryId)
+        await song_feedback_repo.delete_song_feedback(
+            next_entry.queueEntryId, feedback_type=FeedbackType.SKIP
+        )
 
         await playback_session_repo.create_playback_session(
             {
