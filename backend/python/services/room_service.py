@@ -499,9 +499,8 @@ async def _handle_skip_vote(room_id: str, queue_entry_id: str) -> dict[str, obje
     skip_count = sum(1 for f in feedback_list if f.type == FeedbackType.SKIP)
     active_members = await membership_repo.get_room_active_memberships(room_id)
 
-    # Exclude the adder from the eligible voter pool.
-    # Require strictly more than 50% of eligible voters (majority).
-    eligible = max(1, len(active_members) - 1)
+    # All active members are eligible — strictly more than 50% triggers skip/remove.
+    eligible = max(1, len(active_members))
     required = math.floor(eligible / 2) + 1
 
     if skip_count >= required:
