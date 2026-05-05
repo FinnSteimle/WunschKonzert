@@ -388,12 +388,22 @@ async def remove_queue_entry(
     except ResourceNotFoundError:
         raise HTTPException(status_code=404, detail="Room not found")
 
-    # check if the user is authorized to remove the track with no voting
     is_adder = queue_entry.addedBy == user_id
     is_host = room.hostedBy == user_id
 
-    if not is_adder and not is_host:
-        # Democratic vote
+    if is_host:
+        can_remove_directly = True
+    elif is_adder:
+        feedback_list = await song_feedback_repo.get_song_feedback_by_queue_entry(
+            queue_entry_id
+        )
+        has_upvotes = any(f.type == FeedbackType.LIKE for f in feedback_list)
+        can_remove_directly = not has_upvotes
+    else:
+        can_remove_directly = False
+
+    if not can_remove_directly:
+        # Democratic vote path
         return await vote_queue_entry(room_id, queue_entry_id, user_id, "skip")
 
     if queue_entry.status == QueueEntryStatus.PLAYING:
@@ -489,9 +499,10 @@ async def _handle_skip_vote(room_id: str, queue_entry_id: str) -> dict[str, obje
     skip_count = sum(1 for f in feedback_list if f.type == FeedbackType.SKIP)
     active_members = await membership_repo.get_room_active_memberships(room_id)
 
-    # Exclude the adder from the eligible voter pool
+    # Exclude the adder from the eligible voter pool.
+    # Require strictly more than 50% of eligible voters (majority).
     eligible = max(1, len(active_members) - 1)
-    required = math.ceil(eligible * 0.5)
+    required = math.floor(eligible / 2) + 1
 
     if skip_count >= required:
         if queue_entry.status == QueueEntryStatus.PLAYING:
