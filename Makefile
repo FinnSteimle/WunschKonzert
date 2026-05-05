@@ -107,7 +107,7 @@ test:
 
 .PHONY: test-cov
 test-cov:
-	docker compose -f compose.yaml exec -T api uv run python -m pytest --cov=./ --cov-report=term-missing
+	docker compose -f compose.yaml exec -T api uv run python -m pytest --cov=./ --cov-report=term-missing --cov-fail-under=80
 
 .PHONY: test-system
 test-system:
