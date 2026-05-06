@@ -46,7 +46,8 @@ export default defineConfig({
 				'**/*.d.ts',
 				'src/lib/index.ts'
 			],
-			clean: true,
+			// GitLab binds $(pwd)/coverage → /app/coverage; clean:true rmdir`s that path → EBUSY.
+			clean: false,
 			thresholds: {
 				lines: 80,
 				statements: 80
