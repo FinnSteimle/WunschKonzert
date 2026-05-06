@@ -258,7 +258,7 @@ system:e2e:
     expire_in: 7 days
     paths:
       - backend/python/test-results/
-      - backend/python/playwright-report/
+      - backend/python/junit-system.xml
     reports:
       junit: backend/python/junit-system.xml
 
