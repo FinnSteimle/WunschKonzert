@@ -185,3 +185,8 @@ check-health:
 verify-recoverability:
 	@chmod +x scripts/verify_recoverability.sh
 	./scripts/verify_recoverability.sh
+
+.PHONY: verify-confidentiality
+verify-confidentiality:
+	@chmod +x scripts/verify_confidentiality.sh
+	./scripts/verify_confidentiality.sh
