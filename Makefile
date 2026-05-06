@@ -146,8 +146,7 @@ test-system:
 		fi; \
 	done
 	@echo ""
-	@echo "Installing Playwright browsers and dependencies..."
-	docker compose -f compose.yaml -f compose.system.yaml exec -T api uv run playwright install --with-deps chromium firefox webkit
+	@echo "Running system tests..."
 	docker compose -f compose.yaml -f compose.system.yaml exec -T api env BACKEND_URL=http://api:8000 FRONTEND_URL=http://frontend:3000 uv run pytest tests/system/ -v -m system --no-cov --junit-xml=junit-system.xml
 	@echo "System tests complete. Services still running. Use 'make clean' to stop."
 
@@ -196,8 +195,6 @@ verify-confidentiality:
 verify-responsive:
 	@echo "Starting services for responsive verification..."
 	docker compose -f compose.yaml -f compose.system.yaml up -d --build
-	@echo "Installing browser engines and system dependencies (Chromium, Firefox, WebKit)..."
-	docker compose -f compose.yaml -f compose.system.yaml exec -T api uv run playwright install --with-deps chromium firefox webkit
 	@echo "Running cross-browser responsive tests..."
 	docker compose -f compose.yaml -f compose.system.yaml exec -T api env BACKEND_URL=http://api:8000 FRONTEND_URL=http://frontend:3000 uv run pytest tests/system/test_responsive_design.py -v -m system --no-cov
 	@echo "Verification complete."
