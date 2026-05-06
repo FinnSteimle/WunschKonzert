@@ -15,7 +15,7 @@ class SeedUserRequest(BaseModel):
 
 
 @router.post("/seed_user")
-async def seed_user(data: SeedUserRequest):
+async def seed_user(data: SeedUserRequest) -> dict[str, object]:
     """
     Seeds a user with a linked Spotify account for load testing.
     Only available in development environment.
