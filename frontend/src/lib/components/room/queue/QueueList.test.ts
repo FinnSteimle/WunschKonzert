@@ -1,5 +1,6 @@
-import { render, screen } from '@testing-library/svelte';
+import { fireEvent, render, screen } from '@testing-library/svelte';
 import { describe, expect, it } from 'vitest';
+import { vi } from 'vitest';
 import QueueList from './QueueList.svelte';
 import type { QueueEntryDto } from '$lib/types/api';
 
@@ -32,6 +33,18 @@ describe('QueueList', () => {
 		render(QueueList, { entries: [], userId: 'user-1', hostId: 'host-1', totalMembers: 1, voteBusyId: null });
 		expect(screen.getByText('Queue is empty')).toBeTruthy();
 		expect(screen.getByText('Search for a song and add it to the queue.')).toBeTruthy();
+	});
+
+	it('shows empty state when all entries are played', () => {
+		const entries = [
+			makeEntry({ queueEntryId: 'q1', status: 'played' }),
+			makeEntry({ queueEntryId: 'q2', status: 'played', position: 1 })
+		];
+
+		render(QueueList, { entries, userId: 'user-1', hostId: 'host-1', totalMembers: 2, voteBusyId: null });
+
+		expect(screen.getByText('Queue is empty')).toBeTruthy();
+		expect(screen.queryByRole('list', { name: 'Playback queue' })).toBeNull();
 	});
 
 	it('renders queue entries', () => {
@@ -129,5 +142,54 @@ describe('QueueList', () => {
 		render(QueueList, { entries, userId: 'user-1', hostId: 'host-1', totalMembers: 1, voteBusyId: null });
 
 		expect(screen.getByRole('list', { name: 'Playback queue' })).toBeTruthy();
+	});
+
+	it('forwards vote and remove callbacks to queue item actions', async () => {
+		const onVote = vi.fn();
+		const onRemove = vi.fn();
+		const entries = [makeEntry()];
+
+		render(QueueList, {
+			entries,
+			userId: 'user-1',
+			hostId: 'host-1',
+			totalMembers: 2,
+			voteBusyId: null,
+			onVote,
+			onRemove
+		});
+
+		await fireEvent.click(screen.getByRole('button', { name: 'Upvote' }));
+		await fireEvent.click(screen.getByRole('button', { name: 'Remove track' }));
+
+		expect(onVote).toHaveBeenCalledWith('q1', 'upvote');
+		expect(onRemove).toHaveBeenCalledWith('q1');
+	});
+
+	it('disables actions for busy queue entry only', () => {
+		const entries = [
+			makeEntry({ queueEntryId: 'q1' }),
+			makeEntry({
+				queueEntryId: 'q2',
+				position: 1,
+				track: { ...makeEntry().track, title: 'Second song' }
+			})
+		];
+
+		render(QueueList, {
+			entries,
+			userId: 'user-1',
+			hostId: 'host-1',
+			totalMembers: 2,
+			voteBusyId: 'q1'
+		});
+
+		const removeButtons = screen.getAllByRole('button', { name: 'Remove track' }) as HTMLButtonElement[];
+		const upvoteButtons = screen.getAllByRole('button', { name: 'Upvote' }) as HTMLButtonElement[];
+
+		expect(removeButtons[0].disabled).toBe(true);
+		expect(upvoteButtons[0].disabled).toBe(true);
+		expect(removeButtons[1].disabled).toBe(false);
+		expect(upvoteButtons[1].disabled).toBe(false);
 	});
 });
