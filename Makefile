@@ -25,6 +25,7 @@ help:
 	@echo "  test          - Run tests in container"
 	@echo "  test-cov      - Run tests with coverage in container"
 	@echo "  test-system   - Run end-to-end system tests with Playwright"
+	@echo "  test-load     - Run k6 stress tests (requires k6 installed)"
 	@echo ""
 
 	@echo "Cleanup (Docker):"
@@ -147,6 +148,16 @@ test-system:
 	docker compose -f compose.yaml -f compose.system.yaml exec -T api uv run playwright install --with-deps chromium
 	docker compose -f compose.yaml -f compose.system.yaml exec -T api env BACKEND_URL=http://api:8000 FRONTEND_URL=http://frontend:3000 uv run python -m pytest tests/system/ -v -m system --no-cov
 	@echo "System tests complete. Services still running. Use 'make clean' to stop."
+
+.PHONY: test-load
+test-load:
+	@echo "Running k6 load tests..."
+	@if command -v k6 >/dev/null 2>&1; then \
+		k6 run load-tests/stress_test.js; \
+	else \
+		echo "k6 not found. Please install it (e.g., brew install k6 or docker run --rm -i grafana/k6 run - < load-tests/stress_test.js)"; \
+		exit 1; \
+	fi
 
 # Cleanup targets (Docker-focused)
 .PHONY: clean

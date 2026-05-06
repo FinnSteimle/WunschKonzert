@@ -1,3 +1,4 @@
+import os
 import subprocess
 import sys
 from collections.abc import AsyncGenerator
@@ -11,7 +12,7 @@ from fastapi.responses import JSONResponse
 import repositories.health_repo as health_repo
 import repositories.music_provider_repo as music_provider_repo
 from api import websockets
-from api.routers import auth, playback, provider_search, rooms, spotify_auth
+from api.routers import auth, debug, playback, provider_search, rooms, spotify_auth
 from core.exceptions import ResourceNotFoundError
 
 
@@ -74,6 +75,10 @@ app.include_router(provider_search.router)
 app.include_router(playback.router)
 app.include_router(spotify_auth.router)
 app.include_router(websockets.router)
+
+# Include debug router only in development for load testing
+if os.getenv("ENVIRONMENT") == "development":
+    app.include_router(debug.router)
 
 
 @app.api_route("/health", methods=["GET", "HEAD"])
