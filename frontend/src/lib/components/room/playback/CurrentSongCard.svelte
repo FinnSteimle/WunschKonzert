@@ -11,9 +11,26 @@
 	import type { QueueEntryDto } from '$lib/types/api';
 	import EmptyState from '$lib/components/room/states/EmptyState.svelte';
 
-	let { entry }: { entry: QueueEntryDto | null } = $props();
+	let {
+		entry,
+		skipCount = 0,
+		requiredVotes = 1,
+		hasVoted = false,
+		busy = false,
+		connected = true,
+		onToggleSkip
+	}: {
+		entry: QueueEntryDto | null;
+		skipCount?: number;
+		requiredVotes?: number;
+		hasVoted?: boolean;
+		busy?: boolean;
+		connected?: boolean;
+		onToggleSkip?: () => void;
+	} = $props();
 
 	const deepLink = $derived(entry?.track.deepLink?.trim() ?? '');
+	const skipDisabled = $derived(!connected || busy || !entry);
 </script>
 
 {#if entry}
@@ -50,6 +67,24 @@
 				</CardHeader>
 				<CardContent class="text-muted-foreground flex flex-col gap-2 p-0 text-xs">
 					<p>Added by {entry.addedBy.displayName}</p>
+					<div class="flex items-center gap-2">
+						<Button
+							type="button"
+							size="sm"
+							variant={hasVoted ? 'default' : 'outline'}
+							class={hasVoted ? 'bg-orange-500 hover:bg-orange-500 text-white' : ''}
+							disabled={skipDisabled}
+							onclick={() => onToggleSkip?.()}
+						>
+							{hasVoted ? 'Skip voted' : 'Vote skip'}
+						</Button>
+						<span
+							class="text-muted-foreground tabular-nums text-xs"
+							aria-label="{skipCount} of {requiredVotes} votes to skip current song"
+						>
+							{skipCount}/{requiredVotes}
+						</span>
+					</div>
 					{#if deepLink}
 						<Button
 							variant="outline"

@@ -5,7 +5,13 @@
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
 	import { apiClient } from '$lib/api/client';
-	import { roomStore, getCurrentSong, queueWithoutCurrent, activeQueuedTrackIds } from '$lib/stores/room';
+	import {
+		roomStore,
+		getCurrentSong,
+		queueWithoutCurrent,
+		activeQueuedTrackIds,
+		countActiveRoomMembers
+	} from '$lib/stores/room';
 	import { RoomSocketClient } from '$lib/realtime/roomSocket';
 	import {
 		generateRandomDisplayName,
@@ -577,6 +583,15 @@
 			{@const rs = $roomStore.roomState}
 			{@const isHost = rs.host?.userId === sessionUser.userId}
 			{@const current = getCurrentSong(rs)}
+			{@const currentUserId = sessionUser.userId}
+			{@const currentSkipVotes = current
+				? current.feedback.filter((feedback) => feedback.type === 'skip')
+				: []}
+			{@const currentSkipCount = currentSkipVotes.length}
+			{@const currentRequiredVotes = Math.floor(rs.users.length / 2) + 1}
+			{@const currentUserSkipped = current
+				? currentSkipVotes.some((feedback) => feedback.userId === currentUserId)
+				: false}
 			{@const durationMs =
 				isHost && sdkPlayerState && sdkPlayerState.durationMs > 0
 					? sdkPlayerState.durationMs
@@ -618,7 +633,18 @@
 			<main class="grid grid-cols-1 gap-6 lg:grid-cols-12 lg:gap-8">
 				<section class="flex min-w-0 flex-col gap-3 lg:col-span-4" aria-labelledby="wk-now-playing">
 					<h2 id="wk-now-playing" class="text-sm font-medium">Now playing</h2>
-					<CurrentSongCard entry={current} />
+					<CurrentSongCard
+						entry={current}
+						skipCount={currentSkipCount}
+						requiredVotes={currentRequiredVotes}
+						hasVoted={currentUserSkipped}
+						connected={$roomStore.connected}
+						busy={voteBusyId === current?.queueEntryId}
+						onToggleSkip={() => {
+							if (!current) return;
+							void handleVote(current.queueEntryId, currentUserSkipped ? 'neutral' : 'skip');
+						}}
+					/>
 					{#if rs.replayVote}
 						<ReplayVotePanel
 							replayVote={rs.replayVote}
@@ -650,14 +676,17 @@
 						entries={queueWithoutCurrent(rs)}
 						userId={sessionUser.userId}
 						hostId={rs.host.userId}
-						totalMembers={rs.users.length}
+						totalMembers={countActiveRoomMembers($roomStore.roomState)}
 						{voteBusyId}
 						onVote={handleVote}
 						onRemove={handleRemove}
 					/>
 				</section>
 
-				<section class="flex min-w-0 flex-col gap-3 lg:col-span-8" aria-labelledby="wk-search-heading">
+				<section
+					class="flex min-w-0 flex-col gap-3 lg:col-span-8"
+					aria-labelledby="wk-search-heading"
+				>
 					<h2 id="wk-search-heading" class="text-sm font-medium">Add a song</h2>
 					<Card>
 						<CardHeader class="pb-2">

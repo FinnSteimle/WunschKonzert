@@ -1,5 +1,5 @@
-import { render, screen } from '@testing-library/svelte';
-import { describe, expect, it } from 'vitest';
+import { fireEvent, render, screen } from '@testing-library/svelte';
+import { describe, expect, it, vi } from 'vitest';
 import CurrentSongCard from './CurrentSongCard.svelte';
 import type { QueueEntryDto } from '$lib/types/api';
 
@@ -80,5 +80,22 @@ describe('CurrentSongCard', () => {
 	it('shows entry status when present', () => {
 		render(CurrentSongCard, { entry: makeEntry({ status: 'playing' }) });
 		expect(screen.getByText('playing')).toBeTruthy();
+	});
+
+	it('shows live skip progress', () => {
+		render(CurrentSongCard, { entry: makeEntry(), skipCount: 2, requiredVotes: 3 });
+		expect(screen.getByText('2/3')).toBeTruthy();
+	});
+
+	it('shows voted state when current user already voted', () => {
+		render(CurrentSongCard, { entry: makeEntry(), hasVoted: true });
+		expect(screen.getByRole('button', { name: 'Skip voted' })).toBeTruthy();
+	});
+
+	it('calls skip toggle handler on click', async () => {
+		const onToggleSkip = vi.fn();
+		render(CurrentSongCard, { entry: makeEntry(), onToggleSkip });
+		await fireEvent.click(screen.getByRole('button', { name: 'Vote skip' }));
+		expect(onToggleSkip).toHaveBeenCalledTimes(1);
 	});
 });

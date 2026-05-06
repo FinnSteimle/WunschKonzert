@@ -34,7 +34,7 @@
 	);
 	const skipVotes = $derived(entry.feedback.filter((f) => f.type === 'skip'));
 	const skipCount = $derived(skipVotes.length);
-	const requiredVotes = $derived(Math.ceil(Math.max(1, totalMembers - 1) * 0.5));
+	const requiredVotes = $derived(Math.floor(Math.max(1, totalMembers) / 2) + 1);
 	const hasVoted = $derived(skipVotes.some((f) => f.userId === currentUserId));
 </script>
 
