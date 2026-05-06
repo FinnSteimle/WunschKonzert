@@ -8,6 +8,7 @@ import {
 	activeQueuedTrackIds,
 	countActiveRoomMembers,
 	replayMajorityThreshold,
+	clientReplayVoteFromPlayingEntry,
 	type RoomUiState
 } from './room';
 import type { QueueEntryDto, RoomStateDto } from '$lib/types/api';
@@ -174,6 +175,13 @@ describe('getPersonalVoteState', () => {
 		});
 		expect(getPersonalVoteState(entry, 'user-1')).toBe('downvote');
 	});
+
+	it('treats replay feedback as neutral for queue upvote UI', () => {
+		const entry = makeQueueEntry({
+			feedback: [{ userId: 'user-1', votedAt: '2025-01-01T00:00:00Z', type: 'replay' }]
+		});
+		expect(getPersonalVoteState(entry, 'user-1')).toBe('neutral');
+	});
 });
 
 describe('activeQueuedTrackIds', () => {
@@ -331,6 +339,81 @@ describe('countActiveRoomMembers', () => {
 
 	it('returns 0 for null state', () => {
 		expect(countActiveRoomMembers(null)).toBe(0);
+	});
+});
+
+describe('clientReplayVoteFromPlayingEntry', () => {
+	it('returns null when playback is stopped', () => {
+		const entry = makeQueueEntry({ queueEntryId: 'qx', status: 'playing' });
+		const state = makeRoomState({
+			queue: [entry],
+			users: [
+				{
+					user: { userId: 'u1', displayName: 'A', createdAt: '2025-01-01T00:00:00Z' },
+					membership: { joinedAt: '2025-01-01T00:00:00Z', leftAt: null, membershipStatus: 'active' }
+				}
+			],
+			playback: {
+				state: 'stopped',
+				currentQueueEntryId: 'qx',
+				updatedAt: '2025-01-01T00:00:00Z',
+				positionMs: 0
+			}
+		});
+		expect(clientReplayVoteFromPlayingEntry(entry, state, 0, 60_000)).toBeNull();
+	});
+
+	it('returns open replay state with vote tally from feedback', () => {
+		const entry = makeQueueEntry({
+			queueEntryId: 'qx',
+			status: 'playing',
+			feedback: [
+				{
+					userId: 'u1',
+					votedAt: '2025-01-01T00:00:00Z',
+					type: 'replay' as const
+				}
+			]
+		});
+		const state = makeRoomState({
+			queue: [entry],
+			users: [
+				{
+					user: { userId: 'u1', displayName: 'A', createdAt: '2025-01-01T00:00:00Z' },
+					membership: { joinedAt: '2025-01-01T00:00:00Z', leftAt: null, membershipStatus: 'active' }
+				},
+				{
+					user: { userId: 'u2', displayName: 'B', createdAt: '2025-01-01T00:00:00Z' },
+					membership: { joinedAt: '2025-01-01T00:00:00Z', leftAt: null, membershipStatus: 'active' }
+				}
+			],
+			playback: {
+				state: 'playing',
+				currentQueueEntryId: 'qx',
+				updatedAt: '2025-01-01T00:00:00Z',
+				positionMs: 10_000
+			}
+		});
+		const derived = clientReplayVoteFromPlayingEntry(entry, state, 10_000, 60_000);
+		expect(derived?.voteCount).toBe(1);
+		expect(derived?.voterUserIds).toEqual(['u1']);
+		expect(derived?.activeUserCount).toBe(2);
+		expect(derived?.targetQueueEntryId).toBe('qx');
+		expect(derived?.status).toBe('open');
+	});
+
+	it('returns null when entry is not current playback', () => {
+		const entry = makeQueueEntry({ queueEntryId: 'qx', status: 'playing' });
+		const state = makeRoomState({
+			queue: [entry],
+			playback: {
+				state: 'playing',
+				currentQueueEntryId: 'other',
+				updatedAt: '2025-01-01T00:00:00Z',
+				positionMs: 0
+			}
+		});
+		expect(clientReplayVoteFromPlayingEntry(entry, state, 0, 60_000)).toBeNull();
 	});
 });
 

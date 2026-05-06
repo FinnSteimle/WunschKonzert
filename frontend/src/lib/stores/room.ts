@@ -1,5 +1,5 @@
 import { writable } from 'svelte/store';
-import type { QueueEntryDto, RoomStateDto } from '$lib/types/api';
+import type { QueueEntryDto, ReplayVoteStateDto, RoomStateDto } from '$lib/types/api';
 
 export interface RoomUiState {
 	roomState: RoomStateDto | null;
@@ -37,8 +37,8 @@ export function getPersonalVoteState(
 ): 'upvote' | 'downvote' | 'neutral' {
 	const vote = queueEntry.feedback.find((feedback) => feedback.userId === userId);
 	if (!vote) return 'neutral';
-	// skip votes are internal removal votes — treat as neutral for the upvote/downvote UI
-	if (vote.type === 'skip') return 'neutral';
+	// skip / replay — treat as neutral for the upvote/downvote UI
+	if (vote.type === 'skip' || vote.type === 'replay') return 'neutral';
 	return vote.type;
 }
 
@@ -78,4 +78,35 @@ export function countActiveRoomMembers(roomState: RoomStateDto | null): number {
 export function replayMajorityThreshold(activeUserCount: number): number {
 	if (activeUserCount <= 0) return 1;
 	return Math.floor(activeUserCount / 2) + 1;
+}
+
+/**
+ * Client-side replay vote panel when server omits `replayVote` but API still stores
+ * `replay` feedback on the current playback entry (WS `vote` + `vote_type: replay`).
+ */
+export function clientReplayVoteFromPlayingEntry(
+	entry: QueueEntryDto,
+	roomState: RoomStateDto,
+	positionMs: number,
+	durationMs: number
+): ReplayVoteStateDto | null {
+	const currentId = roomState.playback?.currentQueueEntryId;
+	if (!currentId || currentId !== entry.queueEntryId) return null;
+	if (roomState.playback?.state === 'stopped') return null;
+
+	const replayFeedback = entry.feedback.filter((f) => f.type === 'replay');
+	const active = countActiveRoomMembers(roomState);
+	const remainingMs =
+		durationMs > 0 ? Math.max(0, durationMs - positionMs) : 24 * 60 * 60 * 1000;
+	const closesAt = new Date(Date.now() + remainingMs).toISOString();
+
+	return {
+		targetQueueEntryId: entry.queueEntryId,
+		track: entry.track,
+		voteCount: replayFeedback.length,
+		voterUserIds: replayFeedback.map((f) => f.userId),
+		activeUserCount: active,
+		closesAt,
+		status: 'open'
+	};
 }

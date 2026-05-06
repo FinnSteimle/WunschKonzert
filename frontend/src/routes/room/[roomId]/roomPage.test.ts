@@ -62,7 +62,6 @@ vi.mock('$lib/realtime/roomSocket', () => ({
 		removeQueueEntry = vi.fn();
 		setPlayback = vi.fn();
 		renameDisplayName = vi.fn();
-		sendReplayVote = vi.fn();
 	}
 }));
 
@@ -229,7 +228,10 @@ describe('room/[roomId]/+page.svelte', () => {
 			});
 		});
 
-		async function renderAndInjectState(options?: { withReplayVote?: boolean }) {
+		async function renderAndInjectState(options?: {
+			withReplayVote?: boolean;
+			playbackEntryId?: string;
+		}) {
 			render(RoomPage);
 			await waitFor(() => expect(apiClient.joinRoom).toHaveBeenCalled());
 			roomStore.setRoomState({
@@ -271,7 +273,7 @@ describe('room/[roomId]/+page.svelte', () => {
 						addedBy: { userId: 'U_USER1', displayName: 'Alice' },
 						queuedAt: '2025-01-01T00:00:00Z',
 						position: 0,
-						status: 'queued',
+						status: options?.playbackEntryId === 'q1' ? 'playing' : 'queued',
 						voteScore: 3,
 						orderRank: 0,
 						feedback: []
@@ -279,7 +281,7 @@ describe('room/[roomId]/+page.svelte', () => {
 				],
 				playback: {
 					state: 'playing',
-					currentQueueEntryId: null,
+					currentQueueEntryId: options?.playbackEntryId ?? null,
 					updatedAt: '2025-01-01T00:00:00Z',
 					positionMs: 5000
 				},
@@ -308,11 +310,17 @@ describe('room/[roomId]/+page.svelte', () => {
 			});
 		}
 
-		it('shows replay vote panel when server sends replayVote', async () => {
+		it('shows replay icon button when server sends replayVote', async () => {
 			await renderAndInjectState({ withReplayVote: true });
 
-			await waitFor(() => expect(screen.getByText('Replay last track')).toBeTruthy());
-			expect(screen.getByText(/Encore/)).toBeTruthy();
+			await waitFor(() => expect(screen.getByRole('button', { name: /Replay \(\d+\/\d+\)/ })).toBeTruthy());
+			expect(screen.getAllByText('Test Song').length).toBeGreaterThanOrEqual(1);
+		});
+
+		it('shows replay control for current playback without server replayVote', async () => {
+			await renderAndInjectState({ playbackEntryId: 'q1' });
+
+			await waitFor(() => expect(screen.getByRole('button', { name: /Replay \(\d+\/\d+\)/ })).toBeTruthy());
 		});
 
 		it('shows room name and join code in the header', async () => {

@@ -59,7 +59,7 @@ export interface TrackDto {
 export interface QueueFeedbackDto {
 	userId: string;
 	votedAt: string;
-	type: 'upvote' | 'downvote' | 'skip';
+	type: 'upvote' | 'downvote' | 'skip' | 'replay';
 }
 
 export interface QueueEntryDto {
@@ -142,7 +142,7 @@ export interface RoomStateDto {
 
 export interface VoteRequest {
 	user_id: string;
-	vote_type: 'upvote' | 'downvote' | 'neutral' | 'skip';
+	vote_type: 'upvote' | 'downvote' | 'neutral' | 'skip' | 'replay';
 }
 
 export interface SearchResponseDto {

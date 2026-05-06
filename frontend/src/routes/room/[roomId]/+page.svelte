@@ -10,7 +10,9 @@
 		getCurrentSong,
 		queueWithoutCurrent,
 		activeQueuedTrackIds,
-		countActiveRoomMembers
+		countActiveRoomMembers,
+		clientReplayVoteFromPlayingEntry,
+		replayMajorityThreshold
 	} from '$lib/stores/room';
 	import { RoomSocketClient } from '$lib/realtime/roomSocket';
 	import {
@@ -35,7 +37,6 @@
 		CardTitle
 	} from '$lib/components/ui/card';
 	import CurrentSongCard from '$lib/components/room/playback/CurrentSongCard.svelte';
-	import ReplayVotePanel from '$lib/components/room/playback/ReplayVotePanel.svelte';
 	import PlaybackProgress from '$lib/components/room/playback/PlaybackProgress.svelte';
 	import PlaybackControls from '$lib/components/room/playback/PlaybackControls.svelte';
 	import QueueList from '$lib/components/room/queue/QueueList.svelte';
@@ -59,7 +60,6 @@
 	let recordedRecentThisMount = false;
 	let socketClient = $state<RoomSocketClient | null>(null);
 	let voteBusyId = $state<string | null>(null);
-	let replayVoteBusy = $state(false);
 	let playbackBusy = $state(false);
 	let renameDisplayName = $state('');
 	let renameBusy = $state(false);
@@ -117,44 +117,6 @@
 			toast.error(err instanceof Error ? err.message : 'Remove failed');
 		} finally {
 			voteBusyId = null;
-		}
-	}
-
-	async function handleReplayVoteCast() {
-		const uid = sessionUser?.userId;
-		if (!uid || !socketClient || !socketClient.isConnected()) {
-			toast.error('Not connected to room');
-			return;
-		}
-		replayVoteBusy = true;
-		try {
-			const sent = socketClient.sendReplayVote(uid, 'vote');
-			if (!sent) {
-				throw new Error('Could not send replay vote');
-			}
-		} catch (err) {
-			toast.error(err instanceof Error ? err.message : 'Could not send replay vote');
-		} finally {
-			replayVoteBusy = false;
-		}
-	}
-
-	async function handleReplayVoteRetract() {
-		const uid = sessionUser?.userId;
-		if (!uid || !socketClient || !socketClient.isConnected()) {
-			toast.error('Not connected to room');
-			return;
-		}
-		replayVoteBusy = true;
-		try {
-			const sent = socketClient.sendReplayVote(uid, 'retract');
-			if (!sent) {
-				throw new Error('Could not remove replay vote');
-			}
-		} catch (err) {
-			toast.error(err instanceof Error ? err.message : 'Could not remove replay vote');
-		} finally {
-			replayVoteBusy = false;
 		}
 	}
 
@@ -253,7 +215,7 @@
 		});
 	});
 
-	const REPLAY_SCHEDULED_EVENT = 'replay_scheduled';
+	const REPLAY_SUCCESS_EVENTS = new Set(['replay_scheduled', 'playback_replayed']);
 	let lastReplayEventSignature = $state<string | undefined>(undefined);
 	$effect(() => {
 		if (!browser) return;
@@ -261,8 +223,13 @@
 		const sig = ev ? `${ev.type}:${ev.at}` : '';
 		const prev = lastReplayEventSignature;
 		lastReplayEventSignature = sig;
-		if (ev?.type === REPLAY_SCHEDULED_EVENT && prev !== undefined && sig !== prev) {
-			toast.success('The group voted to replay the last song. It has been added to the queue.');
+		if (
+			ev &&
+			REPLAY_SUCCESS_EVENTS.has(ev.type) &&
+			prev !== undefined &&
+			sig !== prev
+		) {
+			toast.success('The group voted to replay this track. It has been added to the top of the queue.');
 		}
 	});
 
@@ -602,6 +569,14 @@
 				isHost && sdkPlayerState ? sdkPlayerState.positionMs : (rs.playback?.positionMs ?? 0)}
 			{@const inviteUrl = rs.room ? `${page.url.origin}/room/${rs.room.joinCode}` : ''}
 			{@const queuedTrackIds = activeQueuedTrackIds(rs)}
+			{@const replayPanelVote =
+				rs.replayVote ??
+				(current
+					? clientReplayVoteFromPlayingEntry(current, rs, positionMs, durationMs)
+					: null)}
+			{@const replayMajorityVotes = replayPanelVote
+				? replayMajorityThreshold(replayPanelVote.activeUserCount)
+				: 0}
 
 			<header
 				class="flex flex-row flex-wrap gap-3 sm:items-center sm:justify-between w-[calc(100%-40px)]"
@@ -637,24 +612,23 @@
 						entry={current}
 						skipCount={currentSkipCount}
 						requiredVotes={currentRequiredVotes}
-						hasVoted={currentUserSkipped}
-						connected={$roomStore.connected}
+						hasSkipVoted={currentUserSkipped}
 						busy={voteBusyId === current?.queueEntryId}
+						replay={replayPanelVote
+							? {
+									voteCount: replayPanelVote.voteCount,
+									neededVotes: replayMajorityVotes,
+									hasVoted: replayPanelVote.voterUserIds.includes(sessionUser.userId),
+									status: replayPanelVote.status,
+									closesAt: replayPanelVote.closesAt,
+									onToggle: () => void handleVote(replayPanelVote.targetQueueEntryId, 'replay')
+								}
+							: undefined}
 						onToggleSkip={() => {
 							if (!current) return;
 							void handleVote(current.queueEntryId, currentUserSkipped ? 'neutral' : 'skip');
 						}}
 					/>
-					{#if rs.replayVote}
-						<ReplayVotePanel
-							replayVote={rs.replayVote}
-							userId={sessionUser.userId}
-							connected={$roomStore.connected}
-							busy={replayVoteBusy}
-							onVote={handleReplayVoteCast}
-							onRetract={handleReplayVoteRetract}
-						/>
-					{/if}
 					{#if current && durationMs > 0}
 						<PlaybackProgress {positionMs} {durationMs} playbackState={rs.playback?.state} />
 					{/if}

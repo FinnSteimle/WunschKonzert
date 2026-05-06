@@ -82,20 +82,50 @@ describe('CurrentSongCard', () => {
 		expect(screen.getByText('playing')).toBeTruthy();
 	});
 
-	it('shows live skip progress', () => {
-		render(CurrentSongCard, { entry: makeEntry(), skipCount: 2, requiredVotes: 3 });
-		expect(screen.getByText('2/3')).toBeTruthy();
+	it('shows compact skip tally on icon button', () => {
+		render(CurrentSongCard, {
+			entry: makeEntry(),
+			skipCount: 2,
+			requiredVotes: 3,
+			hasSkipVoted: false
+		});
+		expect(screen.getByRole('button', { name: 'Skip (2/3)' })).toBeTruthy();
 	});
 
-	it('shows voted state when current user already voted', () => {
-		render(CurrentSongCard, { entry: makeEntry(), hasVoted: true });
-		expect(screen.getByRole('button', { name: 'Skip voted' })).toBeTruthy();
+	it('highlights skip when user voted', () => {
+		render(CurrentSongCard, { entry: makeEntry(), hasSkipVoted: true, skipCount: 1, requiredVotes: 2 });
+		expect(screen.getByRole('button', { name: 'Skip (1/2)' })).toBeTruthy();
 	});
 
 	it('calls skip toggle handler on click', async () => {
 		const onToggleSkip = vi.fn();
-		render(CurrentSongCard, { entry: makeEntry(), onToggleSkip });
-		await fireEvent.click(screen.getByRole('button', { name: 'Vote skip' }));
+		render(CurrentSongCard, {
+			entry: makeEntry(),
+			onToggleSkip,
+			requiredVotes: 2,
+			skipCount: 0
+		});
+		await fireEvent.click(screen.getByRole('button', { name: 'Skip (0/2)' }));
 		expect(onToggleSkip).toHaveBeenCalledTimes(1);
+	});
+
+	it('renders replay icon button with tally when replay prop set', async () => {
+		const onToggle = vi.fn();
+		const closesAt = new Date(Date.now() + 60_000).toISOString();
+		render(CurrentSongCard, {
+			entry: makeEntry(),
+			skipCount: 0,
+			requiredVotes: 2,
+			replay: {
+				voteCount: 1,
+				neededVotes: 2,
+				hasVoted: false,
+				status: 'open',
+				closesAt,
+				onToggle
+			}
+		});
+		await fireEvent.click(screen.getByRole('button', { name: 'Replay (1/2)' }));
+		expect(onToggle).toHaveBeenCalledTimes(1);
 	});
 });

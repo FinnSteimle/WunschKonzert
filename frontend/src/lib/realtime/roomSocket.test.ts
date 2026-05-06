@@ -340,6 +340,23 @@ describe('RoomSocketClient', () => {
 
 			client.disconnect();
 		});
+
+		it('sends replay vote_type for replay tally', () => {
+			const client = new RoomSocketClient('room-1', { onState: vi.fn() });
+			client.connect();
+			createdSockets[0].simulateOpen();
+
+			client.sendVote('q-play', 'user-1', 'replay');
+
+			expect(JSON.parse(createdSockets[0].sent[0])).toEqual({
+				type: 'vote',
+				queue_entry_id: 'q-play',
+				user_id: 'user-1',
+				vote_type: 'replay'
+			});
+
+			client.disconnect();
+		});
 	});
 
 	describe('renameDisplayName', () => {
@@ -360,37 +377,4 @@ describe('RoomSocketClient', () => {
 		});
 	});
 
-	describe('sendReplayVote', () => {
-		it('sends replay_vote for vote', () => {
-			const client = new RoomSocketClient('room-1', { onState: vi.fn() });
-			client.connect();
-			createdSockets[0].simulateOpen();
-
-			client.sendReplayVote('user-1', 'vote');
-
-			expect(JSON.parse(createdSockets[0].sent[0])).toEqual({
-				type: 'replay_vote',
-				user_id: 'user-1',
-				action: 'vote'
-			});
-
-			client.disconnect();
-		});
-
-		it('sends replay_vote for retract', () => {
-			const client = new RoomSocketClient('room-1', { onState: vi.fn() });
-			client.connect();
-			createdSockets[0].simulateOpen();
-
-			client.sendReplayVote('user-1', 'retract');
-
-			expect(JSON.parse(createdSockets[0].sent[0])).toEqual({
-				type: 'replay_vote',
-				user_id: 'user-1',
-				action: 'retract'
-			});
-
-			client.disconnect();
-		});
-	});
 });

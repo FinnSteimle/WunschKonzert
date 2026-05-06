@@ -109,14 +109,6 @@ export class RoomSocketClient {
 		});
 	}
 
-	sendReplayVote(userId: string, action: 'vote' | 'retract') {
-		return this.send({
-			type: 'replay_vote',
-			user_id: userId,
-			action
-		});
-	}
-
 	disconnect() {
 		this.disposed = true;
 		if (this.reconnectTimer) {
