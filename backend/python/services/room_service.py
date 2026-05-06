@@ -296,11 +296,12 @@ async def add_to_queue(
             }
         )
 
-    # Block duplicates only while an existing entry is still active/unplayed.
+    # Block duplicates only while an existing entry is still active (QUEUED/PLAYING).
+    # Status filtering (excludes PLAYED, REMOVED, SKIPPED) is handled by get_queue_entry_by_track.
     existing_entry = await queue_entry_repo.get_queue_entry_by_track(
         room_id, str(track_data["trackId"])
     )
-    if existing_entry and existing_entry.status != QueueEntryStatus.PLAYED:
+    if existing_entry:
         raise HTTPException(status_code=409, detail="Song is already in the queue")
 
     # Get max position and check for playing entries
