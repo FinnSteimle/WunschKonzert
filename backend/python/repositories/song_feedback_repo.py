@@ -4,7 +4,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.database import get_session_factory
-from models.domain import SongFeedback
+from models.domain import FeedbackType, SongFeedback
 
 
 async def get_song_feedback_by_queue_entry(
@@ -27,20 +27,30 @@ async def get_song_feedback_by_queue_entry(
 
 
 async def get_song_feedback(
-    queue_entry_id: str, user_id: str, session: AsyncSession | None = None
+    queue_entry_id: str,
+    user_id: str,
+    feedback_type: FeedbackType | None = None,
+    session: AsyncSession | None = None,
 ) -> SongFeedback | None:
-    """Get song feedback for a user"""
+    """Get song feedback for a user, optionally filtered by type"""
     if session is None:
         session_factory = get_session_factory()
         async with session_factory() as new_session:
-            return await get_song_feedback(queue_entry_id, user_id, session=new_session)
+            return await get_song_feedback(
+                queue_entry_id,
+                user_id,
+                feedback_type=feedback_type,
+                session=new_session,
+            )
 
-    result = await session.execute(
-        select(SongFeedback).where(
-            SongFeedback.queueEntryId == queue_entry_id,
-            SongFeedback.userId == user_id,
-        )
+    query = select(SongFeedback).where(
+        SongFeedback.queueEntryId == queue_entry_id,
+        SongFeedback.userId == user_id,
     )
+    if feedback_type:
+        query = query.where(SongFeedback.type == feedback_type)
+
+    result = await session.execute(query)
     return result.scalar_one_or_none()
 
 
@@ -60,6 +70,7 @@ async def create_or_update_song_feedback(
     existing = await get_song_feedback(
         str(feedback_data["queueEntryId"]),
         str(feedback_data["userId"]),
+        feedback_type=feedback_data.get("type"),  # type: ignore[arg-type]
         session=session,
     )
 
@@ -78,42 +89,31 @@ async def create_or_update_song_feedback(
 
 
 async def delete_song_feedback(
-    queue_entry_id: str, user_id: str, session: AsyncSession | None = None
+    queue_entry_id: str,
+    user_id: str | None = None,
+    feedback_type: FeedbackType | None = None,
+    session: AsyncSession | None = None,
 ) -> None:
-    """Delete song feedback"""
+    """Delete song feedback, optionally filtered by user and/or type"""
     if session is None:
         session_factory = get_session_factory()
         async with session_factory() as new_session:
-            await delete_song_feedback(queue_entry_id, user_id, session=new_session)
+            await delete_song_feedback(
+                queue_entry_id,
+                user_id=user_id,
+                feedback_type=feedback_type,
+                session=new_session,
+            )
             await new_session.commit()
             return
 
-    feedback = await get_song_feedback(queue_entry_id, user_id, session=session)
-    if feedback:
-        await session.delete(feedback)
-        await session.flush()
+    query = select(SongFeedback).where(SongFeedback.queueEntryId == queue_entry_id)
+    if user_id:
+        query = query.where(SongFeedback.userId == user_id)
+    if feedback_type:
+        query = query.where(SongFeedback.type == feedback_type)
 
-
-async def delete_skip_feedback(
-    queue_entry_id: str, session: AsyncSession | None = None
-) -> None:
-    """Delete all skip-type feedback for a queue entry.
-    Called when a song starts playing to close any open removal votes."""
-    if session is None:
-        session_factory = get_session_factory()
-        async with session_factory() as new_session:
-            await delete_skip_feedback(queue_entry_id, session=new_session)
-            await new_session.commit()
-            return
-
-    from models.domain import FeedbackType
-
-    result = await session.execute(
-        select(SongFeedback).where(
-            SongFeedback.queueEntryId == queue_entry_id,
-            SongFeedback.type == FeedbackType.SKIP,
-        )
-    )
+    result = await session.execute(query)
     for feedback in result.scalars().all():
         await session.delete(feedback)
     await session.flush()

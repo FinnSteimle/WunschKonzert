@@ -70,11 +70,32 @@ export interface QueueEntryDto {
 		displayName: string;
 	};
 	queuedAt: string;
+	playedAt?: string | null;
 	position: number;
 	status: string;
 	voteScore: number;
 	orderRank: number;
 	feedback: QueueFeedbackDto[];
+}
+
+/** Present while the room may collect votes to replay the last-completed track (backend contract). */
+export type ReplayVoteStatus = 'open' | 'met' | 'expired';
+
+export interface ReplayVoteStateDto {
+	targetQueueEntryId: string;
+	track: TrackDto;
+	voteCount: number;
+	voterUserIds: string[];
+	activeUserCount: number;
+	closesAt: string;
+	status: ReplayVoteStatus;
+}
+
+/** One finished play from server `history` (playback_history). */
+export interface PlaybackHistoryEntryDto {
+	historyId: number;
+	playedAt: string;
+	track: TrackDto;
 }
 
 export interface RoomStateDto {
@@ -104,12 +125,15 @@ export interface RoomStateDto {
 		};
 	}>;
 	queue: QueueEntryDto[];
+	/** Recent completed plays (newest first from API); optional for older clients/tests. */
+	history?: PlaybackHistoryEntryDto[];
 	playback?: {
 		state: 'playing' | 'paused' | 'stopped';
 		currentQueueEntryId: string | null;
 		updatedAt: string;
 		positionMs: number;
 	};
+	replayVote?: ReplayVoteStateDto | null;
 	lastEvent?: {
 		type: string;
 		at: string;

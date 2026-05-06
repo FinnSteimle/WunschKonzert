@@ -11,7 +11,16 @@ COPY python/pyproject.toml python/uv.lock ./
 
 # Decide whether to install dev dependencies
 ARG DEV=false
-RUN if [ "$DEV" = "true" ] ; then uv sync --frozen ; else uv sync --frozen --no-dev ; fi
+RUN if [ "$DEV" = "true" ] ; then \
+    uv sync --frozen && \
+    apt-get update && \
+    apt-get install -y --no-install-recommends ca-certificates && \
+    uv run playwright install --with-deps chromium firefox webkit && \
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/* ; \
+    else \
+    uv sync --frozen --no-dev ; \
+    fi
 
 
 # --- Test Stage ---

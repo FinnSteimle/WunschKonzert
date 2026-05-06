@@ -59,18 +59,20 @@ def convert(input_path: str, output_path: str) -> None:
         filename = issue.get("filename", "")
         row = issue.get("location", {}).get("row", 1)
 
-        codeclimate.append({
-            "type": "issue",
-            "check_name": code,
-            "description": issue.get("message", ""),
-            "categories": get_categories(code),
-            "location": {
-                "path": filename,
-                "lines": {"begin": row},
-            },
-            "severity": get_severity(code),
-            "fingerprint": fingerprint(filename, code, row),
-        })
+        codeclimate.append(
+            {
+                "type": "issue",
+                "check_name": code,
+                "description": issue.get("message", ""),
+                "categories": get_categories(code),
+                "location": {
+                    "path": filename,
+                    "lines": {"begin": row},
+                },
+                "severity": get_severity(code),
+                "fingerprint": fingerprint(filename, code, row),
+            }
+        )
 
     with open(output_path, "w") as f:
         json.dump(codeclimate, f, indent=2)
@@ -80,6 +82,8 @@ def convert(input_path: str, output_path: str) -> None:
 
 if __name__ == "__main__":
     if len(sys.argv) != 3:
-        print("Usage: ruff_to_codeclimate.py <ruff-output.json> <gl-code-quality-report.json>")
+        print(
+            "Usage: ruff_to_codeclimate.py <ruff-output.json> <gl-code-quality-report.json>"
+        )
         sys.exit(1)
     convert(sys.argv[1], sys.argv[2])

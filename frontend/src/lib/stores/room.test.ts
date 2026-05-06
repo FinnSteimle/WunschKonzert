@@ -1,6 +1,15 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { get } from 'svelte/store';
-import { roomStore, getPersonalVoteState, getCurrentSong, queueWithoutCurrent, type RoomUiState } from './room';
+import {
+	roomStore,
+	getPersonalVoteState,
+	getCurrentSong,
+	queueWithoutCurrent,
+	activeQueuedTrackIds,
+	countActiveRoomMembers,
+	replayMajorityThreshold,
+	type RoomUiState
+} from './room';
 import type { QueueEntryDto, RoomStateDto } from '$lib/types/api';
 
 function makeQueueEntry(overrides: Partial<QueueEntryDto> = {}): QueueEntryDto {
@@ -167,6 +176,32 @@ describe('getPersonalVoteState', () => {
 	});
 });
 
+describe('activeQueuedTrackIds', () => {
+	it('returns empty set for null state', () => {
+		expect(activeQueuedTrackIds(null)).toEqual(new Set());
+	});
+
+	it('includes playing and queued tracks, excludes played', () => {
+		const played = makeQueueEntry({
+			queueEntryId: 'q-old',
+			status: 'played',
+			track: { ...makeQueueEntry().track, trackId: 't-played' }
+		});
+		const playing = makeQueueEntry({
+			queueEntryId: 'q-now',
+			status: 'playing',
+			track: { ...makeQueueEntry().track, trackId: 't-now' }
+		});
+		const queued = makeQueueEntry({
+			queueEntryId: 'q-next',
+			status: 'queued',
+			track: { ...makeQueueEntry().track, trackId: 't-next' }
+		});
+		const state = makeRoomState({ queue: [played, playing, queued] });
+		expect(activeQueuedTrackIds(state)).toEqual(new Set(['t-now', 't-next']));
+	});
+});
+
 describe('queueWithoutCurrent', () => {
 	it('returns empty array for null state', () => {
 		expect(queueWithoutCurrent(null)).toEqual([]);
@@ -270,5 +305,46 @@ describe('getCurrentSong', () => {
 			}
 		});
 		expect(getCurrentSong(state)).toBeNull();
+	});
+});
+
+describe('countActiveRoomMembers', () => {
+	it('counts users with active membership and no leftAt', () => {
+		const state = makeRoomState({
+			users: [
+				{
+					user: { userId: 'u1', displayName: 'A', createdAt: '2025-01-01T00:00:00Z' },
+					membership: { joinedAt: '2025-01-01T00:00:00Z', leftAt: null, membershipStatus: 'active' }
+				},
+				{
+					user: { userId: 'u2', displayName: 'B', createdAt: '2025-01-01T00:00:00Z' },
+					membership: {
+						joinedAt: '2025-01-01T00:00:00Z',
+						leftAt: '2025-01-02T00:00:00Z',
+						membershipStatus: 'active'
+					}
+				}
+			]
+		});
+		expect(countActiveRoomMembers(state)).toBe(1);
+	});
+
+	it('returns 0 for null state', () => {
+		expect(countActiveRoomMembers(null)).toBe(0);
+	});
+});
+
+describe('replayMajorityThreshold', () => {
+	it('uses strict majority (>50%) of active listeners', () => {
+		expect(replayMajorityThreshold(1)).toBe(1);
+		expect(replayMajorityThreshold(2)).toBe(2);
+		expect(replayMajorityThreshold(3)).toBe(2);
+		expect(replayMajorityThreshold(4)).toBe(3);
+		expect(replayMajorityThreshold(5)).toBe(3);
+	});
+
+	it('defaults to 1 when count is non-positive', () => {
+		expect(replayMajorityThreshold(0)).toBe(1);
+		expect(replayMajorityThreshold(-1)).toBe(1);
 	});
 });

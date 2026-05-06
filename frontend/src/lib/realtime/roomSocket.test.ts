@@ -1,6 +1,14 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { RoomSocketClient } from './roomSocket';
 
+vi.mock('$lib/api/client', async (importOriginal) => {
+	const actual = await importOriginal<typeof import('$lib/api/client')>();
+	return {
+		...actual,
+		getWsBaseUrl: () => 'ws://localhost:8000'
+	};
+});
+
 class MockWebSocket {
 	static readonly OPEN = 1;
 	static readonly CLOSED = 3;
@@ -346,6 +354,40 @@ describe('RoomSocketClient', () => {
 				type: 'rename',
 				user_id: 'user-1',
 				display_name: 'Bob'
+			});
+
+			client.disconnect();
+		});
+	});
+
+	describe('sendReplayVote', () => {
+		it('sends replay_vote for vote', () => {
+			const client = new RoomSocketClient('room-1', { onState: vi.fn() });
+			client.connect();
+			createdSockets[0].simulateOpen();
+
+			client.sendReplayVote('user-1', 'vote');
+
+			expect(JSON.parse(createdSockets[0].sent[0])).toEqual({
+				type: 'replay_vote',
+				user_id: 'user-1',
+				action: 'vote'
+			});
+
+			client.disconnect();
+		});
+
+		it('sends replay_vote for retract', () => {
+			const client = new RoomSocketClient('room-1', { onState: vi.fn() });
+			client.connect();
+			createdSockets[0].simulateOpen();
+
+			client.sendReplayVote('user-1', 'retract');
+
+			expect(JSON.parse(createdSockets[0].sent[0])).toEqual({
+				type: 'replay_vote',
+				user_id: 'user-1',
+				action: 'retract'
 			});
 
 			client.disconnect();

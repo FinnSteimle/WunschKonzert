@@ -1,0 +1,79 @@
+# Production stack: pre-built images + Postgres + Caddy (HTTPS, /api → backend).
+# On the server: copy Caddyfile + this file, add .env (see compose.prod.env.example), then deploy.
+#
+# Staging runs from compose.staging.yaml on the same VM. Caddy joins wunschkonzert_edge so it
+# can reach staging-api / staging-frontend. Create once: docker network create wunschkonzert_edge
+
+services:
+  caddy:
+    image: caddy:2-alpine
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - api
+      - frontend
+    networks:
+      app-network:
+      edge:
+    restart: unless-stopped
+
+  api:
+    image: ${BACKEND_IMAGE:?set BACKEND_IMAGE}
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-wunschkonzert}
+      ENVIRONMENT: production
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - app-network
+    restart: unless-stopped
+
+  frontend:
+    image: ${FRONTEND_IMAGE:?set FRONTEND_IMAGE}
+    environment:
+      NODE_ENV: production
+    networks:
+      - app-network
+    restart: unless-stopped
+
+  db:
+    image: postgres:17.9-alpine3.23@sha256:6f30057d31f5861b66f3545d4821f987aacf1dd920765f0acadea0c58ff975b1
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB:-wunschkonzert}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -U postgres -d ${POSTGRES_DB:-wunschkonzert}",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      - app-network
+    restart: unless-stopped
+
+networks:
+  app-network:
+    driver: bridge
+  edge:
+    name: wunschkonzert_edge
+    external: true
+
+volumes:
+  postgres_data:
+  caddy_data:
+  caddy_config:

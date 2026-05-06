@@ -1,7 +1,6 @@
+import { getWsBaseUrl } from '$lib/api/client';
 import type { RoomStateDto } from '$lib/types/api';
 import type { TrackDto, VoteRequest } from '$lib/types/api';
-
-const WS_BASE_URL = import.meta.env.PUBLIC_WS_URL ?? 'ws://localhost:8000';
 
 interface RoomSocketHandlers {
 	onState: (state: RoomStateDto) => void;
@@ -25,7 +24,7 @@ export class RoomSocketClient {
 		if (this.disposed) return;
 		if (this.socket && this.socket.readyState === WebSocket.OPEN) return;
 
-		const url = `${WS_BASE_URL}/ws/${encodeURIComponent(this.roomId)}`;
+		const url = `${getWsBaseUrl()}/ws/${encodeURIComponent(this.roomId)}`;
 		this.socket = new WebSocket(url);
 
 		this.socket.onopen = () => {
@@ -107,6 +106,14 @@ export class RoomSocketClient {
 			type: 'rename',
 			user_id: userId,
 			display_name: displayName
+		});
+	}
+
+	sendReplayVote(userId: string, action: 'vote' | 'retract') {
+		return this.send({
+			type: 'replay_vote',
+			user_id: userId,
+			action
 		});
 	}
 
