@@ -232,6 +232,7 @@ system:e2e:
         - backend/compose.yaml
         - frontend/compose.yaml
         - Makefile
+        - .gitlab-ci.yml
     - if: $CI_COMMIT_BRANCH
       changes:
         - backend/**/*
@@ -241,14 +242,25 @@ system:e2e:
         - backend/compose.yaml
         - frontend/compose.yaml
         - Makefile
+        - .gitlab-ci.yml
       when: manual
   before_script:
     - *dockerhub_auth
-    - apk add --no-cache docker-compose bash
+    - apk add --no-cache docker-compose bash make
     - chmod +x ./scripts/setup_backend_env.sh
     - ./scripts/setup_backend_env.sh
   script:
     - make test-system
+  after_script:
+    - make clean
+  artifacts:
+    when: always
+    expire_in: 7 days
+    paths:
+      - backend/python/test-results/
+      - backend/python/playwright-report/
+    reports:
+      junit: backend/python/junit-system.xml
 
 # -----------------------
 # Frontend, SvelteKit (Vite)
