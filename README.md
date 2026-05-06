@@ -58,12 +58,19 @@ The root Makefile provides several commands to manage the project:
 | `make format` | Format backend code |
 | `make migrate` | Apply database migrations |
 | `make clean` | Stop containers and remove build artifacts |
+| `make verify-responsive` | Run cross-browser responsive tests (NFR WUN-91) |
+| `make verify-recoverability` | Run recoverability crash tests (NFR WUN-90) |
+| `make verify-confidentiality` | Run automated security audit (NFR WUN-95) |
+
+## Non-Functional Requirement (NFR) Verification
+
+The project includes specialized commands to verify compliance with Non-Functional Requirements. These commands use isolated environments and automated checks:
+
+- **Responsive Design (WUN-91):** Run `make verify-responsive`. This executes tests across Chromium, Firefox, and WebKit engines at both mobile and desktop resolutions.
+- **Recoverability (WUN-90):** Run `make verify-recoverability`. This simulates a service crash and measures restoration time.
+- **Confidentiality (WUN-95):** Run `make verify-confidentiality`. This performs a security audit of the configuration and data handling.
 
 ## Frontend MVP Setup
-
-The frontend MVP is built with SvelteKit + TypeScript + shadcn-svelte and talks directly to the backend API/WebSocket.
-
-1. Configure frontend environment:
 
 ```bash
 cd frontend

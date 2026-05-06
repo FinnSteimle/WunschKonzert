@@ -146,9 +146,9 @@ test-system:
 		fi; \
 	done
 	@echo ""
-	@echo "Installing Playwright browsers..."
-	docker compose -f compose.yaml -f compose.system.yaml exec -T api uv run playwright install --with-deps chromium
-	docker compose -f compose.yaml -f compose.system.yaml exec -T api env BACKEND_URL=http://api:8000 FRONTEND_URL=http://frontend:3000 uv run python -m pytest tests/system/ -v -m system --no-cov
+	@echo "Installing Playwright browsers and dependencies..."
+	docker compose -f compose.yaml -f compose.system.yaml exec -T api uv run playwright install --with-deps chromium firefox webkit
+	docker compose -f compose.yaml -f compose.system.yaml exec -T api env BACKEND_URL=http://api:8000 FRONTEND_URL=http://frontend:3000 uv run pytest tests/system/ -v -m system --no-cov
 	@echo "System tests complete. Services still running. Use 'make clean' to stop."
 
 .PHONY: test-load
