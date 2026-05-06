@@ -1,25 +1,51 @@
 <script lang="ts">
-	import type { QueueEntryDto, RoomStateDto } from '$lib/types/api';
+	import type { PlaybackHistoryEntryDto, RoomStateDto, TrackDto } from '$lib/types/api';
 	import * as Dialog from '$lib/components/ui/dialog';
 	import { buttonVariants } from '$lib/components/ui/button';
 	import { cn } from '$lib/utils.js';
+	import { activeQueuedTrackIds } from '$lib/stores/room';
 	import HistoryItem from './HistoryItem.svelte';
 	import EmptyState from '$lib/components/room/states/EmptyState.svelte';
+	import { toast } from 'svelte-sonner';
 
-	let { roomState }: { roomState: RoomStateDto | null } = $props();
+	let {
+		roomState,
+		onAddTrack
+	}: {
+		roomState: RoomStateDto | null;
+		onAddTrack?: (track: TrackDto) => Promise<void> | void;
+	} = $props();
 
 	let open = $state(false);
+	let addingTrackId = $state<string | null>(null);
 
-	const playedSongs = $derived.by(() => {
-		if (!roomState?.queue) return [];
+	const queuedTrackIds = $derived(activeQueuedTrackIds(roomState));
 
-		const playedAtOrQueued = (entry: QueueEntryDto) =>
-			new Date(entry.playedAt ?? entry.queuedAt).getTime();
+	async function readdTrack(track: TrackDto) {
+		addingTrackId = track.trackId;
+		try {
+			if (!onAddTrack) {
+				throw new Error('Add action unavailable');
+			}
+			await onAddTrack(track);
+			toast.success('Added to queue');
+		} catch (err) {
+			const msg = err instanceof Error ? err.message : 'Could not add song';
+			if (msg === 'Song is already in the queue') {
+				toast.message(msg);
+			} else {
+				toast.error(msg);
+			}
+		} finally {
+			addingTrackId = null;
+		}
+	}
 
-		return roomState.queue
-			.filter((entry) => entry.status === 'played')
-			.sort((a, b) => playedAtOrQueued(b) - playedAtOrQueued(a))
-			.slice(0, 30);
+	const historyRows = $derived.by((): PlaybackHistoryEntryDto[] => {
+		const raw = roomState?.history ?? [];
+		return [...raw].sort(
+			(a, b) => new Date(b.playedAt).getTime() - new Date(a.playedAt).getTime()
+		);
 	});
 </script>
 
@@ -53,16 +79,28 @@
 			</Dialog.Description>
 		</Dialog.Header>
 		<div class="max-h-[60vh] overflow-y-auto">
-			{#if playedSongs.length === 0}
+			{#if historyRows.length === 0}
 				<EmptyState
 					title="No songs played yet"
 					description="Songs will appear here once they finish playing."
 				/>
 			{:else}
 				<ul class="flex flex-col gap-2" aria-label="Song history">
-					{#each playedSongs as entry (entry.queueEntryId)}
-						<li class="border-border rounded-lg border bg-card px-3 py-3">
-							<HistoryItem {entry} />
+					{#each historyRows as row (row.historyId)}
+						<li
+							class="border-border rounded-lg border bg-card px-3 py-3 {queuedTrackIds.has(
+								row.track.trackId
+							)
+								? 'bg-muted/45 border-muted-foreground/20'
+								: ''}"
+						>
+							<HistoryItem
+								track={row.track}
+								playedAt={row.playedAt}
+								inQueue={queuedTrackIds.has(row.track.trackId)}
+								adding={addingTrackId === row.track.trackId}
+								onAdd={onAddTrack ? () => void readdTrack(row.track) : undefined}
+							/>
 						</li>
 					{/each}
 				</ul>

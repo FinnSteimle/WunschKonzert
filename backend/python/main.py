@@ -76,7 +76,7 @@ app.include_router(spotify_auth.router)
 app.include_router(websockets.router)
 
 
-@app.get("/health")
+@app.api_route("/health", methods=["GET", "HEAD"])
 async def health() -> JSONResponse:
     result = await health_repo.check_db_health()
     if result["status"] != "ok":

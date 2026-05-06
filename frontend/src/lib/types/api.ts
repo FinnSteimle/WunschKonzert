@@ -91,6 +91,13 @@ export interface ReplayVoteStateDto {
 	status: ReplayVoteStatus;
 }
 
+/** One finished play from server `history` (playback_history). */
+export interface PlaybackHistoryEntryDto {
+	historyId: number;
+	playedAt: string;
+	track: TrackDto;
+}
+
 export interface RoomStateDto {
 	room: {
 		roomId: string;
@@ -118,6 +125,8 @@ export interface RoomStateDto {
 		};
 	}>;
 	queue: QueueEntryDto[];
+	/** Recent completed plays (newest first from API); optional for older clients/tests. */
+	history?: PlaybackHistoryEntryDto[];
 	playback?: {
 		state: 'playing' | 'paused' | 'stopped';
 		currentQueueEntryId: string | null;

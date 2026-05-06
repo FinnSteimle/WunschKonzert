@@ -189,7 +189,7 @@ backend:unit:
     - uv sync --frozen
   script:
     # Use --allow-hosts to whitelist docker and localhost while blocking the internet
-    - uv run --with pytest pytest --allow-hosts=docker,localhost,127.0.0.1 --allow-unix-socket -m "not system" -q --junit-xml=junit-all.xml
+    - uv run --with pytest pytest --allow-hosts=docker,localhost,127.0.0.1 --allow-unix-socket -m "not integration and not system" -q --junit-xml=junit-all.xml
   coverage: '/TOTAL.*\s+(\d+\%)/'
   artifacts:
     when: always
@@ -211,7 +211,7 @@ backend:integration:
     - apk add --no-cache docker-compose
   script:
     - cd backend
-    - docker compose -f compose.test.yaml run --rm api-test uv run pytest -m "integration" -q --no-cov
+    - docker compose -f compose.test.yaml run --rm api-test uv run pytest -m "not system" -q --cov-fail-under=80
   after_script:
     - cd backend
     - docker compose -f compose.test.yaml down -v
