@@ -15,36 +15,24 @@
   "users": [
     {
       "user": {
+        "userId": "HOST123",
+        "displayName": "DJ_Linus",
+        "createdAt": "2026-03-20T11:00:00Z"
+      },
+      "membership": {
+        "joinedAt": "2026-03-20T12:00:00Z",
+        "leftAt": null,
+        "membershipStatus": "active"
+      }
+    },
+    {
+      "user": {
         "userId": "USER001",
         "displayName": "Alice",
         "createdAt": "2026-03-20T10:00:00Z"
       },
       "membership": {
         "joinedAt": "2026-03-20T10:00:00Z",
-        "leftAt": null,
-        "membershipStatus": "active"
-      }
-    },
-    {
-      "user": {
-        "userId": "USER002",
-        "displayName": "Bob",
-        "createdAt": "2026-03-20T10:05:00Z"
-      },
-      "membership": {
-        "joinedAt": "2026-03-20T10:05:00Z",
-        "leftAt": null,
-        "membershipStatus": "active"
-      }
-    },
-    {
-      "user": {
-        "userId": "USER003",
-        "displayName": "Charlie",
-        "createdAt": "2026-03-20T10:10:00Z"
-      },
-      "membership": {
-        "joinedAt": "2026-03-20T10:10:00Z",
         "leftAt": null,
         "membershipStatus": "active"
       }
@@ -60,18 +48,6 @@
         "leftAt": "2026-03-20T10:16:00Z",
         "membershipStatus": "kicked"
       }
-    },
-    {
-      "user": {
-        "userId": "USER005",
-        "displayName": "Frank",
-        "createdAt": "2026-03-20T10:20:00Z"
-      },
-      "membership": {
-        "joinedAt": "2026-03-20T10:20:00Z",
-        "leftAt": "2026-03-20T10:21:00Z",
-        "membershipStatus": "kicked"
-      }
     }
   ],
   "queue": [
@@ -82,10 +58,10 @@
         "providerTrackId": "SONG003",
         "title": "Starboy",
         "artist": "The Weeknd",
-        "album": "",
+        "album": "Starboy",
         "duration": 230,
         "coverUrl": "https://example.com/starboy.jpg",
-        "deepLink": ""
+        "deepLink": "spotify:track:123"
       },
       "addedBy": {
         "userId": "USER003",
@@ -93,14 +69,14 @@
       },
       "queuedAt": "2026-03-20T11:25:00Z",
       "position": 1,
-      "status": "queued",
+      "status": "playing",
       "voteScore": 15,
-      "orderRank": 1,
+      "orderRank": 1.0,
       "feedback": [
         {
-          "userId": "USER123",
+          "userId": "USER001",
           "votedAt": "2026-03-20T11:30:00Z",
-          "type": "downvote"
+          "type": "upvote"
         }
       ]
     },
@@ -111,10 +87,10 @@
         "providerTrackId": "SONG001",
         "title": "Blinding Lights",
         "artist": "The Weeknd",
-        "album": "",
+        "album": "After Hours",
         "duration": 200,
         "coverUrl": "https://example.com/blinding_lights.jpg",
-        "deepLink": ""
+        "deepLink": "spotify:track:456"
       },
       "addedBy": {
         "userId": "USER001",
@@ -124,7 +100,7 @@
       "position": 2,
       "status": "queued",
       "voteScore": 10,
-      "orderRank": 2,
+      "orderRank": 1.9,
       "feedback": [
         {
           "userId": "USER123",
@@ -132,29 +108,6 @@
           "type": "upvote"
         }
       ]
-    },
-    {
-      "queueEntryId": "QENTRY002",
-      "track": {
-        "trackId": "TRACK002",
-        "providerTrackId": "SONG002",
-        "title": "Save Your Tears",
-        "artist": "The Weeknd",
-        "album": "",
-        "duration": 215,
-        "coverUrl": "https://example.com/save_your_tears.jpg",
-        "deepLink": ""
-      },
-      "addedBy": {
-        "userId": "USER002",
-        "displayName": "Bob"
-      },
-      "queuedAt": "2026-03-20T11:20:00Z",
-      "position": 3,
-      "status": "queued",
-      "voteScore": 7,
-      "orderRank": 3,
-      "feedback": []
     }
   ],
   "playback": {
@@ -178,5 +131,9 @@
         "deepLink": ""
       }
     }
-  ]
+  ],
+  "lastEvent": {
+    "type": "vote_updated",
+    "at": "2026-03-20T11:35:00Z"
+  }
 }
