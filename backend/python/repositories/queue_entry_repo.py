@@ -102,7 +102,7 @@ async def get_queue_entry_by_track(
         select(QueueEntry).where(
             QueueEntry.roomId == room_id,
             QueueEntry.trackId == track_id,
-            QueueEntry.status != QueueEntryStatus.PLAYED,
+            QueueEntry.status.in_([QueueEntryStatus.QUEUED, QueueEntryStatus.PLAYING]),
         )
     )
     return result.scalar_one_or_none()
