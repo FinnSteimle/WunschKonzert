@@ -35,6 +35,7 @@ help:
 	@echo "  shell         - Open Python shell in container"
 	@echo "  check-health  - Check API health endpoint"
 	@echo "  check-modular - Automatically verify that backend and frontend can run independently"
+	@echo "  verify-recoverability - Simulate crash and verify NFR WUN-90"
 	@echo ""
 	@echo "Independent Services:"
 	@echo "  run-backend   - Start only backend services"
@@ -179,3 +180,8 @@ shell:
 .PHONY: check-health
 check-health:
 	curl -s http://localhost:8000/health | python -m json.tool
+
+.PHONY: verify-recoverability
+verify-recoverability:
+	@chmod +x scripts/verify_recoverability.sh
+	./scripts/verify_recoverability.sh
