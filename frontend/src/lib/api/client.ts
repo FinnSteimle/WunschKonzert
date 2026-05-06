@@ -53,7 +53,8 @@ export function getWsBaseUrl(): string {
 function shouldUseDirectLocalApiFromBrowser(): boolean {
 	if (typeof window === 'undefined' || !window.location?.hostname) return false;
 	const { hostname, port } = window.location;
-	if (hostname !== 'localhost' && hostname !== '127.0.0.1') return false;
+	const isLocal = hostname === 'localhost' || hostname === '127.0.0.1' || hostname === 'frontend';
+	if (!isLocal) return false;
 	return port === '3000' || port === '5173' || port === '4173';
 }
 

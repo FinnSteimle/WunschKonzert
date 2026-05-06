@@ -36,6 +36,7 @@ help:
 	@echo "  check-health  - Check API health endpoint"
 	@echo "  check-modular - Automatically verify that backend and frontend can run independently"
 	@echo "  verify-recoverability - Simulate crash and verify NFR WUN-90"
+	@echo "  verify-responsive - Run cross-browser responsive tests and verify NFR WUN-91"
 	@echo ""
 	@echo "Independent Services:"
 	@echo "  run-backend   - Start only backend services"
@@ -190,3 +191,13 @@ verify-recoverability:
 verify-confidentiality:
 	@chmod +x scripts/verify_confidentiality.sh
 	./scripts/verify_confidentiality.sh
+
+.PHONY: verify-responsive
+verify-responsive:
+	@echo "Starting services for responsive verification..."
+	docker compose -f compose.yaml -f compose.system.yaml up -d --build
+	@echo "Installing browser engines and system dependencies (Chromium, Firefox, WebKit)..."
+	docker compose -f compose.yaml -f compose.system.yaml exec -T api uv run playwright install --with-deps chromium firefox webkit
+	@echo "Running cross-browser responsive tests..."
+	docker compose -f compose.yaml -f compose.system.yaml exec -T api env BACKEND_URL=http://api:8000 FRONTEND_URL=http://frontend:3000 uv run pytest tests/system/test_responsive_design.py -v -m system --no-cov
+	@echo "Verification complete."

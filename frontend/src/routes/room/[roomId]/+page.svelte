@@ -657,8 +657,8 @@
 					/>
 				</section>
 
-				<section class="flex min-w-0 flex-col gap-3 lg:col-span-8" aria-labelledby="wk-search">
-					<h2 id="wk-search" class="text-sm font-medium">Add a song</h2>
+				<section class="flex min-w-0 flex-col gap-3 lg:col-span-8" aria-labelledby="wk-search-heading">
+					<h2 id="wk-search-heading" class="text-sm font-medium">Add a song</h2>
 					<Card>
 						<CardHeader class="pb-2">
 							<CardTitle class="text-base">Search</CardTitle>

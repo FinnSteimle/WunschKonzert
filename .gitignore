@@ -222,3 +222,6 @@ frontend/coverage/
 
 # Kiro AI assistant
 .kiro/
+
+# Test artifacts
+screenshots/
