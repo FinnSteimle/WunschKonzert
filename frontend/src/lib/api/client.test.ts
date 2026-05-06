@@ -247,4 +247,55 @@ describe('apiClient', () => {
 			})
 		});
 	});
+
+	it('posts rooms availability', async () => {
+		const fetchMock = vi.fn().mockResolvedValue(
+			mockJsonResponse(true, {
+				available_join_codes: ['AA1BB2'],
+				unavailable_join_codes: ['CC3DD4']
+			})
+		);
+		vi.stubGlobal('fetch', fetchMock);
+
+		const payload = { join_codes: ['AA1BB2', 'CC3DD4'] };
+		const result = await apiClient.getRoomsAvailability(payload);
+
+		expect(result).toEqual({
+			available_join_codes: ['AA1BB2'],
+			unavailable_join_codes: ['CC3DD4']
+		});
+		expect(fetchMock).toHaveBeenCalledWith('http://localhost:8000/rooms/availability', {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify(payload)
+		});
+	});
+
+	it('fetches Spotify login URL with query params', async () => {
+		const fetchMock = vi
+			.fn()
+			.mockResolvedValue(mockJsonResponse(true, { auth_url: 'https://accounts.spotify.com/authorize' }));
+		vi.stubGlobal('fetch', fetchMock);
+
+		const result = await apiClient.getSpotifyLoginUrl('U_1', 'https://app.example/room');
+
+		expect(result.auth_url).toBe('https://accounts.spotify.com/authorize');
+		expect(fetchMock).toHaveBeenCalledWith(
+			'http://localhost:8000/auth/spotify/login?user_id=U_1&return_to=https%3A%2F%2Fapp.example%2Froom'
+		);
+	});
+
+	it('fetches Spotify token with user_id param', async () => {
+		const fetchMock = vi
+			.fn()
+			.mockResolvedValue(mockJsonResponse(true, { access_token: 'tok' }));
+		vi.stubGlobal('fetch', fetchMock);
+
+		const result = await apiClient.getSpotifyToken('U_1');
+
+		expect(result).toEqual({ access_token: 'tok' });
+		expect(fetchMock).toHaveBeenCalledWith(
+			'http://localhost:8000/auth/spotify/token?user_id=U_1'
+		);
+	});
 });

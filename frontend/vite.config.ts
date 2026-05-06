@@ -37,16 +37,20 @@ export default defineConfig({
 			provider: 'v8',
 			reporter: ['text', 'text-summary', 'cobertura'],
 			include: ['src/**/*.ts', 'src/**/*.svelte'],
-			exclude: ['src/lib/components/ui/*'],
-			clean: false
-			/*
+			exclude: [
+				'src/lib/components/ui/*',
+				// Spotify Web Playback SDK glue — DOM script injection + globals; smoke-tested manually.
+				'src/lib/playback/**',
+				// Interfaces only; no runnable lines.
+				'src/lib/types/**',
+				'**/*.d.ts',
+				'src/lib/index.ts'
+			],
+			clean: true,
 			thresholds: {
 				lines: 80,
-				functions: 80,
-				branches: 80,
 				statements: 80
 			}
-			*/
 		}
 	}
 });

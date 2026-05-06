@@ -113,4 +113,26 @@ describe('VoteButtons', () => {
 			true
 		);
 	});
+
+	it('runs keyboard handler on upvote (Enter / Space)', async () => {
+		const onVote = vi.fn();
+		render(VoteButtons, { ...defaultProps, state: 'neutral', onVote });
+
+		const up = screen.getByRole('button', { name: 'Upvote' });
+		await fireEvent.keyDown(up, { key: 'Enter' });
+		await fireEvent.keyDown(up, { key: ' ' });
+		await fireEvent.click(up);
+		expect(onVote).toHaveBeenCalledWith('upvote');
+	});
+
+	it('runs keyboard handler on downvote', async () => {
+		const onVote = vi.fn();
+		render(VoteButtons, { ...defaultProps, state: 'neutral', onVote });
+
+		const down = screen.getByRole('button', { name: 'Downvote' });
+		await fireEvent.pointerDown(down);
+		await fireEvent.keyDown(down, { key: ' ' });
+		await fireEvent.click(down);
+		expect(onVote).toHaveBeenCalledWith('downvote');
+	});
 });

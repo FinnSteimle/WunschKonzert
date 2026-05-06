@@ -104,4 +104,31 @@ describe('QueueItem', () => {
 		const button = screen.getByRole('button', { name: 'Remove track' }) as HTMLButtonElement;
 		expect(button.disabled).toBe(true);
 	});
+
+	it('renders placeholder when track has no cover art', () => {
+		render(QueueItem, {
+			entry: makeEntry({ track: { ...makeEntry().track, coverUrl: '' } }),
+			personalVote: 'neutral',
+			voteBusyId: null,
+			currentUserId: 'user-1',
+			hostId: 'host-1',
+			totalMembers: 3
+		});
+
+		expect(screen.getByText('No art')).toBeTruthy();
+	});
+
+	it('shows score and status badges', () => {
+		render(QueueItem, {
+			entry: makeEntry({ voteScore: 7, status: 'queued' }),
+			personalVote: 'neutral',
+			voteBusyId: null,
+			currentUserId: 'user-1',
+			hostId: 'host-1',
+			totalMembers: 3
+		});
+
+		expect(screen.getByText('Score 7')).toBeTruthy();
+		expect(screen.getByText('queued')).toBeTruthy();
+	});
 });
