@@ -544,6 +544,14 @@ deploy:production:
       export FRONTEND_IMAGE="$CI_REGISTRY_IMAGE/frontend:main"
       cd "$DEPLOY_PATH"
       docker compose --env-file .env -f compose.prod.yaml pull
+      
+      # Run database migrations before starting services
+      echo "Running database migrations..."
+      # Wait for database to be ready
+      docker compose --env-file .env -f compose.prod.yaml up -d db
+      sleep 5
+      docker compose --env-file .env -f compose.prod.yaml run --rm api uv run alembic upgrade head
+      
       docker compose --env-file .env -f compose.prod.yaml up -d --remove-orphans
       REMOTE
 
@@ -570,5 +578,13 @@ deploy:staging:
       export FRONTEND_IMAGE="$CI_REGISTRY_IMAGE/frontend:dev"
       cd "$DEPLOY_PATH_STAGING"
       docker compose --env-file .env.staging -f compose.staging.yaml pull
+      
+      # Run database migrations before starting services
+      echo "Running database migrations..."
+      # Wait for database to be ready
+      docker compose --env-file .env.staging -f compose.staging.yaml up -d db
+      sleep 5
+      docker compose --env-file .env.staging -f compose.staging.yaml run --rm api uv run alembic upgrade head
+      
       docker compose --env-file .env.staging -f compose.staging.yaml up -d --remove-orphans
       REMOTE
