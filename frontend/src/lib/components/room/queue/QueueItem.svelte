@@ -80,8 +80,8 @@
 		{busy}
 		onRemove={() => {
 			if (!canRemoveDirectly && hasVoted) {
-				// User already voted — rescind by sending neutral
-				onVote?.(entry.queueEntryId, 'neutral');
+				// Rescind skip vote via toggle (backend removes only the SKIP feedback)
+				onVote?.(entry.queueEntryId, 'skip');
 			} else {
 				// Direct remove (host/adder) or cast a new skip vote
 				onRemove?.(entry.queueEntryId);

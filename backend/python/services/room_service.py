@@ -437,10 +437,15 @@ async def vote_queue_entry(
             detail="Replay votes can only be cast on the currently playing song",
         )
 
-    # Handle "neutral" (explicit deselect)
+    # Handle "neutral" (explicit deselect for upvote/downvote only).
+    # Skip and replay are deselected via their own toggle: send the same type again.
     if vote_type == "neutral":
-        # Removes all feedback for this user on this song
-        await song_feedback_repo.delete_song_feedback(queue_entry_id, user_id)
+        await song_feedback_repo.delete_song_feedback(
+            queue_entry_id, user_id, feedback_type=FeedbackType.LIKE
+        )
+        await song_feedback_repo.delete_song_feedback(
+            queue_entry_id, user_id, feedback_type=FeedbackType.DISLIKE
+        )
         return await _recalculate_and_refresh(room_id, queue_entry_id, "vote_updated")
 
     mapped_type = _ui_to_feedback(vote_type)

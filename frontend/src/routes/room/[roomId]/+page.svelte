@@ -626,7 +626,7 @@
 							: undefined}
 						onToggleSkip={() => {
 							if (!current) return;
-							void handleVote(current.queueEntryId, currentUserSkipped ? 'neutral' : 'skip');
+							void handleVote(current.queueEntryId, 'skip');
 						}}
 					/>
 					{#if current && durationMs > 0}
