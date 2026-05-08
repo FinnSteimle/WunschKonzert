@@ -87,7 +87,7 @@ describe('QueueItem', () => {
 
 		await fireEvent.click(screen.getByRole('button', { name: 'Vote to remove track (1 of 2)' }));
 
-		expect(onVote).toHaveBeenCalledWith('q1', 'neutral');
+		expect(onVote).toHaveBeenCalledWith('q1', 'skip');
 		expect(onRemove).not.toHaveBeenCalled();
 	});
 
