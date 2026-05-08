@@ -5,13 +5,14 @@ Revises: 003_oauth_state_nonces
 Create Date: 2026-05-08 11:24:28.043244
 
 """
+
 from typing import Sequence, Union
 
 from alembic import op
 
 # revision identifiers, used by Alembic.
-revision: str = '1e223c758a44'
-down_revision: Union[str, Sequence[str], None] = '003_oauth_state_nonces'
+revision: str = "1e223c758a44"
+down_revision: Union[str, Sequence[str], None] = "003_oauth_state_nonces"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
