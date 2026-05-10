@@ -1,4 +1,3 @@
-# Makefile for Wunschkonzert Backend
 # Usage: make <target>
 # Run "make help" to see available targets
 
@@ -9,6 +8,7 @@ help:
 	@echo "Development:"
 	@echo "  install       - Build and start containers"
 	@echo "  run           - Run development server with containers and apply migrations"
+	@echo "  rebuild       - Rebuild without cache and restart containers"
 	@echo ""
 	@echo "Database (via Docker):"
 	@echo "  migrate       - Apply all migrations in container"
@@ -25,6 +25,7 @@ help:
 	@echo "  test          - Run tests in container"
 	@echo "  test-cov      - Run tests with coverage in container"
 	@echo "  test-system   - Run end-to-end system tests with Playwright"
+	@echo "  test-load     - Run k6 stress tests (requires k6 installed)"
 	@echo ""
 
 	@echo "Cleanup (Docker):"
@@ -34,6 +35,8 @@ help:
 	@echo "  shell         - Open Python shell in container"
 	@echo "  check-health  - Check API health endpoint"
 	@echo "  check-modular - Automatically verify that backend and frontend can run independently"
+	@echo "  verify-recoverability - Simulate crash and verify NFR WUN-90"
+	@echo "  verify-responsive - Run cross-browser responsive tests and verify NFR WUN-91"
 	@echo ""
 	@echo "Independent Services:"
 	@echo "  run-backend   - Start only backend services"
@@ -42,21 +45,28 @@ help:
 # Development targets (Docker-based)
 .PHONY: install
 install:
-	docker compose -f compose.yaml build && docker compose -f compose.yaml up -d
+	docker compose -f compose.yaml build --no-cache && docker compose -f compose.yaml up -d
 
 .PHONY: run
 run:
-	docker compose -f compose.yaml up --build -d
+	docker compose -f compose.yaml up --build --force-recreate -d
 	docker compose -f compose.yaml exec -T api uv run python -m alembic upgrade head
 	docker compose -f compose.yaml logs -f api
 
 .PHONY: run-backend
 run-backend:
-	docker compose -f backend/compose.yaml up --build -d
+	docker compose -f backend/compose.yaml up --build --force-recreate -d
 
 .PHONY: run-frontend
 run-frontend:
-	docker compose -f frontend/compose.yaml up --build -d
+	docker compose -f frontend/compose.yaml up --build --force-recreate -d
+
+.PHONY: rebuild
+rebuild:
+	docker compose -f compose.yaml build --no-cache
+	docker compose -f compose.yaml up --force-recreate -d
+	docker compose -f compose.yaml exec -T api uv run python -m alembic upgrade head
+	docker compose -f compose.yaml logs -f api
 
 .PHONY: check-modular
 check-modular:
@@ -100,7 +110,7 @@ test:
 
 .PHONY: test-cov
 test-cov:
-	docker compose -f compose.yaml exec -T api uv run python -m pytest --cov=./ --cov-report=term-missing
+	docker compose -f compose.yaml exec -T api uv run python -m pytest --cov=./ --cov-report=term-missing --cov-fail-under=80
 
 .PHONY: test-system
 test-system:
@@ -136,10 +146,19 @@ test-system:
 		fi; \
 	done
 	@echo ""
-	@echo "Installing Playwright browsers..."
-	docker compose -f compose.yaml -f compose.system.yaml exec -T api uv run playwright install --with-deps chromium
-	docker compose -f compose.yaml -f compose.system.yaml exec -T api env BACKEND_URL=http://api:8000 FRONTEND_URL=http://frontend:3000 uv run python -m pytest tests/system/ -v -m system --no-cov
+	@echo "Running system tests..."
+	docker compose -f compose.yaml -f compose.system.yaml exec -T api env BACKEND_URL=http://api:8000 FRONTEND_URL=http://frontend:3000 uv run pytest tests/system/ -v -m system --no-cov --junit-xml=junit-system.xml
 	@echo "System tests complete. Services still running. Use 'make clean' to stop."
+
+.PHONY: test-load
+test-load:
+	@echo "Running k6 load tests..."
+	@if command -v k6 >/dev/null 2>&1; then \
+		k6 run load-tests/stress_test.js; \
+	else \
+		echo "k6 not found. Please install it (e.g., brew install k6 or docker run --rm -i grafana/k6 run - < load-tests/stress_test.js)"; \
+		exit 1; \
+	fi
 
 # Cleanup targets (Docker-focused)
 .PHONY: clean
@@ -161,3 +180,21 @@ shell:
 .PHONY: check-health
 check-health:
 	curl -s http://localhost:8000/health | python -m json.tool
+
+.PHONY: verify-recoverability
+verify-recoverability:
+	@chmod +x scripts/verify_recoverability.sh
+	./scripts/verify_recoverability.sh
+
+.PHONY: verify-confidentiality
+verify-confidentiality:
+	@chmod +x scripts/verify_confidentiality.sh
+	./scripts/verify_confidentiality.sh
+
+.PHONY: verify-responsive
+verify-responsive:
+	@echo "Starting services for responsive verification..."
+	docker compose -f compose.yaml -f compose.system.yaml up -d --build
+	@echo "Running cross-browser responsive tests..."
+	docker compose -f compose.yaml -f compose.system.yaml exec -T api env BACKEND_URL=http://api:8000 FRONTEND_URL=http://frontend:3000 uv run pytest tests/system/test_responsive_design.py -v -m system --no-cov
+	@echo "Verification complete."

@@ -6,10 +6,13 @@ from fastapi import HTTPException
 
 from models import domain
 from repositories import (
-    crud,
     membership_repo,
     music_provider_repo,
+    playback_session_repo,
+    queue_entry_repo,
     room_repo,
+    song_feedback_repo,
+    track_repo,
     user_repo,
 )
 from services import room_service
@@ -167,7 +170,7 @@ async def test_queue_add_remove(db_session, init_room):
     # Add a track to the queue
     await room_service.add_to_queue(room.roomId, track_data, user_id)
 
-    entries = await crud.get_queue_entries(room.roomId)
+    entries = await queue_entry_repo.get_queue_entries(room.roomId)
     assert len(entries) == 1
     item = entries[0]
     assert item.trackId == track_id
@@ -176,11 +179,11 @@ async def test_queue_add_remove(db_session, init_room):
     assert item.status == domain.QueueEntryStatus.PLAYING
 
     # Remove the item from the queue (entries are marked REMOVED, not hard-deleted)
-    await crud.update_queue_entry(
+    await queue_entry_repo.update_queue_entry(
         item.queueEntryId, {"status": domain.QueueEntryStatus.REMOVED}
     )
 
-    entries_after = await crud.get_queue_entries(room.roomId)
+    entries_after = await queue_entry_repo.get_queue_entries(room.roomId)
     active = [
         e
         for e in entries_after
@@ -216,7 +219,7 @@ async def _add_track_to_queue(room_id: str, user_id: str) -> str:
         },
         user_id,
     )
-    entries = await crud.get_queue_entries(room_id)
+    entries = await queue_entry_repo.get_queue_entries(room_id)
     return entries[0].queueEntryId
 
 
@@ -229,7 +232,7 @@ async def test_vote_upvote_increases_score(db_session, init_room):
         room.roomId, queue_entry_id, room.hostedBy, "upvote"
     )
 
-    entry = await crud.get_queue_entry(queue_entry_id)
+    entry = await queue_entry_repo.get_queue_entry(queue_entry_id)
     assert entry.voteScore == 1
 
 
@@ -242,7 +245,7 @@ async def test_vote_downvote_decreases_score(db_session, init_room):
         room.roomId, queue_entry_id, room.hostedBy, "downvote"
     )
 
-    entry = await crud.get_queue_entry(queue_entry_id)
+    entry = await queue_entry_repo.get_queue_entry(queue_entry_id)
     assert entry.voteScore == -1
 
 
@@ -259,10 +262,10 @@ async def test_vote_change_updates_score_without_duplicate_row(db_session, init_
         room.roomId, queue_entry_id, room.hostedBy, "downvote"
     )
 
-    entry = await crud.get_queue_entry(queue_entry_id)
+    entry = await queue_entry_repo.get_queue_entry(queue_entry_id)
     assert entry.voteScore == -1
 
-    feedback = await crud.get_song_feedback_by_queue_entry(queue_entry_id)
+    feedback = await song_feedback_repo.get_song_feedback_by_queue_entry(queue_entry_id)
     assert len(feedback) == 1
     assert feedback[0].type == domain.FeedbackType.DISLIKE
 
@@ -279,10 +282,10 @@ async def test_vote_neutral_removes_feedback_and_resets_score(db_session, init_r
         room.roomId, queue_entry_id, room.hostedBy, "neutral"
     )
 
-    entry = await crud.get_queue_entry(queue_entry_id)
+    entry = await queue_entry_repo.get_queue_entry(queue_entry_id)
     assert entry is not None
     assert entry.voteScore == 0
-    feedback = await crud.get_song_feedback_by_queue_entry(queue_entry_id)
+    feedback = await song_feedback_repo.get_song_feedback_by_queue_entry(queue_entry_id)
     assert len(feedback) == 0
 
 
@@ -295,7 +298,7 @@ async def test_vote_neutral_with_no_prior_feedback_is_noop(db_session, init_room
         room.roomId, queue_entry_id, room.hostedBy, "neutral"
     )
 
-    entry = await crud.get_queue_entry(queue_entry_id)
+    entry = await queue_entry_repo.get_queue_entry(queue_entry_id)
     assert entry is not None
     assert entry.voteScore == 0
 
@@ -346,7 +349,7 @@ async def test_vote_multiple_users_score_aggregated(db_session, init_room):
         room.roomId, queue_entry_id, user3_id, "downvote"
     )
 
-    entry = await crud.get_queue_entry(queue_entry_id)
+    entry = await queue_entry_repo.get_queue_entry(queue_entry_id)
     assert entry is not None
     assert entry.voteScore == 1  # 2 upvotes - 1 downvote
 
@@ -437,13 +440,13 @@ async def test_add_to_queue_allows_readding_track_after_played(db_session, init_
     }
 
     await room_service.add_to_queue(room.roomId, track_data, room.hostedBy)
-    first_entry = (await crud.get_queue_entries(room.roomId))[0]
-    await crud.update_queue_entry(
+    first_entry = (await queue_entry_repo.get_queue_entries(room.roomId))[0]
+    await queue_entry_repo.update_queue_entry(
         first_entry.queueEntryId, {"status": domain.QueueEntryStatus.PLAYED}
     )
 
     await room_service.add_to_queue(room.roomId, track_data, room.hostedBy)
-    entries = await crud.get_queue_entries(room.roomId)
+    entries = await queue_entry_repo.get_queue_entries(room.roomId)
 
     assert len(entries) == 2
     assert sum(1 for entry in entries if entry.trackId == track_id) == 2
@@ -469,7 +472,7 @@ async def test_add_to_queue_second_track_is_queued_not_playing(db_session, init_
     await room_service.add_to_queue(room.roomId, await _track("First"), room.hostedBy)
     await room_service.add_to_queue(room.roomId, await _track("Second"), room.hostedBy)
 
-    entries = await crud.get_queue_entries(room.roomId)
+    entries = await queue_entry_repo.get_queue_entries(room.roomId)
     statuses = {e.status for e in entries}
     assert domain.QueueEntryStatus.PLAYING in statuses
     assert domain.QueueEntryStatus.QUEUED in statuses
@@ -496,7 +499,9 @@ async def test_queue_sort_order(db_session, init_room):
             "deepLink": "",
         }
         await room_service.add_to_queue(room.roomId, track, room.hostedBy)
-        entry = await crud.get_queue_entry_by_track(room.roomId, track["trackId"])
+        entry = await queue_entry_repo.get_queue_entry_by_track(
+            room.roomId, track["trackId"]
+        )
         assert entry is not None
         return entry.queueEntryId
 
@@ -540,7 +545,9 @@ async def test_vote_reflected_in_room_state(db_session, init_room):
             "deepLink": "",
         }
         await room_service.add_to_queue(room.roomId, track, room.hostedBy)
-        entry = await crud.get_queue_entry_by_track(room.roomId, track["trackId"])
+        entry = await queue_entry_repo.get_queue_entry_by_track(
+            room.roomId, track["trackId"]
+        )
         assert entry is not None
         return entry.queueEntryId
 
@@ -585,7 +592,9 @@ async def test_playback_state_mapping_in_room_state(db_session, init_room):
             "deepLink": "",
         }
         await room_service.add_to_queue(room.roomId, track, room.hostedBy)
-        entry = await crud.get_queue_entry_by_track(room.roomId, track["trackId"])
+        entry = await queue_entry_repo.get_queue_entry_by_track(
+            room.roomId, track["trackId"]
+        )
         assert entry is not None
         return entry.queueEntryId
 
@@ -635,11 +644,11 @@ async def test_playback_pause_and_resume(db_session, init_room):
     await _add_track_to_queue(room.roomId, room.hostedBy)
 
     await room_service.set_playback_state(room.roomId, room.hostedBy, "pause")
-    session = await crud.get_current_playback_session(room.roomId)
+    session = await playback_session_repo.get_current_playback_session(room.roomId)
     assert session.state == domain.PlaybackState.PAUSED
 
     await room_service.set_playback_state(room.roomId, room.hostedBy, "resume")
-    session = await crud.get_current_playback_session(room.roomId)
+    session = await playback_session_repo.get_current_playback_session(room.roomId)
     assert session.state == domain.PlaybackState.PLAYING
 
 
@@ -649,7 +658,7 @@ async def test_playback_stop(db_session, init_room):
     await _add_track_to_queue(room.roomId, room.hostedBy)
 
     await room_service.set_playback_state(room.roomId, room.hostedBy, "stop")
-    session = await crud.get_current_playback_session(room.roomId)
+    session = await playback_session_repo.get_current_playback_session(room.roomId)
     assert session.state == domain.PlaybackState.STOPPED
 
 
@@ -684,7 +693,7 @@ async def test_playback_no_session_resume_creates_session(db_session, init_room)
     """resume with no existing session picks the first queued entry."""
     room = await init_room()
     track_id = str(uuid.uuid4())
-    await crud.create_track(
+    await track_repo.create_track(
         {
             "trackId": track_id,
             "providerTrackId": "sp:x",
@@ -696,7 +705,7 @@ async def test_playback_no_session_resume_creates_session(db_session, init_room)
             "deepLink": "",
         }
     )
-    await crud.create_queue_entry(
+    await queue_entry_repo.create_queue_entry(
         {
             "queueEntryId": f"QENTRY{uuid.uuid4().hex[:8].upper()}",
             "roomId": room.roomId,
@@ -710,7 +719,7 @@ async def test_playback_no_session_resume_creates_session(db_session, init_room)
     )
 
     await room_service.set_playback_state(room.roomId, room.hostedBy, "resume")
-    session = await crud.get_current_playback_session(room.roomId)
+    session = await playback_session_repo.get_current_playback_session(room.roomId)
     assert session is not None
     assert session.state == domain.PlaybackState.PLAYING
 

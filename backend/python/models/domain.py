@@ -78,6 +78,7 @@ class FeedbackType(PyEnum):
     LIKE = "like"
     DISLIKE = "dislike"
     SKIP = "skip"
+    REPLAY = "replay"
 
 
 # Identity Package

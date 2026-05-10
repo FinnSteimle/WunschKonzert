@@ -4,9 +4,9 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
+from api.event_handlers import dispatch as handle_room_events
 from api.websockets import (
     active_room_connections,
-    handle_room_events,
     send_room_state,
 )
 from repositories import membership_repo, user_repo

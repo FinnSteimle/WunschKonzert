@@ -1,5 +1,5 @@
-import { render, screen } from '@testing-library/svelte';
-import { describe, expect, it } from 'vitest';
+import { fireEvent, render, screen } from '@testing-library/svelte';
+import { describe, expect, it, vi } from 'vitest';
 import CurrentSongCard from './CurrentSongCard.svelte';
 import type { QueueEntryDto } from '$lib/types/api';
 
@@ -80,5 +80,52 @@ describe('CurrentSongCard', () => {
 	it('shows entry status when present', () => {
 		render(CurrentSongCard, { entry: makeEntry({ status: 'playing' }) });
 		expect(screen.getByText('playing')).toBeTruthy();
+	});
+
+	it('shows compact skip tally on icon button', () => {
+		render(CurrentSongCard, {
+			entry: makeEntry(),
+			skipCount: 2,
+			requiredVotes: 3,
+			hasSkipVoted: false
+		});
+		expect(screen.getByRole('button', { name: 'Skip (2/3)' })).toBeTruthy();
+	});
+
+	it('highlights skip when user voted', () => {
+		render(CurrentSongCard, { entry: makeEntry(), hasSkipVoted: true, skipCount: 1, requiredVotes: 2 });
+		expect(screen.getByRole('button', { name: 'Skip (1/2)' })).toBeTruthy();
+	});
+
+	it('calls skip toggle handler on click', async () => {
+		const onToggleSkip = vi.fn();
+		render(CurrentSongCard, {
+			entry: makeEntry(),
+			onToggleSkip,
+			requiredVotes: 2,
+			skipCount: 0
+		});
+		await fireEvent.click(screen.getByRole('button', { name: 'Skip (0/2)' }));
+		expect(onToggleSkip).toHaveBeenCalledTimes(1);
+	});
+
+	it('renders replay icon button with tally when replay prop set', async () => {
+		const onToggle = vi.fn();
+		const closesAt = new Date(Date.now() + 60_000).toISOString();
+		render(CurrentSongCard, {
+			entry: makeEntry(),
+			skipCount: 0,
+			requiredVotes: 2,
+			replay: {
+				voteCount: 1,
+				neededVotes: 2,
+				hasVoted: false,
+				status: 'open',
+				closesAt,
+				onToggle
+			}
+		});
+		await fireEvent.click(screen.getByRole('button', { name: 'Replay (1/2)' }));
+		expect(onToggle).toHaveBeenCalledTimes(1);
 	});
 });

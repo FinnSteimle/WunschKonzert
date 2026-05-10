@@ -1,6 +1,14 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { RoomSocketClient } from './roomSocket';
 
+vi.mock('$lib/api/client', async (importOriginal) => {
+	const actual = await importOriginal<typeof import('$lib/api/client')>();
+	return {
+		...actual,
+		getWsBaseUrl: () => 'ws://localhost:8000'
+	};
+});
+
 class MockWebSocket {
 	static readonly OPEN = 1;
 	static readonly CLOSED = 3;
@@ -332,6 +340,23 @@ describe('RoomSocketClient', () => {
 
 			client.disconnect();
 		});
+
+		it('sends replay vote_type for replay tally', () => {
+			const client = new RoomSocketClient('room-1', { onState: vi.fn() });
+			client.connect();
+			createdSockets[0].simulateOpen();
+
+			client.sendVote('q-play', 'user-1', 'replay');
+
+			expect(JSON.parse(createdSockets[0].sent[0])).toEqual({
+				type: 'vote',
+				queue_entry_id: 'q-play',
+				user_id: 'user-1',
+				vote_type: 'replay'
+			});
+
+			client.disconnect();
+		});
 	});
 
 	describe('renameDisplayName', () => {
@@ -351,4 +376,5 @@ describe('RoomSocketClient', () => {
 			client.disconnect();
 		});
 	});
+
 });

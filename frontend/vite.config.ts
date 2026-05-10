@@ -24,6 +24,10 @@ export default defineConfig({
 		environment: 'jsdom',
 		include: ['src/**/*.{test,spec}.{ts,js}'],
 		setupFiles: ['src/test/setup.ts'],
+		env: {
+			PUBLIC_API_URL: 'http://localhost:8000',
+			PUBLIC_WS_URL: 'ws://localhost:8000'
+		},
 		server: {
 			deps: {
 				inline: ['html-encoding-sniffer', '@exodus/bytes', 'jsdom']
@@ -33,16 +37,21 @@ export default defineConfig({
 			provider: 'v8',
 			reporter: ['text', 'text-summary', 'cobertura'],
 			include: ['src/**/*.ts', 'src/**/*.svelte'],
-			exclude: ['src/lib/components/ui/*'],
-			clean: false
-			/*
+			exclude: [
+				'src/lib/components/ui/*',
+				// Spotify Web Playback SDK glue — DOM script injection + globals; smoke-tested manually.
+				'src/lib/playback/**',
+				// Interfaces only; no runnable lines.
+				'src/lib/types/**',
+				'**/*.d.ts',
+				'src/lib/index.ts'
+			],
+			// GitLab binds $(pwd)/coverage → /app/coverage; clean:true rmdir`s that path → EBUSY.
+			clean: false,
 			thresholds: {
 				lines: 80,
-				functions: 80,
-				branches: 80,
 				statements: 80
 			}
-			*/
 		}
 	}
 });

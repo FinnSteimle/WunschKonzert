@@ -5,7 +5,15 @@
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
 	import { apiClient } from '$lib/api/client';
-	import { roomStore, getCurrentSong, queueWithoutCurrent } from '$lib/stores/room';
+	import {
+		roomStore,
+		getCurrentSong,
+		queueWithoutCurrent,
+		activeQueuedTrackIds,
+		countActiveRoomMembers,
+		clientReplayVoteFromPlayingEntry,
+		replayMajorityThreshold
+	} from '$lib/stores/room';
 	import { RoomSocketClient } from '$lib/realtime/roomSocket';
 	import {
 		generateRandomDisplayName,
@@ -39,6 +47,7 @@
 	import InvitePanelDialog from '$lib/components/room/invite/InvitePanelDialog.svelte';
 	import LoadingState from '$lib/components/room/states/LoadingState.svelte';
 	import EmptyState from '$lib/components/room/states/EmptyState.svelte';
+	import SongHistoryModal from '$lib/components/room/history/SongHistoryModal.svelte';
 	import * as Dialog from '$lib/components/ui/dialog';
 	import { Button } from '$lib/components/ui/button';
 	import { Input } from '$lib/components/ui/input';
@@ -87,6 +96,25 @@
 			}
 		} catch (err) {
 			toast.error(err instanceof Error ? err.message : 'Vote failed');
+		} finally {
+			voteBusyId = null;
+		}
+	}
+
+	async function handleRemove(queueEntryId: string) {
+		const uid = sessionUser?.userId;
+		if (!uid || !socketClient || !socketClient.isConnected()) {
+			toast.error('Not connected to room');
+			return;
+		}
+		voteBusyId = queueEntryId;
+		try {
+			const sent = socketClient.removeQueueEntry(queueEntryId, uid);
+			if (!sent) {
+				throw new Error('Remove failed');
+			}
+		} catch (err) {
+			toast.error(err instanceof Error ? err.message : 'Remove failed');
 		} finally {
 			voteBusyId = null;
 		}
@@ -185,6 +213,24 @@
 			name: rs.room.name,
 			isHost: rs.host.userId === su.userId
 		});
+	});
+
+	const REPLAY_SUCCESS_EVENTS = new Set(['replay_scheduled', 'playback_replayed']);
+	let lastReplayEventSignature = $state<string | undefined>(undefined);
+	$effect(() => {
+		if (!browser) return;
+		const ev = $roomStore.roomState?.lastEvent;
+		const sig = ev ? `${ev.type}:${ev.at}` : '';
+		const prev = lastReplayEventSignature;
+		lastReplayEventSignature = sig;
+		if (
+			ev &&
+			REPLAY_SUCCESS_EVENTS.has(ev.type) &&
+			prev !== undefined &&
+			sig !== prev
+		) {
+			toast.success('The group voted to replay this track. It has been added to the top of the queue.');
+		}
 	});
 
 	// When the server's current track changes (or the SDK becomes ready), play it.
@@ -504,6 +550,15 @@
 			{@const rs = $roomStore.roomState}
 			{@const isHost = rs.host?.userId === sessionUser.userId}
 			{@const current = getCurrentSong(rs)}
+			{@const currentUserId = sessionUser.userId}
+			{@const currentSkipVotes = current
+				? current.feedback.filter((feedback) => feedback.type === 'skip')
+				: []}
+			{@const currentSkipCount = currentSkipVotes.length}
+			{@const currentRequiredVotes = Math.floor(rs.users.length / 2) + 1}
+			{@const currentUserSkipped = current
+				? currentSkipVotes.some((feedback) => feedback.userId === currentUserId)
+				: false}
 			{@const durationMs =
 				isHost && sdkPlayerState && sdkPlayerState.durationMs > 0
 					? sdkPlayerState.durationMs
@@ -513,9 +568,15 @@
 			{@const positionMs =
 				isHost && sdkPlayerState ? sdkPlayerState.positionMs : (rs.playback?.positionMs ?? 0)}
 			{@const inviteUrl = rs.room ? `${page.url.origin}/room/${rs.room.joinCode}` : ''}
-			{@const queuedTrackIds = new Set(
-				rs.queue.filter((e) => e.status !== 'played').map((e) => e.track.trackId)
-			)}
+			{@const queuedTrackIds = activeQueuedTrackIds(rs)}
+			{@const replayPanelVote =
+				rs.replayVote ??
+				(current
+					? clientReplayVoteFromPlayingEntry(current, rs, positionMs, durationMs)
+					: null)}
+			{@const replayMajorityVotes = replayPanelVote
+				? replayMajorityThreshold(replayPanelVote.activeUserCount)
+				: 0}
 
 			<header
 				class="flex flex-row flex-wrap gap-3 sm:items-center sm:justify-between w-[calc(100%-40px)]"
@@ -547,7 +608,27 @@
 			<main class="grid grid-cols-1 gap-6 lg:grid-cols-12 lg:gap-8">
 				<section class="flex min-w-0 flex-col gap-3 lg:col-span-4" aria-labelledby="wk-now-playing">
 					<h2 id="wk-now-playing" class="text-sm font-medium">Now playing</h2>
-					<CurrentSongCard entry={current} />
+					<CurrentSongCard
+						entry={current}
+						skipCount={currentSkipCount}
+						requiredVotes={currentRequiredVotes}
+						hasSkipVoted={currentUserSkipped}
+						busy={voteBusyId === current?.queueEntryId}
+						replay={replayPanelVote
+							? {
+									voteCount: replayPanelVote.voteCount,
+									neededVotes: replayMajorityVotes,
+									hasVoted: replayPanelVote.voterUserIds.includes(sessionUser.userId),
+									status: replayPanelVote.status,
+									closesAt: replayPanelVote.closesAt,
+									onToggle: () => void handleVote(replayPanelVote.targetQueueEntryId, 'replay')
+								}
+							: undefined}
+						onToggleSkip={() => {
+							if (!current) return;
+							void handleVote(current.queueEntryId, 'skip');
+						}}
+					/>
 					{#if current && durationMs > 0}
 						<PlaybackProgress {positionMs} {durationMs} playbackState={rs.playback?.state} />
 					{/if}
@@ -561,17 +642,26 @@
 				</section>
 
 				<section class="flex min-w-0 flex-col gap-3 lg:col-span-8" aria-labelledby="wk-queue">
-					<h2 id="wk-queue" class="text-sm font-medium">Queue</h2>
+					<div class="flex items-center justify-between">
+						<h2 id="wk-queue" class="text-sm font-medium">Queue</h2>
+						<SongHistoryModal roomState={rs} onAddTrack={handleAddTrack} />
+					</div>
 					<QueueList
 						entries={queueWithoutCurrent(rs)}
 						userId={sessionUser.userId}
+						hostId={rs.host.userId}
+						totalMembers={countActiveRoomMembers($roomStore.roomState)}
 						{voteBusyId}
 						onVote={handleVote}
+						onRemove={handleRemove}
 					/>
 				</section>
 
-				<section class="flex min-w-0 flex-col gap-3 lg:col-span-8" aria-labelledby="wk-search">
-					<h2 id="wk-search" class="text-sm font-medium">Add a song</h2>
+				<section
+					class="flex min-w-0 flex-col gap-3 lg:col-span-8"
+					aria-labelledby="wk-search-heading"
+				>
+					<h2 id="wk-search-heading" class="text-sm font-medium">Add a song</h2>
 					<Card>
 						<CardHeader class="pb-2">
 							<CardTitle class="text-base">Search</CardTitle>
