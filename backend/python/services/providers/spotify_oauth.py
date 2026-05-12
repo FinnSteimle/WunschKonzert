@@ -184,9 +184,7 @@ async def get_user_access_token(user_id: str) -> str:
 
     new_access = token_data["access_token"]
     if not isinstance(new_access, str) or not new_access:
-        raise HTTPException(
-            status_code=502, detail="Failed to refresh Spotify token"
-        )
+        raise HTTPException(status_code=502, detail="Failed to refresh Spotify token")
     new_refresh = token_data.get("refresh_token", pa.refreshToken)
     expires_in = int(token_data.get("expires_in", 3600))
     new_expires = datetime.now(UTC) + timedelta(seconds=max(60, expires_in - 60))
