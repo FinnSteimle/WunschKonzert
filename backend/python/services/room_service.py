@@ -248,7 +248,21 @@ async def _build_room_state(room_id: str) -> dict[str, object] | None:
         "history": history,
     }
 
+    _preserve_ephemeral_fields(room_id, state)
     return state
+
+
+def _preserve_ephemeral_fields(room_id: str, state: dict[str, object]) -> None:
+    """Carry in-memory-only fields (host transfer invite + system messages) across rebuilds."""
+    previous = room_state_cache.get(room_id)
+    if not isinstance(previous, dict):
+        return
+    transfer = previous.get("transfer")
+    if isinstance(transfer, dict):
+        state["transfer"] = transfer
+    messages = previous.get("systemMessages")
+    if isinstance(messages, list):
+        state["systemMessages"] = messages
 
 
 async def refresh_room_state(
