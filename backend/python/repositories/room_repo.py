@@ -124,3 +124,21 @@ async def update_room_status(
     await session.flush()
     await session.refresh(room)
     return room
+
+
+async def update_host(
+    room_id: str, new_user_id: str, session: AsyncSession | None = None
+) -> Room:
+    if session is None:
+        session_factory = get_session_factory()
+        async with session_factory() as new_session:
+            room = await update_host(room_id, new_user_id, session=new_session)
+            await new_session.commit()
+            return room
+
+    room = await get_room(room_id, session=session)
+
+    room.hostedBy = new_user_id
+    await session.flush()
+    await session.refresh(room)
+    return room
