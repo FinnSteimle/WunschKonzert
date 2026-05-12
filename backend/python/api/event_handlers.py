@@ -51,6 +51,7 @@ import json
 from collections.abc import Awaitable
 from typing import Callable
 
+import services.host_transfer_service as host_transfer_service
 import services.room_service as room_service
 
 # Type alias: every handler takes (room_id, event_dict) and returns nothing (async)
@@ -134,6 +135,39 @@ async def _handle_rename(room_id: str, event: dict[str, object]) -> None:
 @register("leave")
 async def _handle_leave(room_id: str, event: dict[str, object]) -> None:
     await room_service.leave_room_service(room_id, str(event.get("user_id", "")))
+
+
+@register("host_transfer_initiate")
+async def _handle_host_transfer_initiate(
+    room_id: str, event: dict[str, object]
+) -> None:
+    await host_transfer_service.initiate_transfer(
+        room_id=room_id,
+        from_user_id=str(event.get("from_user_id", "")),
+        to_user_id=str(event.get("to_user_id", "")),
+    )
+
+
+@register("host_transfer_accept")
+async def _handle_host_transfer_accept(
+    room_id: str, event: dict[str, object]
+) -> None:
+    await host_transfer_service.accept_transfer(
+        room_id=room_id,
+        transfer_id=str(event.get("transfer_id", "")),
+        user_id=str(event.get("user_id", "")),
+    )
+
+
+@register("host_transfer_reject")
+async def _handle_host_transfer_reject(
+    room_id: str, event: dict[str, object]
+) -> None:
+    await host_transfer_service.reject_transfer(
+        room_id=room_id,
+        transfer_id=str(event.get("transfer_id", "")),
+        user_id=str(event.get("user_id", "")),
+    )
 
 
 async def dispatch(room_id: str, data: str) -> None:
