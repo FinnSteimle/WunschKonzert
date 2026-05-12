@@ -1,10 +1,6 @@
 from __future__ import annotations
 
-import base64
-from datetime import UTC, datetime, timedelta
-
-import httpx
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter
 from fastapi.responses import RedirectResponse
 
 import repositories.music_provider_repo as music_provider_repo
@@ -64,46 +60,5 @@ async def spotify_callback(
 @router.get("/auth/spotify/token")
 async def spotify_token(user_id: str) -> dict[str, str]:
     """Return a fresh Spotify access token for the Web Playback SDK."""
-    pa = await music_provider_repo.get_provider_account_by_user(user_id, "spotify")
-    if not pa or not pa.refreshToken:
-        raise HTTPException(
-            status_code=404,
-            detail="No linked Spotify account found for this user",
-        )
-
-    # If the token is still valid, return it directly.
-    if pa.accessToken and pa.tokenExpiresAt and datetime.now(UTC) < pa.tokenExpiresAt:
-        return {"access_token": pa.accessToken}
-
-    # Token expired -- refresh it.
-    client_id, client_secret = spotify_oauth.spotify_credentials()
-    auth_value = base64.b64encode(f"{client_id}:{client_secret}".encode()).decode()
-
-    async with httpx.AsyncClient(timeout=15) as http:
-        resp = await http.post(
-            "https://accounts.spotify.com/api/token",
-            headers={"Authorization": f"Basic {auth_value}"},
-            data={
-                "grant_type": "refresh_token",
-                "refresh_token": pa.refreshToken,
-            },
-        )
-        if resp.status_code != 200:
-            raise HTTPException(
-                status_code=502, detail="Failed to refresh Spotify token"
-            )
-        token_data = resp.json()
-
-    new_access = token_data["access_token"]
-    new_refresh = token_data.get("refresh_token", pa.refreshToken)
-    expires_in = int(token_data.get("expires_in", 3600))
-    new_expires = datetime.now(UTC) + timedelta(seconds=max(60, expires_in - 60))
-
-    await music_provider_repo.update_provider_account_tokens(
-        pa.providerAccountId,
-        access_token=new_access,
-        token_expires_at=new_expires,
-        refresh_token=new_refresh if new_refresh != pa.refreshToken else None,
-    )
-
-    return {"access_token": new_access}
+    access_token = await spotify_oauth.get_user_access_token(user_id)
+    return {"access_token": access_token}

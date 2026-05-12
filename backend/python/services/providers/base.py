@@ -32,3 +32,7 @@ class MusicProviderClient(Protocol):
     provider_id: str
 
     async def search_tracks(self, query: str) -> list[ProviderTrack]: ...
+
+    async def find_track_for_user(
+        self, *, user_id: str, title: str, artist: str
+    ) -> ProviderTrack | None: ...

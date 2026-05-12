@@ -7,6 +7,7 @@ from datetime import UTC, datetime, timedelta
 import httpx
 from fastapi import HTTPException
 
+from services.providers import spotify_oauth
 from services.providers.base import ProviderTrack
 
 
@@ -86,6 +87,52 @@ class SpotifyProviderClient:
         return [
             self._to_track(item) for item in payload.get("tracks", {}).get("items", [])
         ]
+
+    async def find_track_for_user(
+        self, *, user_id: str, title: str, artist: str
+    ) -> ProviderTrack | None:
+        """Search Spotify on behalf of the user and return the best Title+Artist match."""
+        token = await spotify_oauth.get_user_access_token(user_id)
+        search_url = os.getenv(
+            "SPOTIFY_SEARCH_URL", "https://api.spotify.com/v1/search"
+        )
+
+        query = f'track:"{title}" artist:"{artist}"'
+        async with httpx.AsyncClient(timeout=15) as client:
+            response = await client.get(
+                search_url,
+                params={
+                    "q": query,
+                    "type": "track",
+                    "limit": 5,
+                    "market": "from_token",
+                },
+                headers={"Authorization": f"Bearer {token}"},
+            )
+            try:
+                response.raise_for_status()
+            except httpx.HTTPStatusError:
+                return None
+            payload = response.json()
+
+        items = payload.get("tracks", {}).get("items", [])
+        if not items:
+            return None
+
+        target_title = title.strip().casefold()
+        target_artist = artist.strip().casefold()
+
+        best: ProviderTrack | None = None
+        for item in items:
+            candidate = self._to_track(item)
+            cand_title = candidate.title.strip().casefold()
+            cand_artist = candidate.artist.strip().casefold()
+            if cand_title == target_title and target_artist in cand_artist:
+                return candidate
+            if best is None and target_artist in cand_artist:
+                best = candidate
+
+        return best
 
     def _to_track(self, item: dict[str, object]) -> ProviderTrack:
         track_id_raw = item.get("id")
