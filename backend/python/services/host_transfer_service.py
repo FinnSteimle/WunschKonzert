@@ -43,9 +43,7 @@ def _push_system_message(room_id: str, text: str) -> None:
     messages = cached.get("systemMessages")
     if not isinstance(messages, list):
         messages = []
-    messages.append(
-        {"id": str(uuid.uuid4()), "text": text, "at": _time_now()}
-    )
+    messages.append({"id": str(uuid.uuid4()), "text": text, "at": _time_now()})
     cached["systemMessages"] = messages[-MAX_SYSTEM_MESSAGES:]
 
 
