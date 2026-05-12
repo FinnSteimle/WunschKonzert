@@ -6,10 +6,14 @@ from datetime import UTC, datetime
 from fastapi import HTTPException
 
 import repositories.membership_repo as membership_repo
+import repositories.music_provider_repo as music_provider_repo
+import repositories.queue_entry_repo as queue_entry_repo
 import repositories.room_repo as room_repo
+import repositories.track_repo as track_repo
 import services.room_service as room_service
 from core.exceptions import ResourceNotFoundError
-from models.domain import MembershipStatus
+from models.domain import MembershipStatus, QueueEntryStatus
+from services.providers.registry import get_provider_client
 
 MAX_SYSTEM_MESSAGES = 5
 
