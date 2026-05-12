@@ -149,9 +149,7 @@ async def _handle_host_transfer_initiate(
 
 
 @register("host_transfer_accept")
-async def _handle_host_transfer_accept(
-    room_id: str, event: dict[str, object]
-) -> None:
+async def _handle_host_transfer_accept(room_id: str, event: dict[str, object]) -> None:
     await host_transfer_service.accept_transfer(
         room_id=room_id,
         transfer_id=str(event.get("transfer_id", "")),
@@ -160,9 +158,7 @@ async def _handle_host_transfer_accept(
 
 
 @register("host_transfer_reject")
-async def _handle_host_transfer_reject(
-    room_id: str, event: dict[str, object]
-) -> None:
+async def _handle_host_transfer_reject(room_id: str, event: dict[str, object]) -> None:
     await host_transfer_service.reject_transfer(
         room_id=room_id,
         transfer_id=str(event.get("transfer_id", "")),

@@ -101,7 +101,6 @@ async def reject_transfer(
     return room_service.room_state_cache[room_id]
 
 
-
 async def _remove_entry(entry_id: str) -> None:
     await queue_entry_repo.update_queue_entry(
         entry_id, {"status": QueueEntryStatus.REMOVED}
@@ -166,9 +165,7 @@ async def _remap_queue_for_user(
     return removed_titles, playing_was_removed
 
 
-async def _validate_accept(
-    room_id: str, transfer_id: str, user_id: str
-) -> Room:
+async def _validate_accept(room_id: str, transfer_id: str, user_id: str) -> Room:
     """Validate the accept request and return the loaded Room."""
     transfer = _get_transfer(room_id)
     if not transfer or transfer.get("transferId") != transfer_id:
