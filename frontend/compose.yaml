@@ -1,5 +1,4 @@
 services:
-  # Force redeploy to apply playback fix (WUN-168)
   frontend:
     build:
       context: .

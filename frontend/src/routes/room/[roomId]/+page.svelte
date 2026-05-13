@@ -247,7 +247,9 @@
 		const queueEntryId = rs.playback?.currentQueueEntryId ?? null;
 		const playbackState = rs.playback?.state;
 
-		if (!queueEntryId || playbackState === 'stopped' || playbackState === 'paused') return;
+		// ONLY initiate a new 'play' command if the server explicitly says we are 'playing'.
+		// This prevents accidental auto-play on first song addition or during state transitions.
+		if (!queueEntryId || playbackState !== 'playing') return;
 		if (queueEntryId === lastPlayedQueueEntryId) return;
 
 		const entry = rs.queue.find((e) => e.queueEntryId === queueEntryId);
@@ -278,6 +280,7 @@
 				musicPlayer.resume().catch((err) => console.error('[SpotifyPlayer] sync resume failed:', err));
 			}
 		} else if (!serverPlaying && localPlaying) {
+			// Aggressively pause if the server says we should be paused/stopped
 			musicPlayer.pause().catch((err) => console.error('[SpotifyPlayer] sync pause failed:', err));
 		}
 	});
