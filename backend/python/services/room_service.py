@@ -202,7 +202,11 @@ async def _build_room_state(room_id: str) -> dict[str, object] | None:
                 latest_playback.queueEntryId if playback_state != "stopped" else None
             ),
             "updatedAt": latest_playback.startedAt.isoformat(),
-            "positionMs": int(latest_playback.elapsedTime or 0) * 1000,
+            "positionMs": (
+                int(latest_playback.elapsedTime or 0) * 1000
+                if playback_state != "stopped"
+                else 0
+            ),
         }
 
     history_entries = await playback_history_repo.get_history(room_id, limit=20)
@@ -283,7 +287,9 @@ async def get_song_history(room_id: str) -> dict[str, object]:
     return await refresh_room_state(room_id, "history_updated")
 
 
-async def sync_playback_position(room_id: str, user_id: str, position_ms: int) -> None:
+async def sync_playback_position(
+    room_id: str, user_id: str, position_ms: int, queue_entry_id: str | None = None
+) -> None:
     """Lightweight position sync: update DB + patch cache without full rebuild."""
     try:
         room = await room_repo.get_room(room_id)
@@ -295,6 +301,10 @@ async def sync_playback_position(room_id: str, user_id: str, position_ms: int) -
 
     session = await playback_session_repo.get_current_playback_session(room_id)
     if not session or _enum_value(session.state) != "playing":
+        return
+
+    # If a queue_entry_id is provided, ensure it matches the current session
+    if queue_entry_id and session.queueEntryId != queue_entry_id:
         return
 
     elapsed = max(0, position_ms // 1000)
@@ -614,6 +624,7 @@ async def set_playback_state(
     user_id: str,
     action: str,
     position_ms: int | None = None,
+    queue_entry_id: str | None = None,
 ) -> dict[str, object]:
     if action not in {"pause", "resume", "stop", "advance"}:
         raise HTTPException(status_code=400, detail="Invalid playback action")
@@ -656,6 +667,14 @@ async def set_playback_state(
     elapsed_seconds = (
         max(0, int(position_ms) // 1000) if position_ms is not None else None
     )
+
+    # If resuming and a queue_entry_id is provided, ignore position if it's for a different track.
+    if (
+        action == "resume"
+        and queue_entry_id
+        and playback_session.queueEntryId != queue_entry_id
+    ):
+        elapsed_seconds = None
 
     updates: dict[str, object] = {"state": PlaybackState.PLAYING, "pausedAt": None}
     if action == "pause":

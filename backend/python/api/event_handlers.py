@@ -106,15 +106,20 @@ async def _handle_playback(room_id: str, event: dict[str, object]) -> None:
         user_id=str(event.get("user_id", "")),
         action=str(event.get("action", "")),
         position_ms=int(position_ms) if isinstance(position_ms, (int, float)) else None,
+        queue_entry_id=str(event.get("queue_entry_id", "")) or None,
     )
 
 
 @register("position_sync")
 async def _handle_position_sync(room_id: str, event: dict[str, object]) -> None:
     pos = event.get("position_ms")
+    entry_id = event.get("queue_entry_id")
     if isinstance(pos, (int, float)):
         await room_service.sync_playback_position(
-            room_id, str(event.get("user_id", "")), int(pos)
+            room_id,
+            str(event.get("user_id", "")),
+            int(pos),
+            queue_entry_id=str(entry_id) if entry_id else None,
         )
 
 
