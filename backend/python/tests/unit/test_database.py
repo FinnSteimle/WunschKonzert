@@ -92,9 +92,9 @@ def test_get_session_factory_works_with_correct_values():
     # checks that it uses the created engine and creates an AsyncSession (once)
     mock_create_engine.assert_called_once_with(
         "postgresql+asyncpg://test",
-        pool_size=20,
-        max_overflow=30,
-        pool_timeout=30,
+        pool_size=50,
+        max_overflow=100,
+        pool_timeout=60,
     )
     mock_sessionmaker.assert_called_once_with(
         mock_create_engine.return_value,
