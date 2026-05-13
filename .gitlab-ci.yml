@@ -578,10 +578,8 @@ deploy:staging:
       export FRONTEND_IMAGE="$CI_REGISTRY_IMAGE/frontend:dev"
       cd "$DEPLOY_PATH_STAGING"
       
-      # Nuclear refresh: stop, pull, and restart to ensure no old code persists
-      docker compose --env-file .env.staging -f compose.staging.yaml stop frontend || true
-      docker compose --env-file .env.staging -f compose.staging.yaml rm -f frontend || true
-      docker compose --env-file .env.staging -f compose.staging.yaml pull
+      docker compose --env-file .env.staging -f compose.staging.yaml pull --quiet
+      docker compose --env-file .env.staging -f compose.staging.yaml up -d --force-recreate --remove-orphans
       
       # Run database migrations before starting services
       echo "Running database migrations..."
