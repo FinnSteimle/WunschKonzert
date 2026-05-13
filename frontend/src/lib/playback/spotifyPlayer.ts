@@ -74,6 +74,13 @@ export class SpotifyPlayer implements MusicPlayer {
 					clearTimeout(this.reconnectTimer);
 					this.reconnectTimer = null;
 				}
+				// Force a pause on ready to prevent Spotify's auto-resume behavior
+				// in some browsers/accounts.
+				this.player?.getCurrentState().then((state) => {
+					if (state && !state.paused) {
+						this.player?.pause().catch(() => {});
+					}
+				});
 				this.flushReadyWaiters();
 				this.emitState({ isReady: true });
 			});
