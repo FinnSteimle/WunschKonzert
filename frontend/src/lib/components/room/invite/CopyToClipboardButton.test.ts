@@ -41,7 +41,9 @@ describe('CopyToClipboardButton', () => {
 
 		vi.advanceTimersByTime(2000);
 
-		await waitFor(() => expect(screen.getByRole('button', { name: 'Copy invite code' })).toBeTruthy());
+		await waitFor(() =>
+			expect(screen.getByRole('button', { name: 'Copy invite code' })).toBeTruthy()
+		);
 	});
 
 	it('shows error toast if clipboard write fails', async () => {

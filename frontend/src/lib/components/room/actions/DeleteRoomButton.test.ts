@@ -86,7 +86,12 @@ describe('DeleteRoomButton', () => {
 	});
 
 	it('shows Deleting… text while busy', async () => {
-		let resolveDelete!: (v: { success: boolean; message: string; room_id: string | null; join_code: string | null }) => void;
+		let resolveDelete!: (v: {
+			success: boolean;
+			message: string;
+			room_id: string | null;
+			join_code: string | null;
+		}) => void;
 		vi.mocked(apiClient.deleteRoom).mockReturnValue(
 			new Promise((res) => {
 				resolveDelete = res;
@@ -154,7 +159,9 @@ describe('DeleteRoomButton', () => {
 
 		await fireEvent.click(screen.getByRole('button', { name: 'Delete room' }));
 		await fireEvent.click(screen.getByRole('button', { name: 'Delete forever' }));
-		expect((screen.getByRole('button', { name: 'Delete room' }) as HTMLButtonElement).disabled).toBe(true);
+		expect(
+			(screen.getByRole('button', { name: 'Delete room' }) as HTMLButtonElement).disabled
+		).toBe(true);
 
 		await view.rerender({
 			roomId: 'room-1',
@@ -162,10 +169,14 @@ describe('DeleteRoomButton', () => {
 			disabled: true
 		});
 
-		expect((screen.getByRole('button', { name: 'Delete room' }) as HTMLButtonElement).disabled).toBe(true);
+		expect(
+			(screen.getByRole('button', { name: 'Delete room' }) as HTMLButtonElement).disabled
+		).toBe(true);
 
 		resolveDelete({ success: true, message: 'ok', room_id: 'room-1', join_code: null });
 		await waitFor(() => expect(toast.success).toHaveBeenCalledWith('Room deleted'));
-		expect((screen.getByRole('button', { name: 'Delete room' }) as HTMLButtonElement).disabled).toBe(true);
+		expect(
+			(screen.getByRole('button', { name: 'Delete room' }) as HTMLButtonElement).disabled
+		).toBe(true);
 	});
 });

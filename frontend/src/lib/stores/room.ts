@@ -96,8 +96,7 @@ export function clientReplayVoteFromPlayingEntry(
 
 	const replayFeedback = entry.feedback.filter((f) => f.type === 'replay');
 	const active = countActiveRoomMembers(roomState);
-	const remainingMs =
-		durationMs > 0 ? Math.max(0, durationMs - positionMs) : 24 * 60 * 60 * 1000;
+	const remainingMs = durationMs > 0 ? Math.max(0, durationMs - positionMs) : 24 * 60 * 60 * 1000;
 	const closesAt = new Date(Date.now() + remainingMs).toISOString();
 
 	return {

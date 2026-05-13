@@ -186,9 +186,7 @@ describe('SongSearchPanel', () => {
 		await waitFor(() => expect(screen.getByRole('button', { name: 'Add to queue' })).toBeTruthy());
 		await fireEvent.click(screen.getByRole('button', { name: 'Add to queue' }));
 
-		await waitFor(() =>
-			expect(toast.message).toHaveBeenCalledWith('Song is already in the queue')
-		);
+		await waitFor(() => expect(toast.message).toHaveBeenCalledWith('Song is already in the queue'));
 		expect(toast.error).not.toHaveBeenCalled();
 	});
 

@@ -82,9 +82,9 @@ describe('apiClient', () => {
 	});
 
 	it('throws backend detail message for failed join requests', async () => {
-		const fetchMock = vi.fn().mockResolvedValue(
-			mockJsonResponse(false, { detail: 'Room already exists' }, 409)
-		);
+		const fetchMock = vi
+			.fn()
+			.mockResolvedValue(mockJsonResponse(false, { detail: 'Room already exists' }, 409));
 		vi.stubGlobal('fetch', fetchMock);
 
 		await expect(
@@ -196,9 +196,9 @@ describe('apiClient', () => {
 		});
 		vi.stubGlobal('fetch', fetchMock);
 
-		await expect(
-			apiClient.leaveRoom({ room_id: 'room-1', user_id: 'U_123' })
-		).rejects.toThrow('Request failed: 503');
+		await expect(apiClient.leaveRoom({ room_id: 'room-1', user_id: 'U_123' })).rejects.toThrow(
+			'Request failed: 503'
+		);
 	});
 
 	it('encodes room id when requesting room state', async () => {
@@ -274,7 +274,9 @@ describe('apiClient', () => {
 	it('fetches Spotify login URL with query params', async () => {
 		const fetchMock = vi
 			.fn()
-			.mockResolvedValue(mockJsonResponse(true, { auth_url: 'https://accounts.spotify.com/authorize' }));
+			.mockResolvedValue(
+				mockJsonResponse(true, { auth_url: 'https://accounts.spotify.com/authorize' })
+			);
 		vi.stubGlobal('fetch', fetchMock);
 
 		const result = await apiClient.getSpotifyLoginUrl('U_1', 'https://app.example/room');
@@ -286,16 +288,12 @@ describe('apiClient', () => {
 	});
 
 	it('fetches Spotify token with user_id param', async () => {
-		const fetchMock = vi
-			.fn()
-			.mockResolvedValue(mockJsonResponse(true, { access_token: 'tok' }));
+		const fetchMock = vi.fn().mockResolvedValue(mockJsonResponse(true, { access_token: 'tok' }));
 		vi.stubGlobal('fetch', fetchMock);
 
 		const result = await apiClient.getSpotifyToken('U_1');
 
 		expect(result).toEqual({ access_token: 'tok' });
-		expect(fetchMock).toHaveBeenCalledWith(
-			'http://localhost:8000/auth/spotify/token?user_id=U_1'
-		);
+		expect(fetchMock).toHaveBeenCalledWith('http://localhost:8000/auth/spotify/token?user_id=U_1');
 	});
 });

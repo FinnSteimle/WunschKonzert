@@ -59,7 +59,9 @@
 				hover:border-red-500 hover:bg-red-50 hover:text-red-600
 				dark:hover:bg-red-950 dark:hover:text-red-400
 				{skipCount > 0 ? 'border-orange-400 text-orange-500' : ''}"
-			aria-label="Remove track{skipCount > 0 ? ` (${skipCount} of ${requiredVotes} votes to skip)` : ''}"
+			aria-label="Remove track{skipCount > 0
+				? ` (${skipCount} of ${requiredVotes} votes to skip)`
+				: ''}"
 			disabled={busy}
 			onclick={handleClick}
 		>
@@ -78,7 +80,6 @@
 		{:else}
 			<span class="text-muted-foreground text-[10px]">Remove</span>
 		{/if}
-
 	{:else if mode === 'neutral'}
 		<Button
 			type="button"
@@ -97,7 +98,6 @@
 			/>
 		</Button>
 		<span class="text-muted-foreground text-[10px]">Skip</span>
-
 	{:else}
 		<Button
 			type="button"
@@ -137,9 +137,17 @@
 	}
 
 	@keyframes remove-bounce {
-		0% { transform: scale(0.9) translateY(0); }
-		38% { transform: scale(1.2) translateY(-2px); }
-		70% { transform: scale(0.96) translateY(1px); }
-		100% { transform: scale(1) translateY(0); }
+		0% {
+			transform: scale(0.9) translateY(0);
+		}
+		38% {
+			transform: scale(1.2) translateY(-2px);
+		}
+		70% {
+			transform: scale(0.96) translateY(1px);
+		}
+		100% {
+			transform: scale(1) translateY(0);
+		}
 	}
 </style>

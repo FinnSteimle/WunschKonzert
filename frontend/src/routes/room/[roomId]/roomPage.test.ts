@@ -175,9 +175,9 @@ describe('room/[roomId]/+page.svelte', () => {
 			expect(screen.getByText('Code AB2CD3')).toBeTruthy();
 			expect(screen.getByRole('button', { name: 'Join room' })).toBeTruthy();
 			expect(screen.getByRole('link', { name: 'Back home' })).toBeTruthy();
-			expect((screen.getByRole('textbox', { name: 'Your display name' }) as HTMLInputElement).value).toBe(
-				'DJ Fox'
-			);
+			expect(
+				(screen.getByRole('textbox', { name: 'Your display name' }) as HTMLInputElement).value
+			).toBe('DJ Fox');
 			expect(saveSessionDisplayName).toHaveBeenCalledWith('DJ Fox');
 		});
 
@@ -250,11 +250,19 @@ describe('room/[roomId]/+page.svelte', () => {
 				users: [
 					{
 						user: { userId: 'U_USER1', displayName: 'Alice', createdAt: '2025-01-01T00:00:00Z' },
-						membership: { joinedAt: '2025-01-01T00:00:00Z', leftAt: null, membershipStatus: 'active' }
+						membership: {
+							joinedAt: '2025-01-01T00:00:00Z',
+							leftAt: null,
+							membershipStatus: 'active'
+						}
 					},
 					{
 						user: { userId: 'U_HOST', displayName: 'Host User', createdAt: '2025-01-01T00:00:00Z' },
-						membership: { joinedAt: '2025-01-01T00:00:00Z', leftAt: null, membershipStatus: 'active' }
+						membership: {
+							joinedAt: '2025-01-01T00:00:00Z',
+							leftAt: null,
+							membershipStatus: 'active'
+						}
 					}
 				],
 				queue: [
@@ -313,14 +321,18 @@ describe('room/[roomId]/+page.svelte', () => {
 		it('shows replay icon button when server sends replayVote', async () => {
 			await renderAndInjectState({ withReplayVote: true });
 
-			await waitFor(() => expect(screen.getByRole('button', { name: /Replay \(\d+\/\d+\)/ })).toBeTruthy());
+			await waitFor(() =>
+				expect(screen.getByRole('button', { name: /Replay \(\d+\/\d+\)/ })).toBeTruthy()
+			);
 			expect(screen.getAllByText('Test Song').length).toBeGreaterThanOrEqual(1);
 		});
 
 		it('shows replay control for current playback without server replayVote', async () => {
 			await renderAndInjectState({ playbackEntryId: 'q1' });
 
-			await waitFor(() => expect(screen.getByRole('button', { name: /Replay \(\d+\/\d+\)/ })).toBeTruthy());
+			await waitFor(() =>
+				expect(screen.getByRole('button', { name: /Replay \(\d+\/\d+\)/ })).toBeTruthy()
+			);
 		});
 
 		it('shows room name and join code in the header', async () => {
@@ -360,7 +372,9 @@ describe('room/[roomId]/+page.svelte', () => {
 		it('renders section headings for Now playing, Queue, Add a song, Who is here', async () => {
 			await renderAndInjectState();
 
-			await waitFor(() => expect(screen.getByRole('heading', { name: 'Now playing' })).toBeTruthy());
+			await waitFor(() =>
+				expect(screen.getByRole('heading', { name: 'Now playing' })).toBeTruthy()
+			);
 			expect(screen.getByRole('heading', { name: 'Queue' })).toBeTruthy();
 			expect(screen.getByRole('heading', { name: 'Add a song' })).toBeTruthy();
 			expect(screen.getByRole('heading', { name: 'Who is here' })).toBeTruthy();

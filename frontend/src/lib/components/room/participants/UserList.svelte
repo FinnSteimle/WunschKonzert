@@ -34,7 +34,10 @@
 	</CardHeader>
 	<CardContent class="pt-0">
 		{#if active.length === 0}
-			<EmptyState title="No listeners yet" description="Share the invite link to gather the crowd." />
+			<EmptyState
+				title="No listeners yet"
+				description="Share the invite link to gather the crowd."
+			/>
 		{:else}
 			<ul class="flex flex-col gap-2" aria-label="Room members">
 				{#each active as row (row.user.userId)}

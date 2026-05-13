@@ -163,7 +163,9 @@ describe('LeaveRoomButton', () => {
 		});
 
 		await fireEvent.click(screen.getByRole('button', { name: 'Leave room' }));
-		expect((screen.getByRole('button', { name: 'Leaving…' }) as HTMLButtonElement).disabled).toBe(true);
+		expect((screen.getByRole('button', { name: 'Leaving…' }) as HTMLButtonElement).disabled).toBe(
+			true
+		);
 
 		await view.rerender({
 			roomId: 'room-1',
@@ -171,7 +173,9 @@ describe('LeaveRoomButton', () => {
 			disabled: true
 		});
 
-		expect((screen.getByRole('button', { name: 'Leaving…' }) as HTMLButtonElement).disabled).toBe(true);
+		expect((screen.getByRole('button', { name: 'Leaving…' }) as HTMLButtonElement).disabled).toBe(
+			true
+		);
 
 		request.resolvePromise({
 			success: true,
@@ -181,6 +185,8 @@ describe('LeaveRoomButton', () => {
 		});
 
 		await waitFor(() => expect(toast.success).toHaveBeenCalledWith('Left room'));
-		expect((screen.getByRole('button', { name: 'Leave room' }) as HTMLButtonElement).disabled).toBe(true);
+		expect((screen.getByRole('button', { name: 'Leave room' }) as HTMLButtonElement).disabled).toBe(
+			true
+		);
 	});
 });

@@ -134,7 +134,9 @@ describe('RoomCodeJoinForm', () => {
 		render(RoomCodeJoinForm);
 
 		await typeRoomCode('AB2CD3');
-		await fireEvent.input(screen.getByLabelText('Your display name'), { target: { value: '    ' } });
+		await fireEvent.input(screen.getByLabelText('Your display name'), {
+			target: { value: '    ' }
+		});
 		await fireEvent.click(screen.getByRole('button', { name: 'Join room' }));
 
 		expect(toast.error).toHaveBeenCalledWith('Please enter your display name.');
@@ -150,7 +152,9 @@ describe('RoomCodeJoinForm', () => {
 		});
 		await fireEvent.click(screen.getByRole('button', { name: 'Join room' }));
 
-		await waitFor(() => expect(resolve).toHaveBeenCalledWith('/room/[roomId]', { roomId: 'AB2CD3' }));
+		await waitFor(() =>
+			expect(resolve).toHaveBeenCalledWith('/room/[roomId]', { roomId: 'AB2CD3' })
+		);
 		expect(goto).toHaveBeenCalledWith('/room/AB2CD3');
 		expect(saveSessionDisplayName).toHaveBeenCalledWith('Alice Cooper');
 		// Called on mount for prefill and again on submit.
@@ -185,7 +189,9 @@ describe('RoomCodeJoinForm', () => {
 		await typeRoomCode('ab2cd3');
 		await fireEvent.click(screen.getByRole('button', { name: 'Join room' }));
 
-		expect((screen.getByRole('button', { name: 'Joining…' }) as HTMLButtonElement).disabled).toBe(true);
+		expect((screen.getByRole('button', { name: 'Joining…' }) as HTMLButtonElement).disabled).toBe(
+			true
+		);
 		for (const input of getCodeInputs()) {
 			expect(input.disabled).toBe(true);
 		}
@@ -194,9 +200,9 @@ describe('RoomCodeJoinForm', () => {
 		navigation.resolvePromise();
 
 		await waitFor(() =>
-			expect((screen.getByRole('button', { name: 'Join room' }) as HTMLButtonElement).disabled).toBe(
-				false
-			)
+			expect(
+				(screen.getByRole('button', { name: 'Join room' }) as HTMLButtonElement).disabled
+			).toBe(false)
 		);
 	});
 });

@@ -138,11 +138,7 @@
 			const isCorrectEntry =
 				currentEntryId === lastPlayedQueueEntryId && currentEntryId !== playInitiatedEntryId;
 			let localTrackId = musicPlayer?.getLastTrackId();
-			if (
-				isCorrectEntry &&
-				localTrackId &&
-				serverProviderTrackId?.includes(localTrackId)
-			) {
+			if (isCorrectEntry && localTrackId && serverProviderTrackId?.includes(localTrackId)) {
 				// Tracks and entry match
 			} else {
 				localTrackId = null;
@@ -168,7 +164,12 @@
 						? sdkPlayerState.positionMs
 						: undefined;
 
-			const sent = await socketClient.setPlayback(uid, action, currentPos, currentEntryId ?? undefined);
+			const sent = await socketClient.setPlayback(
+				uid,
+				action,
+				currentPos,
+				currentEntryId ?? undefined
+			);
 			if (!sent) {
 				throw new Error('Playback command failed');
 			}
@@ -256,13 +257,10 @@
 		const sig = ev ? `${ev.type}:${ev.at}` : '';
 		const prev = lastReplayEventSignature;
 		lastReplayEventSignature = sig;
-		if (
-			ev &&
-			REPLAY_SUCCESS_EVENTS.has(ev.type) &&
-			prev !== undefined &&
-			sig !== prev
-		) {
-			toast.success('The group voted to replay this track. It has been added to the top of the queue.');
+		if (ev && REPLAY_SUCCESS_EVENTS.has(ev.type) && prev !== undefined && sig !== prev) {
+			toast.success(
+				'The group voted to replay this track. It has been added to the top of the queue.'
+			);
 		}
 	});
 
@@ -285,7 +283,7 @@
 		if (!queueEntryId || playbackState !== 'playing') {
 			return;
 		}
-		
+
 		if (queueEntryId === lastPlayedQueueEntryId) return;
 
 		const entry = rs.queue.find((e) => e.queueEntryId === queueEntryId);
@@ -333,7 +331,8 @@
 			const serverPos = rs.playback.positionMs ?? 0;
 			const isSynced =
 				trackMatch &&
-				(sdkPlayerState.positionMs < 2000 || Math.abs(sdkPlayerState.positionMs - serverPos) < 5000);
+				(sdkPlayerState.positionMs < 2000 ||
+					Math.abs(sdkPlayerState.positionMs - serverPos) < 5000);
 
 			if (isSynced) {
 				playInitiatedEntryId = null;
@@ -346,7 +345,9 @@
 				rs.playback.currentQueueEntryId === lastPlayedQueueEntryId &&
 				playInitiatedEntryId !== rs.playback.currentQueueEntryId
 			) {
-				musicPlayer.resume().catch((err) => console.error('[SpotifyPlayer] sync resume failed:', err));
+				musicPlayer
+					.resume()
+					.catch((err) => console.error('[SpotifyPlayer] sync resume failed:', err));
 			}
 		} else if (!serverPlaying && localPlaying) {
 			// Aggressively pause if the server says we should be paused/stopped
@@ -471,14 +472,18 @@
 			}
 		});
 
-		const socket = new RoomSocketClient(roomId, {
-			onState: (s) => roomStore.setRoomState(s),
-			onError: (m) => {
-				toast.error(m);
-				roomStore.setError(m);
+		const socket = new RoomSocketClient(
+			roomId,
+			{
+				onState: (s) => roomStore.setRoomState(s),
+				onError: (m) => {
+					toast.error(m);
+					roomStore.setError(m);
+				},
+				onConnectionChange: (c) => roomStore.setConnected(c)
 			},
-			onConnectionChange: (c) => roomStore.setConnected(c)
-		});
+			sessionUser?.userId
+		);
 		socketClient = socket;
 		socket.connect();
 
@@ -691,9 +696,7 @@
 			{@const queuedTrackIds = activeQueuedTrackIds(rs)}
 			{@const replayPanelVote =
 				rs.replayVote ??
-				(current
-					? clientReplayVoteFromPlayingEntry(current, rs, positionMs, durationMs)
-					: null)}
+				(current ? clientReplayVoteFromPlayingEntry(current, rs, positionMs, durationMs) : null)}
 			{@const replayMajorityVotes = replayPanelVote
 				? replayMajorityThreshold(replayPanelVote.activeUserCount)
 				: 0}

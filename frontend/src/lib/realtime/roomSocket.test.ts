@@ -376,5 +376,4 @@ describe('RoomSocketClient', () => {
 			client.disconnect();
 		});
 	});
-
 });

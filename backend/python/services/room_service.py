@@ -790,6 +790,21 @@ async def leave_room_service(room_id: str, user_id: str) -> dict[str, object]:
         raise HTTPException(status_code=500, detail=f"Failed to leave room: {str(e)}")
 
 
+async def handle_disconnect(room_id: str, user_id: str) -> dict[str, object]:
+    """Handle a participant's disconnect by marking them as inactive."""
+    try:
+        await membership_repo.update_room_membership_status(
+            user_id, room_id, MembershipStatus.INACTIVE
+        )
+        return await refresh_room_state(room_id, "participant_left")
+    except ResourceNotFoundError:
+        # If no membership was found, nothing to do.
+        return await refresh_room_state(room_id)
+    except Exception as e:
+        print(f"Error handling disconnect for user {user_id} in room {room_id}: {e}")
+        return await refresh_room_state(room_id)
+
+
 async def create_room_service(
     name: str, user_id: str, display_name: str, supported_provider_id: str
 ) -> dict[str, object]:

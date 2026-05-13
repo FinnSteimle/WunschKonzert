@@ -22,7 +22,10 @@ function createMemoryStorage(): Storage {
 	};
 }
 
-if (typeof globalThis.localStorage === 'undefined' || typeof globalThis.localStorage.clear !== 'function') {
+if (
+	typeof globalThis.localStorage === 'undefined' ||
+	typeof globalThis.localStorage.clear !== 'function'
+) {
 	Object.defineProperty(globalThis, 'localStorage', {
 		value: createMemoryStorage(),
 		configurable: true

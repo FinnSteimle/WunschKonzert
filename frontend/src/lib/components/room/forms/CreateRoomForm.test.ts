@@ -71,7 +71,9 @@ describe('CreateRoomForm', () => {
 
 		render(CreateRoomForm, { spotifyLinked: true });
 
-		await fireEvent.input(screen.getByLabelText('Room name'), { target: { value: 'Friday vibes' } });
+		await fireEvent.input(screen.getByLabelText('Room name'), {
+			target: { value: 'Friday vibes' }
+		});
 		await fireEvent.click(screen.getByRole('button', { name: 'Create room' }));
 
 		expect(toast.error).toHaveBeenCalledWith('Please enter your display name.');
@@ -102,7 +104,9 @@ describe('CreateRoomForm', () => {
 	it('shows an error when room name exceeds max length', async () => {
 		render(CreateRoomForm, { spotifyLinked: true });
 
-		await fireEvent.input(screen.getByLabelText('Room name'), { target: { value: 'B'.repeat(41) } });
+		await fireEvent.input(screen.getByLabelText('Room name'), {
+			target: { value: 'B'.repeat(41) }
+		});
 		await fireEvent.click(screen.getByRole('button', { name: 'Create room' }));
 
 		expect(toast.error).toHaveBeenCalledWith('Room name must be 40 characters or fewer.');
@@ -117,7 +121,9 @@ describe('CreateRoomForm', () => {
 		unsupportedOption.text = 'Invalid';
 		providerSelect.append(unsupportedOption);
 
-		await fireEvent.input(screen.getByLabelText('Room name'), { target: { value: 'Friday vibes' } });
+		await fireEvent.input(screen.getByLabelText('Room name'), {
+			target: { value: 'Friday vibes' }
+		});
 		await fireEvent.change(providerSelect, { target: { value: 'invalid-provider' } });
 
 		const submitButton = screen.getByRole('button', { name: 'Create room' }) as HTMLButtonElement;
@@ -190,9 +196,9 @@ describe('CreateRoomForm', () => {
 		});
 
 		await waitFor(() =>
-			expect((screen.getByRole('button', { name: 'Create room' }) as HTMLButtonElement).disabled).toBe(
-				false
-			)
+			expect(
+				(screen.getByRole('button', { name: 'Create room' }) as HTMLButtonElement).disabled
+			).toBe(false)
 		);
 	});
 
@@ -206,7 +212,9 @@ describe('CreateRoomForm', () => {
 		vi.mocked(apiClient.createRoom).mockReturnValue(request.promise);
 
 		render(CreateRoomForm, { spotifyLinked: true });
-		await fireEvent.input(screen.getByLabelText('Room name'), { target: { value: 'Friday vibes' } });
+		await fireEvent.input(screen.getByLabelText('Room name'), {
+			target: { value: 'Friday vibes' }
+		});
 
 		const submitButton = screen.getByRole('button', { name: 'Create room' });
 		const form = submitButton.closest('form');

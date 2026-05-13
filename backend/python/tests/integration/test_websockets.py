@@ -378,7 +378,7 @@ async def test_send_room_state_websocket_failure():
     mock_websocket.send_text.side_effect = Exception("Connection lost")
 
     # Add to active connections
-    active_room_connections[room_id].add(mock_websocket)
+    active_room_connections[room_id][mock_websocket] = None
 
     # Mock cache to return state by temporarily replacing the cache
     original_cache = room_service.room_state_cache

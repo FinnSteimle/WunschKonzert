@@ -26,11 +26,7 @@
 	<div class="mx-auto flex w-full max-w-lg min-w-0 flex-col gap-8 px-4 py-8 sm:max-w-xl sm:py-12">
 		<header class="flex flex-col gap-2">
 			<div class="text-muted-foreground flex items-center gap-2 text-sm">
-				<img
-					src="/logo.svg"
-					alt="WunschKonzert logo"
-					class="h-8 w-8 shrink-0"
-				/>
+				<img src="/logo.svg" alt="WunschKonzert logo" class="h-8 w-8 shrink-0" />
 				<span>WunschKonzert</span>
 			</div>
 			<h1 class="text-2xl font-semibold tracking-tight sm:text-3xl">Create a room</h1>

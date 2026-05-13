@@ -61,13 +61,16 @@
 	const skipDisabled = $derived(busy || !entry);
 
 	const replayDisabled = $derived(
-		busy || !entry || !replay || replay.status === 'met' || replay.status === 'expired' || !replayWindowOpen
+		busy ||
+			!entry ||
+			!replay ||
+			replay.status === 'met' ||
+			replay.status === 'expired' ||
+			!replayWindowOpen
 	);
 
 	const skipLabel = $derived(`Skip (${skipCount}/${requiredVotes})`);
-	const replayLabel = $derived(
-		replay ? `Replay (${replay.voteCount}/${replay.neededVotes})` : ''
-	);
+	const replayLabel = $derived(replay ? `Replay (${replay.voteCount}/${replay.neededVotes})` : '');
 </script>
 
 {#if entry}
