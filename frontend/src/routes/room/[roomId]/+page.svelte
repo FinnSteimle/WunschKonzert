@@ -247,9 +247,17 @@
 		const queueEntryId = rs.playback?.currentQueueEntryId ?? null;
 		const playbackState = rs.playback?.state;
 
+		console.log(`[Playback Effect] Entry: ${queueEntryId}, State: ${playbackState}, LastPlayed: ${lastPlayedQueueEntryId}`);
+
 		// ONLY initiate a new 'play' command if the server explicitly says we are 'playing'.
 		// This prevents accidental auto-play on first song addition or during state transitions.
-		if (!queueEntryId || playbackState !== 'playing') return;
+		if (!queueEntryId || playbackState !== 'playing') {
+			if (queueEntryId && playbackState === 'paused') {
+				console.log('[Playback Effect] Server says PAUSED. Skipping play().');
+			}
+			return;
+		}
+		
 		if (queueEntryId === lastPlayedQueueEntryId) return;
 
 		const entry = rs.queue.find((e) => e.queueEntryId === queueEntryId);
@@ -259,6 +267,7 @@
 		advanceSent = false;
 
 		const resumePos = rs.playback?.positionMs ?? 0;
+		console.log(`[Playback Effect] Calling player.play() for ${entry.track.title} at ${resumePos}ms`);
 		player.play(entry.track.providerTrackId, resumePos).catch((err) => {
 			console.error('[SpotifyPlayer] play failed:', err);
 			lastPlayedQueueEntryId = null;
@@ -277,10 +286,12 @@
 		if (serverPlaying && !localPlaying) {
 			// Only resume if we are already on the correct track
 			if (rs.playback.currentQueueEntryId === lastPlayedQueueEntryId) {
+				console.log('[Playback Sync] Server PLAYING, Local PAUSED -> Calling resume()');
 				musicPlayer.resume().catch((err) => console.error('[SpotifyPlayer] sync resume failed:', err));
 			}
 		} else if (!serverPlaying && localPlaying) {
 			// Aggressively pause if the server says we should be paused/stopped
+			console.log('[Playback Sync] Server PAUSED/STOPPED, Local PLAYING -> Calling pause()');
 			musicPlayer.pause().catch((err) => console.error('[SpotifyPlayer] sync pause failed:', err));
 		}
 	});

@@ -95,6 +95,7 @@ export class SpotifyPlayer implements MusicPlayer {
 				if (!state) return;
 				const track = state.track_window.current_track;
 				const playing = !state.paused;
+				console.log(`[Spotify SDK] State change: playing=${playing}, track=${track?.name}, pos=${state.position}`);
 
 				// Track whether we've played past the start (position > 1000ms) at least once.
 				// This helps distinguish between:
@@ -195,6 +196,7 @@ export class SpotifyPlayer implements MusicPlayer {
 	}
 
 	async play(providerTrackId: string, positionMs?: number): Promise<void> {
+		console.log(`[Spotify SDK] play() called for ${providerTrackId} at ${positionMs}ms`);
 		const token = await this.fetchToken();
 		await this.waitForReady();
 		if (!this.deviceId) throw new Error('Spotify player not ready');
@@ -220,10 +222,12 @@ export class SpotifyPlayer implements MusicPlayer {
 	}
 
 	async pause(): Promise<void> {
+		console.log('[Spotify SDK] pause() called');
 		await this.player?.pause();
 	}
 
 	async resume(): Promise<void> {
+		console.log('[Spotify SDK] resume() called');
 		await this.player?.resume();
 	}
 
