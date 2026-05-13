@@ -160,6 +160,27 @@ test-load:
 		exit 1; \
 	fi
 
+.PHONY: test-scalability
+test-scalability:
+	@echo "Starting resource monitoring (load-tests/resource_usage.log)..."
+	@rm -f load-tests/resource_usage.log
+	@(while true; do \
+		echo "--- $$(date +%H:%M:%S) ---" >> load-tests/resource_usage.log; \
+		docker stats --no-stream --format "table {{.Name}}\t{{.CPUPerc}}\t{{.MemUsage}}" | grep -E "api|db|frontend" >> load-tests/resource_usage.log; \
+		sleep 5; \
+	done) & MONITOR_PID=$$!; \
+	echo "Running k6 scalability stress tests (2,500 users)..."; \
+	if command -v k6 >/dev/null 2>&1; then \
+		k6 run load-tests/scalability_test.js; \
+		RET=$$?; \
+	else \
+		echo "k6 not found. Please install it."; \
+		RET=1; \
+	fi; \
+	kill $$MONITOR_PID; \
+	echo "Test complete. Resource usage saved to load-tests/resource_usage.log"; \
+	exit $$RET
+
 # Cleanup targets (Docker-focused)
 .PHONY: clean
 clean:

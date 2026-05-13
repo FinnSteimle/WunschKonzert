@@ -66,7 +66,9 @@ The root Makefile provides several commands to manage the project:
 
 The project includes specialized commands to verify compliance with Non-Functional Requirements. These commands use isolated environments and automated checks:
 
-- **Responsive Design (WUN-91):** Run `make verify-responsive`. This executes tests across Chromium, Firefox, and WebKit engines at both mobile and desktop resolutions.
+- **Scalability (WUN-88):** Run `make test-scalability`. This simulates 2,500 concurrent users using k6 and logs resource usage.
+- **Minimum Capacity (WUN-87):** Run `make test-load`. This simulates 100 concurrent users across 10 rooms.
+- **Responsive Design (WUN-91):** Run `make verify-responsive`.
 - **Recoverability (WUN-90):** Run `make verify-recoverability`. This simulates a service crash and measures restoration time.
 - **Confidentiality (WUN-95):** Run `make verify-confidentiality`. This performs a security audit of the configuration and data handling.
 
