@@ -247,7 +247,7 @@
 		const queueEntryId = rs.playback?.currentQueueEntryId ?? null;
 		const playbackState = rs.playback?.state;
 
-		if (!queueEntryId || playbackState === 'stopped') return;
+		if (!queueEntryId || playbackState === 'stopped' || playbackState === 'paused') return;
 		if (queueEntryId === lastPlayedQueueEntryId) return;
 
 		const entry = rs.queue.find((e) => e.queueEntryId === queueEntryId);
@@ -261,6 +261,25 @@
 			console.error('[SpotifyPlayer] play failed:', err);
 			lastPlayedQueueEntryId = null;
 		});
+	});
+
+	// Sync local player pause/resume state with server state (handles multi-tab host sync)
+	$effect(() => {
+		if (!browser || !musicPlayer || !sdkPlayerState?.isReady) return;
+		const rs = $roomStore.roomState;
+		if (!rs?.playback) return;
+
+		const serverPlaying = rs.playback.state === 'playing';
+		const localPlaying = sdkPlayerState.isPlaying;
+
+		if (serverPlaying && !localPlaying) {
+			// Only resume if we are already on the correct track
+			if (rs.playback.currentQueueEntryId === lastPlayedQueueEntryId) {
+				musicPlayer.resume().catch((err) => console.error('[SpotifyPlayer] sync resume failed:', err));
+			}
+		} else if (!serverPlaying && localPlaying) {
+			musicPlayer.pause().catch((err) => console.error('[SpotifyPlayer] sync pause failed:', err));
+		}
 	});
 
 	async function handleAddTrack(track: TrackDto) {
