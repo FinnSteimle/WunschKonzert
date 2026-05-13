@@ -58,6 +58,7 @@
 
 	let sessionUser = $state<{ userId: string; displayName: string } | null>(null);
 	let recordedRecentThisMount = false;
+	console.log(`[WUN-168] Build Timestamp: ${new Date().toISOString()}`);
 	let socketClient = $state<RoomSocketClient | null>(null);
 	let voteBusyId = $state<string | null>(null);
 	let playbackBusy = $state(false);
