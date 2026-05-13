@@ -71,6 +71,7 @@
 	let lastPlayedQueueEntryId = $state<string | null>(null);
 	let advanceSent = false;
 	let positionSyncInterval: ReturnType<typeof setInterval> | null = null;
+	let playInitiatedEntryId = $state<string | null>(null);
 
 	/** Direct link /room/{code}: ask for name before calling join API. */
 	let linkJoinCode = $state<string | null>(null);
@@ -122,20 +123,52 @@
 
 	async function handlePlayback(action: 'pause' | 'resume') {
 		const uid = sessionUser?.userId;
+		const rs = get(roomStore).roomState;
 		if (!uid || !socketClient || !socketClient.isConnected()) {
 			toast.error('Not connected to room');
 			return;
 		}
 		playbackBusy = true;
 		try {
+			const currentEntryId = rs?.playback?.currentQueueEntryId;
+			const currentEntry = rs?.queue.find((e) => e.queueEntryId === currentEntryId);
+			const serverProviderTrackId = currentEntry?.track.providerTrackId;
+
+			// Strictly check if local player is on the same queue entry as the server
+			const isCorrectEntry =
+				currentEntryId === lastPlayedQueueEntryId && currentEntryId !== playInitiatedEntryId;
+			let localTrackId = musicPlayer?.getLastTrackId();
+			if (
+				isCorrectEntry &&
+				localTrackId &&
+				serverProviderTrackId?.includes(localTrackId)
+			) {
+				// Tracks and entry match
+			} else {
+				localTrackId = null;
+			}
+
 			if (musicPlayer) {
 				if (action === 'pause') await musicPlayer.pause();
-				else await musicPlayer.resume();
+				else {
+					if (localTrackId) {
+						await musicPlayer.resume();
+					} else if (serverProviderTrackId) {
+						// If tracks don't match, we'll let the server know we're resuming,
+						// and the $effect will trigger player.play() when the state update comes back.
+						// We don't call musicPlayer.resume() here to avoid playing the wrong track briefly.
+					}
+				}
 			}
-			const currentPos = musicPlayer
-				? await musicPlayer.getPositionMs()
-				: (sdkPlayerState?.positionMs ?? undefined);
-			const sent = await socketClient.setPlayback(uid, action, currentPos);
+
+			const currentPos =
+				localTrackId && musicPlayer
+					? await musicPlayer.getPositionMs()
+					: localTrackId && sdkPlayerState
+						? sdkPlayerState.positionMs
+						: undefined;
+
+			const sent = await socketClient.setPlayback(uid, action, currentPos, currentEntryId ?? undefined);
 			if (!sent) {
 				throw new Error('Playback command failed');
 			}
@@ -259,12 +292,21 @@
 		if (!entry) return;
 
 		lastPlayedQueueEntryId = queueEntryId;
+		playInitiatedEntryId = queueEntryId;
 		advanceSent = false;
+
+		// Safety timeout: never stay in playInitiated quarantine for more than 10s
+		setTimeout(() => {
+			if (playInitiatedEntryId === queueEntryId) {
+				playInitiatedEntryId = null;
+			}
+		}, 10000);
 
 		const resumePos = rs.playback?.positionMs ?? 0;
 		player.play(entry.track.providerTrackId, resumePos).catch((err) => {
 			console.error('[SpotifyPlayer] play failed:', err);
 			lastPlayedQueueEntryId = null;
+			playInitiatedEntryId = null;
 		});
 	});
 
@@ -277,9 +319,33 @@
 		const serverPlaying = rs.playback.state === 'playing';
 		const localPlaying = sdkPlayerState.isPlaying;
 
+		// Reset playInitiated only once the local player confirms it is playing the CORRECT track
+		// AND the position has actually reset (to handle the same-track-re-add jump).
+		if (localPlaying && playInitiatedEntryId === rs.playback.currentQueueEntryId) {
+			const currentEntry = rs.queue.find((e) => e.queueEntryId === playInitiatedEntryId);
+			const trackMatch =
+				currentEntry &&
+				sdkPlayerState.trackId &&
+				currentEntry.track.providerTrackId.includes(sdkPlayerState.trackId);
+
+			// We wait for track match AND either a small position (fresh play) or a large one (syncing to middle).
+			// This covers both new songs and newly joining hosts syncing to a song already in progress.
+			const serverPos = rs.playback.positionMs ?? 0;
+			const isSynced =
+				trackMatch &&
+				(sdkPlayerState.positionMs < 2000 || Math.abs(sdkPlayerState.positionMs - serverPos) < 5000);
+
+			if (isSynced) {
+				playInitiatedEntryId = null;
+			}
+		}
+
 		if (serverPlaying && !localPlaying) {
-			// Only resume if we are already on the correct track
-			if (rs.playback.currentQueueEntryId === lastPlayedQueueEntryId) {
+			// Only resume if we are already on the correct track AND we didn't just initiate a play
+			if (
+				rs.playback.currentQueueEntryId === lastPlayedQueueEntryId &&
+				playInitiatedEntryId !== rs.playback.currentQueueEntryId
+			) {
 				musicPlayer.resume().catch((err) => console.error('[SpotifyPlayer] sync resume failed:', err));
 			}
 		} else if (!serverPlaying && localPlaying) {
@@ -322,13 +388,20 @@
 			if (s.trackEnded && !advanceSent) {
 				advanceSent = true;
 				const pos = Math.round(s.positionMs ?? 0);
+				const rs = get(roomStore).roomState;
+				const currentEntryId = rs?.playback?.currentQueueEntryId;
+
+				// Only send the position if we're actually still on that entry and not initiating a new play
+				const isCorrectEntry =
+					currentEntryId === lastPlayedQueueEntryId && currentEntryId !== playInitiatedEntryId;
+
 				// Send advance with the host's last known position to help the server
 				// compute an accurate start time for the next track.
 				socketClient?.send({
 					type: 'playback',
 					user_id: userId,
 					action: 'advance',
-					position_ms: pos
+					position_ms: isCorrectEntry ? pos : 0
 				});
 
 				// Also send an immediate position_sync so the server has the latest
@@ -336,7 +409,8 @@
 				socketClient?.send({
 					type: 'position_sync',
 					user_id: userId,
-					position_ms: pos
+					position_ms: isCorrectEntry ? pos : 0,
+					queue_entry_id: currentEntryId
 				});
 			}
 		});
@@ -347,13 +421,26 @@
 
 		positionSyncInterval = setInterval(() => {
 			if (!socketClient?.isConnected() || !sdkPlayerState?.isPlaying) return;
-			musicPlayer?.getPositionMs().then((pos) => {
-				socketClient?.send({
-					type: 'position_sync',
-					user_id: userId,
-					position_ms: Math.round(pos)
+
+			const rs = get(roomStore).roomState;
+			const currentEntryId = rs?.playback?.currentQueueEntryId;
+			const currentEntry = rs?.queue.find((e) => e.queueEntryId === currentEntryId);
+			const serverProviderTrackId = currentEntry?.track.providerTrackId;
+			const localTrackId = musicPlayer?.getLastTrackId();
+
+			// Only sync if local track and queue entry match server and not initiating a new play
+			const isCorrectEntry =
+				currentEntryId === lastPlayedQueueEntryId && currentEntryId !== playInitiatedEntryId;
+			if (isCorrectEntry && localTrackId && serverProviderTrackId?.includes(localTrackId)) {
+				musicPlayer?.getPositionMs().then((pos) => {
+					socketClient?.send({
+						type: 'position_sync',
+						user_id: userId,
+						position_ms: Math.round(pos),
+						queue_entry_id: currentEntryId
+					});
 				});
-			});
+			}
 		}, 5000);
 	}
 
@@ -584,14 +671,22 @@
 			{@const currentUserSkipped = current
 				? currentSkipVotes.some((feedback) => feedback.userId === currentUserId)
 				: false}
+			{@const isLocalTrackMatch =
+				current &&
+				sdkPlayerState?.trackId &&
+				current.track.providerTrackId.includes(sdkPlayerState.trackId) &&
+				current.queueEntryId === lastPlayedQueueEntryId}
+			{@const isTransitioning = isLocalTrackMatch && playInitiatedEntryId === current.queueEntryId}
 			{@const durationMs =
-				isHost && sdkPlayerState && sdkPlayerState.durationMs > 0
+				isHost && sdkPlayerState && isLocalTrackMatch && sdkPlayerState.durationMs > 0
 					? sdkPlayerState.durationMs
 					: current
 						? Math.max(0, current.track.duration) * 1000
 						: 0}
 			{@const positionMs =
-				isHost && sdkPlayerState ? sdkPlayerState.positionMs : (rs.playback?.positionMs ?? 0)}
+				isHost && sdkPlayerState && isLocalTrackMatch && !isTransitioning
+					? sdkPlayerState.positionMs
+					: (rs.playback?.positionMs ?? 0)}
 			{@const inviteUrl = rs.room ? `${page.url.origin}/room/${rs.room.joinCode}` : ''}
 			{@const queuedTrackIds = activeQueuedTrackIds(rs)}
 			{@const replayPanelVote =

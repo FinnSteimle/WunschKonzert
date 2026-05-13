@@ -202,7 +202,7 @@ export class SpotifyPlayer implements MusicPlayer {
 		const body: Record<string, unknown> = {
 			uris: [toSpotifyTrackUri(providerTrackId)]
 		};
-		if (positionMs !== undefined && positionMs > 0) {
+		if (positionMs !== undefined) {
 			body.position_ms = Math.round(positionMs);
 		}
 

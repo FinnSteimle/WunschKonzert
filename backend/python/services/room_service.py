@@ -19,6 +19,7 @@ from core.exceptions import ResourceNotFoundError
 from models.domain import (
     FeedbackType,
     MembershipStatus,
+    PlaybackSession,
     PlaybackState,
     QueueEntryStatus,
     RoomStatus,
@@ -645,23 +646,12 @@ async def set_playback_state(
     playback_session = await playback_session_repo.get_current_playback_session(room_id)
 
     if not playback_session:
-        current_queue_entry = await queue_entry_repo.get_first_queued_entry(room_id)
+        playback_session = await _initialize_playback_session(room_id)
 
-        if not current_queue_entry:
-            raise HTTPException(status_code=400, detail="No queued songs")
-
-        await queue_entry_repo.update_queue_entry(
-            current_queue_entry.queueEntryId, {"status": QueueEntryStatus.PLAYING}
-        )
-
-        playback_session = await playback_session_repo.create_playback_session(
-            {
-                "playbackSessionId": str(uuid.uuid4()),
-                "roomId": room_id,
-                "queueEntryId": current_queue_entry.queueEntryId,
-                "state": PlaybackState.PLAYING,
-                "elapsedTime": 0,
-            }
+    # Convince mypy that playback_session is not None
+    if not playback_session:
+        raise HTTPException(
+            status_code=500, detail="Failed to initialize playback session"
         )
 
     elapsed_seconds = (
@@ -676,26 +666,53 @@ async def set_playback_state(
     ):
         elapsed_seconds = None
 
-    updates: dict[str, object] = {"state": PlaybackState.PLAYING, "pausedAt": None}
-    if action == "pause":
-        updates = {
-            "state": PlaybackState.PAUSED,
-            "pausedAt": datetime.now(UTC).replace(tzinfo=None),
-        }
-    elif action == "stop":
-        updates = {
-            "state": PlaybackState.STOPPED,
-            "pausedAt": datetime.now(UTC).replace(tzinfo=None),
-        }
-
-    if elapsed_seconds is not None:
-        updates["elapsedTime"] = elapsed_seconds
+    updates = _determine_playback_updates(action, elapsed_seconds)
 
     await playback_session_repo.update_playback_session(
         playback_session.playbackSessionId, updates
     )
 
     return await refresh_room_state(room_id, "playback_updated")
+
+
+async def _initialize_playback_session(room_id: str) -> PlaybackSession:
+    """Initialize a new playback session if none exists."""
+    current_queue_entry = await queue_entry_repo.get_first_queued_entry(room_id)
+
+    if not current_queue_entry:
+        raise HTTPException(status_code=400, detail="No queued songs")
+
+    await queue_entry_repo.update_queue_entry(
+        current_queue_entry.queueEntryId, {"status": QueueEntryStatus.PLAYING}
+    )
+
+    return await playback_session_repo.create_playback_session(
+        {
+            "playbackSessionId": str(uuid.uuid4()),
+            "roomId": room_id,
+            "queueEntryId": current_queue_entry.queueEntryId,
+            "state": PlaybackState.PLAYING,
+            "elapsedTime": 0,
+        }
+    )
+
+
+def _determine_playback_updates(
+    action: str, elapsed_seconds: int | None
+) -> dict[str, object]:
+    """Determine the updates for a playback session based on the action."""
+    now = datetime.now(UTC).replace(tzinfo=None)
+    updates: dict[str, object] = {"state": PlaybackState.PLAYING, "pausedAt": None}
+
+    if action == "pause":
+        updates = {"state": PlaybackState.PAUSED, "pausedAt": now}
+    elif action == "stop":
+        updates = {"state": PlaybackState.STOPPED, "pausedAt": now}
+
+    if elapsed_seconds is not None:
+        updates["elapsedTime"] = elapsed_seconds
+
+    return updates
 
 
 async def _advance_to_next(room_id: str) -> dict[str, object]:

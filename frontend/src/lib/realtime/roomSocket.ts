@@ -89,7 +89,12 @@ export class RoomSocketClient {
 		});
 	}
 
-	setPlayback(userId: string, action: 'pause' | 'resume', positionMs?: number) {
+	setPlayback(
+		userId: string,
+		action: 'pause' | 'resume',
+		positionMs?: number,
+		queueEntryId?: string
+	) {
 		const payload: Record<string, unknown> = {
 			type: 'playback',
 			user_id: userId,
@@ -97,6 +102,9 @@ export class RoomSocketClient {
 		};
 		if (positionMs !== undefined) {
 			payload.position_ms = Math.round(positionMs);
+		}
+		if (queueEntryId) {
+			payload.queue_entry_id = queueEntryId;
 		}
 		return this.send(payload);
 	}
