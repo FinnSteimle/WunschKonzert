@@ -2,17 +2,17 @@ import http from 'k6/http';
 import { check, sleep } from 'k6';
 
 /**
- * k6 Scalability Test for Wunschkonzert NFR WUN-88 Verification
+ * k6 Scalability Test for Wunschkonzert NFR WUN-88 Verification (Server)
  * 
  * Acceptance Criteria:
  * - Verified for 2,500 users (100 rooms with 25 users each)
  * 
- * Run with: k6 run load-tests/scalability_test.js
+ * Run with: k6 run load-tests/scalability_test_server.js
  */
 
-const BASE_URL = __ENV.BASE_URL || 'http://localhost:8000';
-const NUM_ROOMS = 100;
-const USERS_PER_ROOM = 25;
+const BASE_URL = __ENV.BASE_URL || 'https://staging-wunschkonzert.jj11.ch';
+const NUM_ROOMS = parseInt(__ENV.NUM_ROOMS || '100');
+const USERS_PER_ROOM = parseInt(__ENV.USERS_PER_ROOM || '25');
 const TOTAL_USERS = NUM_ROOMS * USERS_PER_ROOM;
 
 export const options = {
@@ -21,9 +21,9 @@ export const options = {
       executor: 'ramping-vus',
       startVUs: 0,
       stages: [
-        { duration: '2m', target: TOTAL_USERS }, // Ramp up to 7,500 users over 2 minutes
-        { duration: '5m', target: TOTAL_USERS }, // Stay at 7,500 for 5 minutes
-        { duration: '1m', target: 0 },           // Ramp down
+        { duration: __ENV.RAMP_UP_DURATION || '2m', target: TOTAL_USERS }, // Ramp up
+        { duration: __ENV.STEADY_DURATION || '5m', target: TOTAL_USERS },  // Stay at target
+        { duration: __ENV.RAMP_DOWN_DURATION || '1m', target: 0 },           // Ramp down
       ],
     },
   },
@@ -33,7 +33,7 @@ export const options = {
     // 95% of requests should be under 2s under extreme load
     'http_req_duration': ['p(95)<2000'],
   },
-  setupTimeout: '10m', // Increase setup timeout for 250 rooms
+  setupTimeout: '15m', // Increase setup timeout for server environment
 };
 
 function randomString(length) {
@@ -84,7 +84,7 @@ export function setup() {
       console.error(`Failed to create room ${i}: ${res.status}`);
     }
 
-    if ((i + 1) % 50 === 0) {
+    if ((i + 1) % 10 === 0) {
       console.log(`Created ${i + 1}/${NUM_ROOMS} rooms...`);
     }
   }
@@ -97,7 +97,7 @@ export function setup() {
 }
 
 export default function (data) {
-  const vu = __VU; // 1 to 7500
+  const vu = __VU; // 1 to TOTAL_USERS
   
   if (vu <= NUM_ROOMS) {
     // --- HOSTS (1 per room) ---
@@ -117,7 +117,7 @@ export default function (data) {
 
     sleep(10 + Math.random() * 5);
   } else {
-    // --- PARTICIPANTS (29 per room) ---
+    // --- PARTICIPANTS ---
     const participantIdx = vu - NUM_ROOMS - 1;
     const roomIdx = participantIdx % NUM_ROOMS;
     const joinCode = data.codes[roomIdx];

@@ -66,7 +66,7 @@ The root Makefile provides several commands to manage the project:
 
 The project includes specialized commands to verify compliance with Non-Functional Requirements. These commands use isolated environments and automated checks:
 
-- **Scalability (WUN-88):** Run `make test-scalability`. This simulates 2,500 concurrent users using k6 and logs resource usage.
+- **Scalability (WUN-88):** Run `make test-scalability` for local tests or `make test-scalability-server` for staging environment tests. This simulates 2,500 concurrent users using k6 and logs resource usage.
 - **Minimum Capacity (WUN-87):** Run `make test-load`. This simulates 100 concurrent users across 10 rooms.
 - **Responsive Design (WUN-91):** Run `make verify-responsive`.
 - **Recoverability (WUN-90):** Run `make verify-recoverability`. This simulates a service crash and measures restoration time.

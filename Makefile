@@ -171,7 +171,7 @@ test-scalability:
 	done) & MONITOR_PID=$$!; \
 	echo "Running k6 scalability stress tests (2,500 users)..."; \
 	if command -v k6 >/dev/null 2>&1; then \
-		k6 run load-tests/scalability_test.js; \
+		k6 run load-tests/scalability_test_local.js; \
 		RET=$$?; \
 	else \
 		echo "k6 not found. Please install it."; \
@@ -180,6 +180,16 @@ test-scalability:
 	kill $$MONITOR_PID; \
 	echo "Test complete. Resource usage saved to load-tests/resource_usage.log"; \
 	exit $$RET
+
+.PHONY: test-scalability-server
+test-scalability-server:
+	@echo "Running k6 scalability stress tests on server (2,500 users)..."
+	@if command -v k6 >/dev/null 2>&1; then \
+		k6 run load-tests/scalability_test_server.js; \
+	else \
+		echo "k6 not found. Please install it."; \
+		exit 1; \
+	fi
 
 # Cleanup targets (Docker-focused)
 .PHONY: clean
