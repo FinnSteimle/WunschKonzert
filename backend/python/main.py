@@ -77,7 +77,10 @@ app.include_router(spotify_auth.router)
 app.include_router(websockets.router)
 
 # Include debug router only in development or if load testing is explicitly enabled
-if os.getenv("ENVIRONMENT") == "development" or os.getenv("ENABLE_DEBUG_ROUTES") == "true":
+if (
+    os.getenv("ENVIRONMENT") == "development"
+    or os.getenv("ENABLE_DEBUG_ROUTES") == "true"
+):
     app.include_router(debug.router)
 
 
