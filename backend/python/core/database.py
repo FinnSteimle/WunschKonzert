@@ -37,7 +37,7 @@ def get_session_factory() -> async_sessionmaker[AsyncSession]:
     global _engine, _session_factory
     if _session_factory is None:
         database_url = _get_database_url()
-        # pool_size and max_overflow are increased to support NFR WUN-87 and WUN-88 (up to 7,500 users).
+        # pool_size and max_overflow are increased to support NFR WUN-87 and WUN-88 (up to 2,500 users).
         # This prevents connection exhaustion during high-load stress tests.
         _engine = create_async_engine(
             database_url,
