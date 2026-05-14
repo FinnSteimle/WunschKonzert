@@ -412,7 +412,7 @@ docker:push_backend:
         BRANCH_TAG="main"
       fi
     - IMAGE_NAME="$CI_REGISTRY_IMAGE/backend"
-    - docker build -t "$IMAGE_NAME:$BRANCH_TAG" -t "$IMAGE_NAME:$CI_COMMIT_SHORT_SHA" -f backend/Dockerfile backend
+    - docker build --no-cache --pull -t "$IMAGE_NAME:$BRANCH_TAG" -t "$IMAGE_NAME:$CI_COMMIT_SHORT_SHA" -f backend/Dockerfile backend
     - docker push "$IMAGE_NAME:$BRANCH_TAG"
     - docker push "$IMAGE_NAME:$CI_COMMIT_SHORT_SHA"
 
