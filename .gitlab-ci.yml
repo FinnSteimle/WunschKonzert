@@ -580,14 +580,14 @@ deploy:staging:
       cd "$DEPLOY_PATH_STAGING"
       
       # Always force a pull and recreation of containers to ensure latest code
-      docker compose -f compose.staging.yaml pull
+      docker compose --env-file .env.staging -f compose.staging.yaml pull
       
       # Run database migrations
       echo "Running database migrations..."
-      docker compose -f compose.staging.yaml up -d db
+      docker compose --env-file .env.staging -f compose.staging.yaml up -d db
       sleep 5
-      docker compose -f compose.staging.yaml run --rm api uv run alembic upgrade head
+      docker compose --env-file .env.staging -f compose.staging.yaml run --rm api uv run alembic upgrade head
       
       # Final up with force-recreate
-      docker compose -f compose.staging.yaml up -d --force-recreate --remove-orphans
+      docker compose --env-file .env.staging -f compose.staging.yaml up -d --force-recreate --remove-orphans
       REMOTE
