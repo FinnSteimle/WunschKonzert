@@ -575,19 +575,21 @@ deploy:staging:
       set -euo pipefail
       docker network inspect wunschkonzert_edge >/dev/null 2>&1 || docker network create wunschkonzert_edge
       echo "$CI_JOB_TOKEN" | docker login -u gitlab-ci-token --password-stdin "$CI_REGISTRY"
-      export BACKEND_IMAGE="$CI_REGISTRY_IMAGE/backend:dev"
-      export FRONTEND_IMAGE="$CI_REGISTRY_IMAGE/frontend:dev"
+      export BACKEND_IMAGE="$CI_REGISTRY_IMAGE/backend:$CI_COMMIT_SHORT_SHA"
+      export FRONTEND_IMAGE="$CI_REGISTRY_IMAGE/frontend:$CI_COMMIT_SHORT_SHA"
       cd "$DEPLOY_PATH_STAGING"
-      
-      # Always force a pull and recreation of containers to ensure latest code
+
+      # Always force a pull of the unique tag
       docker compose --env-file .env.staging -f compose.staging.yaml pull
-      
+
       # Run database migrations
       echo "Running database migrations..."
       docker compose --env-file .env.staging -f compose.staging.yaml up -d db
       sleep 5
       docker compose --env-file .env.staging -f compose.staging.yaml run --rm api uv run alembic upgrade head
-      
+
       # Final up with force-recreate
+      echo "Restarting services with new images..."
       docker compose --env-file .env.staging -f compose.staging.yaml up -d --force-recreate --remove-orphans
+      echo "STAGING DEPLOYMENT COMPLETE"
       REMOTE
