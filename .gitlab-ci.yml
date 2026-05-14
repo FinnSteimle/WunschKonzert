@@ -542,7 +542,7 @@ deploy:production:
       # Wait for database to be ready
       docker compose --env-file .env -f compose.prod.yaml up -d db
       sleep 5
-      docker compose --env-file .env -f compose.prod.yaml run --rm -T api uv run --no-dev alembic upgrade head
+      docker compose --env-file .env -f compose.prod.yaml run --rm -T api uv run --no-dev alembic upgrade head < /dev/null
       
       docker compose --env-file .env -f compose.prod.yaml up -d --remove-orphans
       REMOTE
