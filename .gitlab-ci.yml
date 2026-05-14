@@ -577,7 +577,7 @@ deploy:staging:
       echo "Running database migrations..."
       docker compose --env-file .env.staging -f compose.staging.yaml up -d db
       sleep 5
-      docker compose --env-file .env.staging -f compose.staging.yaml run --rm -T api uv run --no-dev alembic upgrade head
+      docker compose --env-file .env.staging -f compose.staging.yaml run --rm -T api uv run --no-dev alembic upgrade head < /dev/null
 
       # Final up with force-recreate
       echo "Restarting services with new images..."
