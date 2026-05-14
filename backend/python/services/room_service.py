@@ -23,7 +23,6 @@ from models.domain import (
     PlaybackState,
     QueueEntryStatus,
     RoomStatus,
-    SongFeedback,
 )
 
 # Shared state moved to service (or could be in core if needed by multiple services)
@@ -69,12 +68,10 @@ def _ui_to_feedback(vote_type: str) -> FeedbackType | None:
 
 async def _build_room_state(room_id: str) -> dict[str, object] | None:
     try:
-        room = await room_repo.get_room(room_id)
-        host = await user_repo.get_user(room.hostedBy)
+        room = await room_repo.get_room_with_full_state(room_id)
+        host = room.host
     except ResourceNotFoundError:
         return None
-
-    memberships_list = await membership_repo.get_room_active_memberships(room_id)
 
     users: list[dict[str, object]] = [
         {
@@ -91,8 +88,12 @@ async def _build_room_state(room_id: str) -> dict[str, object] | None:
         }
     ]
     seen_user_ids = {host.userId}
-    for membership, user in memberships_list:
-        if user.userId in seen_user_ids:
+    for membership in room.memberships:
+        user = membership.user
+        if (
+            user.userId in seen_user_ids
+            or membership.membershipStatus != MembershipStatus.ACTIVE
+        ):
             continue
         seen_user_ids.add(user.userId)
         users.append(
@@ -112,31 +113,16 @@ async def _build_room_state(room_id: str) -> dict[str, object] | None:
             }
         )
 
-    # Get queue entries with tracks and users
-    queue_entries = await queue_entry_repo.get_queue_entries(room_id)
-    queue_entry_ids = [entry.queueEntryId for entry in queue_entries]
-
-    # Build feedback map
-    feedback_map: dict[str, list[SongFeedback]] = {
-        entry_id: [] for entry_id in queue_entry_ids
-    }
-
-    for entry_id in queue_entry_ids:
-        feedback_list = await song_feedback_repo.get_song_feedback_by_queue_entry(
-            entry_id
-        )
-        feedback_map[entry_id].extend(feedback_list)
-
-    # Build queue
+    # Build queue from pre-loaded queue_entries
     queue: list[dict[str, object]] = []
-    for queue_entry in queue_entries:
-        track = await track_repo.get_track(queue_entry.trackId)
-        added_by_user = await user_repo.get_user(queue_entry.addedBy)
+    for queue_entry in room.queue_entries:
+        track = queue_entry.track
+        added_by_user = queue_entry.added_by
 
         if not track or not added_by_user:
             continue
 
-        feedback_entries = feedback_map.get(queue_entry.queueEntryId, [])
+        feedback_entries = queue_entry.song_feedback
         upvotes = sum(
             1 for feedback in feedback_entries if feedback.type == FeedbackType.LIKE
         )
@@ -186,8 +172,13 @@ async def _build_room_state(room_id: str) -> dict[str, object] | None:
         )
     )
 
-    # Get latest playback session
-    latest_playback = await playback_session_repo.get_current_playback_session(room_id)
+    # Get latest playback session from pre-loaded sessions
+    latest_playback = None
+    if room.playback_sessions:
+        # Sort to find the most recent one by startedAt
+        latest_playback = sorted(
+            room.playback_sessions, key=lambda s: s.startedAt, reverse=True
+        )[0]
 
     playback = {
         "state": "stopped",

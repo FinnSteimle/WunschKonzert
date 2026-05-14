@@ -1,10 +1,11 @@
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import joinedload, selectinload
 
 from core.database import get_session_factory
 from core.exceptions import ResourceNotFoundError
 from core.identifiers import generate_join_code, generate_room_id
-from models.domain import Room, RoomStatus
+from models.domain import QueueEntry, Room, RoomMembership, RoomStatus
 
 
 # helper methods to make sure room_id and join_code are unique
@@ -141,4 +142,42 @@ async def update_host(
     room.hostedBy = new_user_id
     await session.flush()
     await session.refresh(room)
+    return room
+
+
+async def get_room_with_full_state(
+    room_id: str, session: AsyncSession | None = None
+) -> Room:
+    """
+    Fetch a room with all its related entities pre-loaded in a single query.
+    This includes the host, active memberships, queue entries (with tracks,
+    users, and feedback), and the current playback session.
+    """
+    if session is None:
+        session_factory = get_session_factory()
+        async with session_factory() as new_session:
+            return await get_room_with_full_state(room_id, session=new_session)
+
+    # Use selectinload for collections and joinedload for many-to-one/one-to-one
+    stmt = (
+        select(Room)
+        .where(Room.roomId == room_id)
+        .options(
+            joinedload(Room.host),
+            selectinload(Room.memberships).joinedload(RoomMembership.user),
+            selectinload(Room.queue_entries).options(
+                joinedload(QueueEntry.track),
+                joinedload(QueueEntry.added_by),
+                selectinload(QueueEntry.song_feedback),
+            ),
+            selectinload(Room.playback_sessions),
+        )
+    )
+
+    result = await session.execute(stmt)
+    room = result.unique().scalar_one_or_none()
+
+    if room is None:
+        raise ResourceNotFoundError("Room not found in database.")
+
     return room
