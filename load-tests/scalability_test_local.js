@@ -33,7 +33,7 @@ export const options = {
     // 95% of requests should be under 2s under extreme load
     'http_req_duration': ['p(95)<2000'],
   },
-  setupTimeout: '10m', // Increase setup timeout for 250 rooms
+  setupTimeout: '10m', // Increase setup timeout for 100 rooms
 };
 
 function randomString(length) {
@@ -97,7 +97,7 @@ export function setup() {
 }
 
 export default function (data) {
-  const vu = __VU; // 1 to 7500
+  const vu = __VU; // 1 to TOTAL_USERS (2,500)
   
   if (vu <= NUM_ROOMS) {
     // --- HOSTS (1 per room) ---
@@ -117,7 +117,7 @@ export default function (data) {
 
     sleep(10 + Math.random() * 5);
   } else {
-    // --- PARTICIPANTS (29 per room) ---
+    // --- PARTICIPANTS (24 per room) ---
     const participantIdx = vu - NUM_ROOMS - 1;
     const roomIdx = participantIdx % NUM_ROOMS;
     const joinCode = data.codes[roomIdx];

@@ -10,7 +10,7 @@ import { check, sleep } from 'k6';
  * Run with: k6 run load-tests/scalability_test_server.js
  */
 
-const BASE_URL = __ENV.BASE_URL || 'https://staging-wunschkonzert.jj11.ch';
+const BASE_URL = __ENV.BASE_URL || 'https://staging-wunschkonzert.jj11.ch/api';
 const NUM_ROOMS = parseInt(__ENV.NUM_ROOMS || '100');
 const USERS_PER_ROOM = parseInt(__ENV.USERS_PER_ROOM || '25');
 const TOTAL_USERS = NUM_ROOMS * USERS_PER_ROOM;
