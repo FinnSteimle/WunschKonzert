@@ -5,6 +5,7 @@ from pydantic import BaseModel
 
 import repositories.music_provider_repo as music_provider_repo
 import repositories.user_repo as user_repo
+from core.exceptions import ResourceNotFoundError
 
 router = APIRouter(prefix="/debug", tags=["debug"])
 
@@ -18,13 +19,13 @@ class SeedUserRequest(BaseModel):
 async def seed_user(data: SeedUserRequest) -> dict[str, object]:
     """
     Seeds a user with a linked Spotify account for load testing.
-    Only available in development environment.
+    Available in development and staging environments.
     """
     try:
         # 1. Ensure user exists
         try:
             await user_repo.get_user(data.user_id)
-        except Exception:
+        except ResourceNotFoundError:
             await user_repo.create_user(data.user_id, data.display_name)
 
         # 2. Link a dummy Spotify account so create_room_service passes
