@@ -94,7 +94,7 @@ async def health() -> JSONResponse:
 
 @app.get("/hello")
 async def root() -> dict[str, str]:
-    return {"message": "Hello World", "version": "v1.0.1-debug-check"}
+    return {"message": "hello"}
 
 
 if __name__ == "__main__":
