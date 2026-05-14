@@ -406,8 +406,9 @@ docker:push_backend:
     - if: '$CI_COMMIT_BRANCH == "dev" || $CI_COMMIT_BRANCH == "main"'
       changes:
         - backend/**/*
-        # or changes to gitlab ci
         - .gitlab-ci.yml
+        - compose.staging.yaml
+        - compose.prod.yaml
   script:
     - |
       if [ "$CI_COMMIT_BRANCH" = "dev" ]; then
@@ -578,15 +579,15 @@ deploy:staging:
       export FRONTEND_IMAGE="$CI_REGISTRY_IMAGE/frontend:dev"
       cd "$DEPLOY_PATH_STAGING"
       
-      docker compose --env-file .env.staging -f compose.staging.yaml pull --quiet
-      docker compose --env-file .env.staging -f compose.staging.yaml up -d --force-recreate --remove-orphans
+      # Always force a pull and recreation of containers to ensure latest code
+      docker compose -f compose.staging.yaml pull
       
-      # Run database migrations before starting services
+      # Run database migrations
       echo "Running database migrations..."
-      # Wait for database to be ready
-      docker compose --env-file .env.staging -f compose.staging.yaml up -d db
+      docker compose -f compose.staging.yaml up -d db
       sleep 5
-      docker compose --env-file .env.staging -f compose.staging.yaml run --rm api uv run alembic upgrade head
+      docker compose -f compose.staging.yaml run --rm api uv run alembic upgrade head
       
-      docker compose --env-file .env.staging -f compose.staging.yaml up -d --remove-orphans
+      # Final up with force-recreate
+      docker compose -f compose.staging.yaml up -d --force-recreate --remove-orphans
       REMOTE
