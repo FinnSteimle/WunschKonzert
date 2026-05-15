@@ -85,7 +85,12 @@ vi.mock('$lib/realtime/roomSocket', () => ({
 		rejectHostTransfer = vi.fn(() => true);
 
 		constructor() {
-			lastSocket = this;
+			lastSocket = {
+				initiateHostTransfer: this.initiateHostTransfer,
+				acceptHostTransfer: this.acceptHostTransfer,
+				rejectHostTransfer: this.rejectHostTransfer,
+				isConnected: this.isConnected
+			};
 		}
 	}
 }));
