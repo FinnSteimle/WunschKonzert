@@ -93,13 +93,13 @@ async def websocket_endpoint_room(websocket: WebSocket, room_id: str) -> None:
                 pass
 
             await dispatch(room_id, data)
-            await send_room_state(room_id, force_refresh=True)
+            await send_room_state(room_id, force_refresh=False)
     finally:
         heartbeat_task.cancel()
         disconnected_user_id = active_room_connections[room_id].pop(websocket, None)
         if disconnected_user_id:
             await room_service.handle_disconnect(room_id, disconnected_user_id)
-            await send_room_state(room_id, force_refresh=True)
+            await send_room_state(room_id, force_refresh=False)
 
 
 @router.websocket("/ws")

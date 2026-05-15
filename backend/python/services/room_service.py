@@ -456,7 +456,7 @@ async def add_to_queue(
             session=session,
         )
 
-    return {"success": True, "message": "Song added to queue"}
+    return await refresh_room_state(room_id, "queue_updated", session=session)
 
 
 async def remove_queue_entry(
@@ -515,7 +515,7 @@ async def remove_queue_entry(
             queue_entry_id, {"status": QueueEntryStatus.REMOVED}, session=session
         )
 
-    return {"success": True, "message": "Queue entry removed"}
+    return await refresh_room_state(room_id, "queue_updated", session=session)
 
 
 async def _handle_neutral_vote(
@@ -700,7 +700,7 @@ async def _handle_skip_vote(
         await queue_entry_repo.update_queue_entry(
             queue_entry_id, {"status": QueueEntryStatus.REMOVED}, session=session
         )
-        return {"success": True, "message": "Queue entry removed"}
+        return await refresh_room_state(room_id, "queue_updated", session=session)
 
     return await _recalculate_and_refresh(
         room_id, queue_entry_id, "vote_updated", session=session
@@ -791,7 +791,7 @@ async def _recalculate_and_refresh(
         queue_entry_id, session=session
     )
     if not queue_entry:
-        return {"success": True, "message": "Vote score updated"}
+        return await refresh_room_state(room_id, event_type, session=session)
 
     feedback_list = await song_feedback_repo.get_song_feedback_by_queue_entry(
         queue_entry_id, session=session
@@ -813,7 +813,7 @@ async def _recalculate_and_refresh(
         session=session,
     )
 
-    return {"success": True, "message": "Vote score updated"}
+    return await refresh_room_state(room_id, event_type, session=session)
 
 
 async def set_playback_state(
@@ -885,7 +885,7 @@ async def set_playback_state(
         playback_session.playbackSessionId, updates, session=session
     )
 
-    return {"success": True, "message": f"Playback {action}ed"}
+    return await refresh_room_state(room_id, "playback_updated", session=session)
 
 
 async def _initialize_playback_session(
@@ -1004,7 +1004,7 @@ async def _advance_to_next(
             session=session,
         )
 
-    return {"success": True, "message": "Playback advanced"}
+    return await refresh_room_state(room_id, "playback_updated", session=session)
 
 
 async def leave_room_service(
@@ -1035,7 +1035,7 @@ async def leave_room_service(
             )
 
         await membership_repo.leave_room(user_id, room_id, session=session)
-        return {"success": True, "message": "Participant left"}
+        return await refresh_room_state(room_id, "participant_left", session=session)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
@@ -1059,7 +1059,9 @@ async def handle_disconnect(
         await membership_repo.update_room_membership_status(
             user_id, room_id, MembershipStatus.INACTIVE, session=session
         )
-        return {"success": True, "message": "Participant disconnected"}
+        return await refresh_room_state(
+            room_id, "participant_disconnected", session=session
+        )
     except ResourceNotFoundError:
         # If no membership was found, nothing to do.
         return {"success": True, "message": "No membership to disconnect"}
@@ -1304,7 +1306,7 @@ async def rename_participant(
             )
 
         await ensure_user_display_name(user_id, display_name, session=session)
-        return {"success": True, "message": "Participant renamed"}
+        return await refresh_room_state(room_id, "participant_renamed", session=session)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:

@@ -202,10 +202,16 @@ async def test_websocket_addqueue_updates_state_for_all_clients(
 
         def _receive_queue_updated(ws):
             last = None
-            for _ in range(3):
-                last = ws.receive_json()
-                if last.get("lastEvent", {}).get("type") == "queue_updated":
-                    return last
+            for _ in range(5):
+                try:
+                    data = ws.receive_text()
+                    if data == "ping":
+                        continue
+                    last = json.loads(data)
+                    if last.get("lastEvent", {}).get("type") == "queue_updated":
+                        return last
+                except json.JSONDecodeError, TypeError:
+                    continue
             return last
 
         after_state_1 = _receive_queue_updated(ws1)
