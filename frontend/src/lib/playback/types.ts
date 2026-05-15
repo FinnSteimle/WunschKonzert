@@ -17,4 +17,5 @@ export interface MusicPlayer {
 	seekTo(positionMs: number): Promise<void>;
 	getPositionMs(): Promise<number>;
 	onStateChange(cb: (state: MusicPlayerState) => void): void;
+	getLastTrackId(): string | null;
 }

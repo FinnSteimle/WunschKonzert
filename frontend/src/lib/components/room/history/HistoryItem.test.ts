@@ -110,9 +110,9 @@ describe('HistoryItem', () => {
 			inQueue: true,
 			onAdd: vi.fn()
 		});
-		expect((screen.getByRole('button', { name: 'Already in queue' }) as HTMLButtonElement).disabled).toBe(
-			true
-		);
+		expect(
+			(screen.getByRole('button', { name: 'Already in queue' }) as HTMLButtonElement).disabled
+		).toBe(true);
 	});
 
 	it('disables add while adding', () => {
@@ -123,9 +123,9 @@ describe('HistoryItem', () => {
 			adding: true,
 			onAdd: vi.fn()
 		});
-		expect((screen.getByRole('button', { name: 'Add to queue again' }) as HTMLButtonElement).disabled).toBe(
-			true
-		);
+		expect(
+			(screen.getByRole('button', { name: 'Add to queue again' }) as HTMLButtonElement).disabled
+		).toBe(true);
 	});
 
 	it('disables add when handler missing', () => {
@@ -133,8 +133,8 @@ describe('HistoryItem', () => {
 			track: baseTrack,
 			playedAt: '2025-06-15T11:00:00.000Z'
 		});
-		expect((screen.getByRole('button', { name: 'Add to queue again' }) as HTMLButtonElement).disabled).toBe(
-			true
-		);
+		expect(
+			(screen.getByRole('button', { name: 'Add to queue again' }) as HTMLButtonElement).disabled
+		).toBe(true);
 	});
 });

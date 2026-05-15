@@ -25,7 +25,9 @@ describe('RemoveButton', () => {
 			requiredVotes: 5
 		});
 
-		expect(screen.getByRole('button', { name: 'Remove track (2 of 5 votes to skip)' })).toBeTruthy();
+		expect(
+			screen.getByRole('button', { name: 'Remove track (2 of 5 votes to skip)' })
+		).toBeTruthy();
 		expect(screen.getByLabelText('2 of 5 votes to skip')).toBeTruthy();
 		expect(screen.getByText('2/5')).toBeTruthy();
 	});
@@ -66,7 +68,9 @@ describe('RemoveButton', () => {
 		const onRemove = vi.fn();
 		render(RemoveButton, { ...baseProps, busy: true, onRemove });
 
-		const button = screen.getByRole('button', { name: 'Vote to remove track' }) as HTMLButtonElement;
+		const button = screen.getByRole('button', {
+			name: 'Vote to remove track'
+		}) as HTMLButtonElement;
 		expect(button.disabled).toBe(true);
 
 		await fireEvent.click(button);

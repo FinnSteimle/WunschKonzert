@@ -74,6 +74,13 @@ export class SpotifyPlayer implements MusicPlayer {
 					clearTimeout(this.reconnectTimer);
 					this.reconnectTimer = null;
 				}
+				// Force a pause on ready to prevent Spotify's auto-resume behavior
+				// in some browsers/accounts.
+				this.player?.getCurrentState().then((state) => {
+					if (state && !state.paused) {
+						this.player?.pause().catch(() => {});
+					}
+				});
 				this.flushReadyWaiters();
 				this.emitState({ isReady: true });
 			});
@@ -195,7 +202,7 @@ export class SpotifyPlayer implements MusicPlayer {
 		const body: Record<string, unknown> = {
 			uris: [toSpotifyTrackUri(providerTrackId)]
 		};
-		if (positionMs !== undefined && positionMs > 0) {
+		if (positionMs !== undefined) {
 			body.position_ms = Math.round(positionMs);
 		}
 

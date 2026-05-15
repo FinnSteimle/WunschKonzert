@@ -2,8 +2,10 @@ import math
 import re
 import uuid
 from datetime import UTC, datetime
+from typing import Sequence
 
 from fastapi import HTTPException
+from sqlalchemy.ext.asyncio import AsyncSession
 
 import repositories.membership_repo as membership_repo
 import repositories.music_provider_repo as music_provider_repo
@@ -15,14 +17,17 @@ import repositories.song_feedback_repo as song_feedback_repo
 import repositories.track_repo as track_repo
 import repositories.user_repo as user_repo
 from core import identifiers
+from core.database import get_session_factory
 from core.exceptions import ResourceNotFoundError
 from models.domain import (
     FeedbackType,
     MembershipStatus,
+    PlaybackHistoryEntry,
+    PlaybackSession,
     PlaybackState,
     QueueEntryStatus,
+    Room,
     RoomStatus,
-    SongFeedback,
 )
 
 # Shared state moved to service (or could be in core if needed by multiple services)
@@ -66,15 +71,8 @@ def _ui_to_feedback(vote_type: str) -> FeedbackType | None:
     return None
 
 
-async def _build_room_state(room_id: str) -> dict[str, object] | None:
-    try:
-        room = await room_repo.get_room(room_id)
-        host = await user_repo.get_user(room.hostedBy)
-    except ResourceNotFoundError:
-        return None
-
-    memberships_list = await membership_repo.get_room_active_memberships(room_id)
-
+def _build_user_list(room: Room) -> list[dict[str, object]]:
+    host = room.host
     users: list[dict[str, object]] = [
         {
             "user": {
@@ -90,8 +88,12 @@ async def _build_room_state(room_id: str) -> dict[str, object] | None:
         }
     ]
     seen_user_ids = {host.userId}
-    for membership, user in memberships_list:
-        if user.userId in seen_user_ids:
+    for membership in room.memberships:
+        user = membership.user
+        if (
+            user.userId in seen_user_ids
+            or membership.membershipStatus != MembershipStatus.ACTIVE
+        ):
             continue
         seen_user_ids.add(user.userId)
         users.append(
@@ -110,32 +112,19 @@ async def _build_room_state(room_id: str) -> dict[str, object] | None:
                 },
             }
         )
+    return users
 
-    # Get queue entries with tracks and users
-    queue_entries = await queue_entry_repo.get_queue_entries(room_id)
-    queue_entry_ids = [entry.queueEntryId for entry in queue_entries]
 
-    # Build feedback map
-    feedback_map: dict[str, list[SongFeedback]] = {
-        entry_id: [] for entry_id in queue_entry_ids
-    }
-
-    for entry_id in queue_entry_ids:
-        feedback_list = await song_feedback_repo.get_song_feedback_by_queue_entry(
-            entry_id
-        )
-        feedback_map[entry_id].extend(feedback_list)
-
-    # Build queue
+def _build_queue_list(room: Room) -> list[dict[str, object]]:
     queue: list[dict[str, object]] = []
-    for queue_entry in queue_entries:
-        track = await track_repo.get_track(queue_entry.trackId)
-        added_by_user = await user_repo.get_user(queue_entry.addedBy)
+    for queue_entry in room.queue_entries:
+        track = queue_entry.track
+        added_by_user = queue_entry.added_by
 
         if not track or not added_by_user:
             continue
 
-        feedback_entries = feedback_map.get(queue_entry.queueEntryId, [])
+        feedback_entries = queue_entry.song_feedback
         upvotes = sum(
             1 for feedback in feedback_entries if feedback.type == FeedbackType.LIKE
         )
@@ -184,11 +173,17 @@ async def _build_room_state(room_id: str) -> dict[str, object] | None:
             item["position"],
         )
     )
+    return queue
 
-    # Get latest playback session
-    latest_playback = await playback_session_repo.get_current_playback_session(room_id)
 
-    playback = {
+def _build_playback_state(room: Room) -> dict[str, object]:
+    latest_playback = None
+    if room.playback_sessions:
+        latest_playback = sorted(
+            room.playback_sessions, key=lambda s: s.startedAt, reverse=True
+        )[0]
+
+    playback: dict[str, object] = {
         "state": "stopped",
         "currentQueueEntryId": None,
         "updatedAt": _now_iso(),
@@ -202,10 +197,18 @@ async def _build_room_state(room_id: str) -> dict[str, object] | None:
                 latest_playback.queueEntryId if playback_state != "stopped" else None
             ),
             "updatedAt": latest_playback.startedAt.isoformat(),
-            "positionMs": int(latest_playback.elapsedTime or 0) * 1000,
+            "positionMs": (
+                int(latest_playback.elapsedTime or 0) * 1000
+                if playback_state != "stopped"
+                else 0
+            ),
         }
+    return playback
 
-    history_entries = await playback_history_repo.get_history(room_id, limit=20)
+
+def _build_history_list(
+    history_entries: Sequence[PlaybackHistoryEntry],
+) -> list[dict[str, object]]:
     history: list[dict[str, object]] = []
     for entry in history_entries:
         if not entry.queue_entry or not entry.queue_entry.track:
@@ -227,6 +230,31 @@ async def _build_room_state(room_id: str) -> dict[str, object] | None:
                 },
             }
         )
+    return history
+
+
+async def _build_room_state(
+    room_id: str, session: AsyncSession | None = None
+) -> dict[str, object] | None:
+    if session is None:
+        session_factory = get_session_factory()
+        async with session_factory() as new_session:
+            return await _build_room_state(room_id, session=new_session)
+
+    try:
+        room = await room_repo.get_room_with_full_state(room_id, session=session)
+        host = room.host
+    except ResourceNotFoundError:
+        return None
+
+    users = _build_user_list(room)
+    queue = _build_queue_list(room)
+    playback = _build_playback_state(room)
+
+    history_entries = await playback_history_repo.get_history(
+        room_id, limit=20, session=session
+    )
+    history = _build_history_list(history_entries)
 
     state: dict[str, object] = {
         "room": {
@@ -248,13 +276,27 @@ async def _build_room_state(room_id: str) -> dict[str, object] | None:
         "history": history,
     }
 
+    _preserve_ephemeral_fields(room_id, state)
     return state
 
 
+def _preserve_ephemeral_fields(room_id: str, state: dict[str, object]) -> None:
+    """Carry in-memory-only fields (host transfer invite + system messages) across rebuilds."""
+    previous = room_state_cache.get(room_id)
+    if not isinstance(previous, dict):
+        return
+    transfer = previous.get("transfer")
+    if isinstance(transfer, dict):
+        state["transfer"] = transfer
+    messages = previous.get("systemMessages")
+    if isinstance(messages, list):
+        state["systemMessages"] = messages
+
+
 async def refresh_room_state(
-    room_id: str, event_type: str | None = None
+    room_id: str, event_type: str | None = None, session: AsyncSession | None = None
 ) -> dict[str, object]:
-    room_state = await _build_room_state(room_id)
+    room_state = await _build_room_state(room_id, session=session)
     if room_state is None:
         raise HTTPException(status_code=404, detail="Room not found")
 
@@ -269,23 +311,44 @@ async def get_song_history(room_id: str) -> dict[str, object]:
     return await refresh_room_state(room_id, "history_updated")
 
 
-async def sync_playback_position(room_id: str, user_id: str, position_ms: int) -> None:
+async def sync_playback_position(
+    room_id: str,
+    user_id: str,
+    position_ms: int,
+    queue_entry_id: str | None = None,
+    session: AsyncSession | None = None,
+) -> None:
     """Lightweight position sync: update DB + patch cache without full rebuild."""
+    if session is None:
+        session_factory = get_session_factory()
+        async with session_factory() as new_session:
+            await sync_playback_position(
+                room_id, user_id, position_ms, queue_entry_id, session=new_session
+            )
+            await new_session.commit()
+            return
+
     try:
-        room = await room_repo.get_room(room_id)
+        room = await room_repo.get_room(room_id, session=session)
     except ResourceNotFoundError:
         return
 
     if room.hostedBy != user_id:
         return
 
-    session = await playback_session_repo.get_current_playback_session(room_id)
-    if not session or _enum_value(session.state) != "playing":
+    playback_session = await playback_session_repo.get_current_playback_session(
+        room_id, session=session
+    )
+    if not playback_session or _enum_value(playback_session.state) != "playing":
+        return
+
+    # If a queue_entry_id is provided, ensure it matches the current session
+    if queue_entry_id and playback_session.queueEntryId != queue_entry_id:
         return
 
     elapsed = max(0, position_ms // 1000)
     await playback_session_repo.update_playback_session(
-        session.playbackSessionId, {"elapsedTime": elapsed}
+        playback_session.playbackSessionId, {"elapsedTime": elapsed}, session=session
     )
 
     cached = room_state_cache.get(room_id)
@@ -296,14 +359,26 @@ async def sync_playback_position(room_id: str, user_id: str, position_ms: int) -
 
 
 async def add_to_queue(
-    room_id: str, track_data: dict[str, object], user_id: str
+    room_id: str,
+    track_data: dict[str, object],
+    user_id: str,
+    session: AsyncSession | None = None,
 ) -> dict[str, object]:
+    if session is None:
+        session_factory = get_session_factory()
+        async with session_factory() as new_session:
+            result = await add_to_queue(
+                room_id, track_data, user_id, session=new_session
+            )
+            await new_session.commit()
+            return result
+
     if not track_data:
         raise HTTPException(status_code=400, detail="No track data provided")
 
     # Get room and validate
     try:
-        room = await room_repo.get_room(room_id)
+        room = await room_repo.get_room(room_id, session=session)
     except ResourceNotFoundError:
         raise HTTPException(status_code=404, detail="Room not found")
 
@@ -312,12 +387,12 @@ async def add_to_queue(
 
     # Get user
     try:
-        await user_repo.get_user(user_id)
+        await user_repo.get_user(user_id, session=session)
     except ResourceNotFoundError:
         raise HTTPException(status_code=404, detail="User not found")
 
     # Get or create track
-    db_track = await track_repo.get_track(str(track_data["trackId"]))
+    db_track = await track_repo.get_track(str(track_data["trackId"]), session=session)
     if not db_track:
         db_track = await track_repo.create_track(
             {
@@ -329,21 +404,26 @@ async def add_to_queue(
                 "duration": track_data["duration"],
                 "coverUrl": track_data["coverUrl"],
                 "deepLink": track_data["deepLink"],
-            }
+            },
+            session=session,
         )
 
     # Block duplicates only while an existing entry is still active (QUEUED/PLAYING).
     # Status filtering (excludes PLAYED, REMOVED, SKIPPED) is handled by get_queue_entry_by_track.
     existing_entry = await queue_entry_repo.get_queue_entry_by_track(
-        room_id, str(track_data["trackId"])
+        room_id, str(track_data["trackId"]), session=session
     )
     if existing_entry:
         raise HTTPException(status_code=409, detail="Song is already in the queue")
 
     # Get max position and check for playing entries
-    max_position = await queue_entry_repo.get_max_queue_position(room_id)
+    max_position = await queue_entry_repo.get_max_queue_position(
+        room_id, session=session
+    )
     next_position = max_position + 1
-    has_playing = await queue_entry_repo.get_playing_queue_entry(room_id)
+    has_playing = await queue_entry_repo.get_playing_queue_entry(
+        room_id, session=session
+    )
 
     # Create queue entry
     queue_entry_id = identifiers.generate_queue_entry_id()
@@ -359,7 +439,8 @@ async def add_to_queue(
             else QueueEntryStatus.QUEUED,
             "voteScore": 0,
             "orderRank": float(next_position),
-        }
+        },
+        session=session,
     )
 
     # Create playback session if this is the first entry (paused, host must resume)
@@ -371,21 +452,36 @@ async def add_to_queue(
                 "queueEntryId": queue_entry_id,
                 "state": PlaybackState.PAUSED,
                 "elapsedTime": 0,
-            }
+            },
+            session=session,
         )
 
-    return await refresh_room_state(room_id, "queue_updated")
+    return await refresh_room_state(room_id, "queue_updated", session=session)
 
 
 async def remove_queue_entry(
-    room_id: str, queue_entry_id: str, user_id: str
+    room_id: str,
+    queue_entry_id: str,
+    user_id: str,
+    session: AsyncSession | None = None,
 ) -> dict[str, object]:
-    queue_entry = await queue_entry_repo.get_queue_entry(queue_entry_id)
+    if session is None:
+        session_factory = get_session_factory()
+        async with session_factory() as new_session:
+            result = await remove_queue_entry(
+                room_id, queue_entry_id, user_id, session=new_session
+            )
+            await new_session.commit()
+            return result
+
+    queue_entry = await queue_entry_repo.get_queue_entry(
+        queue_entry_id, session=session
+    )
     if not queue_entry or queue_entry.roomId != room_id:
         raise HTTPException(status_code=404, detail="Queue entry not found")
 
     try:
-        room = await room_repo.get_room(room_id)
+        room = await room_repo.get_room(room_id, session=session)
     except ResourceNotFoundError:
         raise HTTPException(status_code=404, detail="Room not found")
 
@@ -396,7 +492,7 @@ async def remove_queue_entry(
         can_remove_directly = True
     elif is_adder:
         feedback_list = await song_feedback_repo.get_song_feedback_by_queue_entry(
-            queue_entry_id
+            queue_entry_id, session=session
         )
         has_upvotes = any(f.type == FeedbackType.LIKE for f in feedback_list)
         can_remove_directly = not has_upvotes
@@ -405,29 +501,89 @@ async def remove_queue_entry(
 
     if not can_remove_directly:
         # Democratic vote path
-        return await vote_queue_entry(room_id, queue_entry_id, user_id, "skip")
+        return await vote_queue_entry(
+            room_id, queue_entry_id, user_id, "skip", session=session
+        )
 
     if queue_entry.status == QueueEntryStatus.PLAYING:
-        await _advance_to_next(room_id)
+        await _advance_to_next(room_id, session=session)
         await queue_entry_repo.update_queue_entry(
-            queue_entry_id, {"status": QueueEntryStatus.REMOVED}
+            queue_entry_id, {"status": QueueEntryStatus.REMOVED}, session=session
         )
     else:
         await queue_entry_repo.update_queue_entry(
-            queue_entry_id, {"status": QueueEntryStatus.REMOVED}
+            queue_entry_id, {"status": QueueEntryStatus.REMOVED}, session=session
         )
 
-    return await refresh_room_state(room_id, "queue_entry_removed")
+    return await refresh_room_state(room_id, "queue_updated", session=session)
+
+
+async def _handle_neutral_vote(
+    room_id: str,
+    queue_entry_id: str,
+    user_id: str,
+    session: AsyncSession,
+) -> dict[str, object]:
+    await song_feedback_repo.delete_song_feedback(
+        queue_entry_id,
+        user_id,
+        feedback_type=FeedbackType.LIKE,
+        session=session,
+    )
+    await song_feedback_repo.delete_song_feedback(
+        queue_entry_id,
+        user_id,
+        feedback_type=FeedbackType.DISLIKE,
+        session=session,
+    )
+    return await _recalculate_and_refresh(
+        room_id, queue_entry_id, "vote_updated", session=session
+    )
+
+
+async def _toggle_feedback(
+    room_id: str,
+    queue_entry_id: str,
+    user_id: str,
+    feedback_type: FeedbackType,
+    session: AsyncSession,
+) -> dict[str, object] | None:
+    existing = await song_feedback_repo.get_song_feedback(
+        queue_entry_id, user_id, feedback_type=feedback_type, session=session
+    )
+    if existing:
+        await song_feedback_repo.delete_song_feedback(
+            queue_entry_id, user_id, feedback_type=feedback_type, session=session
+        )
+        return await _recalculate_and_refresh(
+            room_id, queue_entry_id, "vote_updated", session=session
+        )
+    return None
 
 
 async def vote_queue_entry(
-    room_id: str, queue_entry_id: str, user_id: str, vote_type: str
+    room_id: str,
+    queue_entry_id: str,
+    user_id: str,
+    vote_type: str,
+    session: AsyncSession | None = None,
 ) -> dict[str, object]:
+    if session is None:
+        session_factory = get_session_factory()
+        async with session_factory() as new_session:
+            result = await vote_queue_entry(
+                room_id, queue_entry_id, user_id, vote_type, session=new_session
+            )
+            await new_session.commit()
+            return result
+
     if vote_type not in {"upvote", "downvote", "neutral", "skip", "replay"}:
         raise HTTPException(status_code=400, detail="Invalid vote type")
 
     # Get queue entry
-    queue_entry = await queue_entry_repo.get_queue_entry(queue_entry_id)
+    queue_entry = await queue_entry_repo.get_queue_entry(
+        queue_entry_id, session=session
+    )
     if not queue_entry or queue_entry.roomId != room_id:
         raise HTTPException(status_code=404, detail="Queue entry not found")
 
@@ -437,41 +593,20 @@ async def vote_queue_entry(
             detail="Replay votes can only be cast on the currently playing song",
         )
 
-    # Handle "neutral" (explicit deselect for upvote/downvote only).
-    # Skip and replay are deselected via their own toggle: send the same type again.
     if vote_type == "neutral":
-        await song_feedback_repo.delete_song_feedback(
-            queue_entry_id, user_id, feedback_type=FeedbackType.LIKE
-        )
-        await song_feedback_repo.delete_song_feedback(
-            queue_entry_id, user_id, feedback_type=FeedbackType.DISLIKE
-        )
-        return await _recalculate_and_refresh(room_id, queue_entry_id, "vote_updated")
+        return await _handle_neutral_vote(room_id, queue_entry_id, user_id, session)
 
     mapped_type = _ui_to_feedback(vote_type)
     if not mapped_type:
         raise HTTPException(status_code=400, detail="Invalid vote type")
 
-    # Check for existing feedback of the same type (Toggle logic)
-    existing = await song_feedback_repo.get_song_feedback(
-        queue_entry_id, user_id, feedback_type=mapped_type
+    toggle_result = await _toggle_feedback(
+        room_id, queue_entry_id, user_id, mapped_type, session
     )
-    if existing:
-        await song_feedback_repo.delete_song_feedback(
-            queue_entry_id, user_id, feedback_type=mapped_type
-        )
-        return await _recalculate_and_refresh(room_id, queue_entry_id, "vote_updated")
+    if toggle_result:
+        return toggle_result
 
-    # Handle Mutual Exclusivity for Upvote/Downvote
-    if mapped_type in {FeedbackType.LIKE, FeedbackType.DISLIKE}:
-        other_type = (
-            FeedbackType.DISLIKE
-            if mapped_type == FeedbackType.LIKE
-            else FeedbackType.LIKE
-        )
-        await song_feedback_repo.delete_song_feedback(
-            queue_entry_id, user_id, feedback_type=other_type
-        )
+    await _handle_mutual_exclusivity(queue_entry_id, user_id, mapped_type, session)
 
     # Create/Update the vote
     await song_feedback_repo.create_or_update_song_feedback(
@@ -480,30 +615,80 @@ async def vote_queue_entry(
             "userId": user_id,
             "type": mapped_type,
             "votedAt": datetime.now(UTC).replace(tzinfo=None),
-        }
+        },
+        session=session,
     )
 
-    # 5. Handle Side Effects (Skip/Replay thresholds)
+    return await _handle_vote_side_effects(
+        room_id, queue_entry_id, user_id, mapped_type, session
+    )
+
+
+async def _handle_mutual_exclusivity(
+    queue_entry_id: str,
+    user_id: str,
+    mapped_type: FeedbackType,
+    session: AsyncSession,
+) -> None:
+    """Handle Mutual Exclusivity for Upvote/Downvote."""
+    if mapped_type in {FeedbackType.LIKE, FeedbackType.DISLIKE}:
+        other_type = (
+            FeedbackType.DISLIKE
+            if mapped_type == FeedbackType.LIKE
+            else FeedbackType.LIKE
+        )
+        await song_feedback_repo.delete_song_feedback(
+            queue_entry_id, user_id, feedback_type=other_type, session=session
+        )
+
+
+async def _handle_vote_side_effects(
+    room_id: str,
+    queue_entry_id: str,
+    user_id: str,
+    mapped_type: FeedbackType,
+    session: AsyncSession,
+) -> dict[str, object]:
+    """Handle side effects like skip/replay thresholds or just recalculate."""
     if mapped_type == FeedbackType.SKIP:
-        return await _handle_skip_vote(room_id, queue_entry_id)
+        return await _handle_skip_vote(room_id, queue_entry_id, session=session)
 
     if mapped_type == FeedbackType.REPLAY:
-        return await _handle_replay_vote(room_id, queue_entry_id, user_id)
+        return await _handle_replay_vote(
+            room_id, queue_entry_id, user_id, session=session
+        )
 
-    return await _recalculate_and_refresh(room_id, queue_entry_id, "vote_updated")
+    return await _recalculate_and_refresh(
+        room_id, queue_entry_id, "vote_updated", session=session
+    )
 
 
-async def _handle_skip_vote(room_id: str, queue_entry_id: str) -> dict[str, object]:
+async def _handle_skip_vote(
+    room_id: str, queue_entry_id: str, session: AsyncSession | None = None
+) -> dict[str, object]:
     """Check if skip threshold is met and advance if necessary."""
-    queue_entry = await queue_entry_repo.get_queue_entry(queue_entry_id)
+    if session is None:
+        session_factory = get_session_factory()
+        async with session_factory() as new_session:
+            result = await _handle_skip_vote(
+                room_id, queue_entry_id, session=new_session
+            )
+            await new_session.commit()
+            return result
+
+    queue_entry = await queue_entry_repo.get_queue_entry(
+        queue_entry_id, session=session
+    )
     if not queue_entry:
-        return await refresh_room_state(room_id, "vote_updated")
+        return {"success": True, "message": "Vote updated"}
 
     feedback_list = await song_feedback_repo.get_song_feedback_by_queue_entry(
-        queue_entry_id
+        queue_entry_id, session=session
     )
     skip_count = sum(1 for f in feedback_list if f.type == FeedbackType.SKIP)
-    active_members = await membership_repo.get_room_active_memberships(room_id)
+    active_members = await membership_repo.get_room_active_memberships(
+        room_id, session=session
+    )
 
     # All active members are eligible — strictly more than 50% triggers skip/remove.
     eligible = max(1, len(active_members))
@@ -511,35 +696,53 @@ async def _handle_skip_vote(room_id: str, queue_entry_id: str) -> dict[str, obje
 
     if skip_count >= required:
         if queue_entry.status == QueueEntryStatus.PLAYING:
-            await _advance_to_next(room_id)
+            await _advance_to_next(room_id, session=session)
         await queue_entry_repo.update_queue_entry(
-            queue_entry_id, {"status": QueueEntryStatus.REMOVED}
+            queue_entry_id, {"status": QueueEntryStatus.REMOVED}, session=session
         )
-        return await refresh_room_state(room_id, "queue_entry_removed")
+        return await refresh_room_state(room_id, "queue_updated", session=session)
 
-    return await _recalculate_and_refresh(room_id, queue_entry_id, "vote_updated")
+    return await _recalculate_and_refresh(
+        room_id, queue_entry_id, "vote_updated", session=session
+    )
 
 
 async def _handle_replay_vote(
-    room_id: str, queue_entry_id: str, user_id: str
+    room_id: str,
+    queue_entry_id: str,
+    user_id: str,
+    session: AsyncSession | None = None,
 ) -> dict[str, object]:
     """Check if replay threshold is met and requeue if necessary."""
-    queue_entry = await queue_entry_repo.get_queue_entry(queue_entry_id)
+    if session is None:
+        session_factory = get_session_factory()
+        async with session_factory() as new_session:
+            result = await _handle_replay_vote(
+                room_id, queue_entry_id, user_id, session=new_session
+            )
+            await new_session.commit()
+            return result
+
+    queue_entry = await queue_entry_repo.get_queue_entry(
+        queue_entry_id, session=session
+    )
     if not queue_entry:
-        return await refresh_room_state(room_id, "vote_updated")
+        return {"success": True, "message": "Vote updated"}
 
     feedback_list = await song_feedback_repo.get_song_feedback_by_queue_entry(
-        queue_entry_id
+        queue_entry_id, session=session
     )
     replay_count = sum(1 for f in feedback_list if f.type == FeedbackType.REPLAY)
-    active_members = await membership_repo.get_room_active_memberships(room_id)
+    active_members = await membership_repo.get_room_active_memberships(
+        room_id, session=session
+    )
 
     eligible = max(1, len(active_members))
     required = math.ceil(eligible * 0.5)
 
     if replay_count >= required:
         # Threshold reached, requeue the track to play next
-        track = await track_repo.get_track(queue_entry.trackId)
+        track = await track_repo.get_track(queue_entry.trackId, session=session)
         if not track:
             raise HTTPException(status_code=404, detail="Track not found")
 
@@ -554,27 +757,44 @@ async def _handle_replay_vote(
                 "status": QueueEntryStatus.QUEUED,
                 "voteScore": 9999,
                 "orderRank": -1.0,
-            }
+            },
+            session=session,
         )
 
         await song_feedback_repo.delete_song_feedback(
-            queue_entry_id, feedback_type=FeedbackType.REPLAY
+            queue_entry_id, feedback_type=FeedbackType.REPLAY, session=session
         )
-        return await refresh_room_state(room_id, "playback_replayed")
+        return {"success": True, "message": "Playback replayed"}
 
-    return await _recalculate_and_refresh(room_id, queue_entry_id, "vote_updated")
+    return await _recalculate_and_refresh(
+        room_id, queue_entry_id, "vote_updated", session=session
+    )
 
 
 async def _recalculate_and_refresh(
-    room_id: str, queue_entry_id: str, event_type: str
+    room_id: str,
+    queue_entry_id: str,
+    event_type: str,
+    session: AsyncSession | None = None,
 ) -> dict[str, object]:
     """Helper to recalculate vote scores and return the fresh room state."""
-    queue_entry = await queue_entry_repo.get_queue_entry(queue_entry_id)
+    if session is None:
+        session_factory = get_session_factory()
+        async with session_factory() as new_session:
+            result = await _recalculate_and_refresh(
+                room_id, queue_entry_id, event_type, session=new_session
+            )
+            await new_session.commit()
+            return result
+
+    queue_entry = await queue_entry_repo.get_queue_entry(
+        queue_entry_id, session=session
+    )
     if not queue_entry:
-        return await refresh_room_state(room_id, event_type)
+        return await refresh_room_state(room_id, event_type, session=session)
 
     feedback_list = await song_feedback_repo.get_song_feedback_by_queue_entry(
-        queue_entry_id
+        queue_entry_id, session=session
     )
     upvotes = sum(1 for feedback in feedback_list if feedback.type == FeedbackType.LIKE)
     downvotes = sum(
@@ -590,9 +810,10 @@ async def _recalculate_and_refresh(
             "voteScore": vote_score,
             "orderRank": order_rank,
         },
+        session=session,
     )
 
-    return await refresh_room_state(room_id, event_type)
+    return await refresh_room_state(room_id, event_type, session=session)
 
 
 async def set_playback_state(
@@ -600,12 +821,28 @@ async def set_playback_state(
     user_id: str,
     action: str,
     position_ms: int | None = None,
+    queue_entry_id: str | None = None,
+    session: AsyncSession | None = None,
 ) -> dict[str, object]:
+    if session is None:
+        session_factory = get_session_factory()
+        async with session_factory() as new_session:
+            result = await set_playback_state(
+                room_id,
+                user_id,
+                action,
+                position_ms,
+                queue_entry_id,
+                session=new_session,
+            )
+            await new_session.commit()
+            return result
+
     if action not in {"pause", "resume", "stop", "advance"}:
         raise HTTPException(status_code=400, detail="Invalid playback action")
 
     try:
-        room = await room_repo.get_room(room_id)
+        room = await room_repo.get_room(room_id, session=session)
     except ResourceNotFoundError:
         raise HTTPException(status_code=404, detail="Room not found")
 
@@ -615,59 +852,110 @@ async def set_playback_state(
         )
 
     if action == "advance":
-        return await _advance_to_next(room_id)
+        return await _advance_to_next(room_id, session=session)
 
-    playback_session = await playback_session_repo.get_current_playback_session(room_id)
+    playback_session = await playback_session_repo.get_current_playback_session(
+        room_id, session=session
+    )
 
     if not playback_session:
-        current_queue_entry = await queue_entry_repo.get_first_queued_entry(room_id)
+        playback_session = await _initialize_playback_session(room_id, session=session)
 
-        if not current_queue_entry:
-            raise HTTPException(status_code=400, detail="No queued songs")
-
-        await queue_entry_repo.update_queue_entry(
-            current_queue_entry.queueEntryId, {"status": QueueEntryStatus.PLAYING}
-        )
-
-        playback_session = await playback_session_repo.create_playback_session(
-            {
-                "playbackSessionId": str(uuid.uuid4()),
-                "roomId": room_id,
-                "queueEntryId": current_queue_entry.queueEntryId,
-                "state": PlaybackState.PLAYING,
-                "elapsedTime": 0,
-            }
+    # Convince mypy that playback_session is not None
+    if not playback_session:
+        raise HTTPException(
+            status_code=500, detail="Failed to initialize playback session"
         )
 
     elapsed_seconds = (
         max(0, int(position_ms) // 1000) if position_ms is not None else None
     )
 
+    # If resuming and a queue_entry_id is provided, ignore position if it's for a different track.
+    if (
+        action == "resume"
+        and queue_entry_id
+        and playback_session.queueEntryId != queue_entry_id
+    ):
+        elapsed_seconds = None
+
+    updates = _determine_playback_updates(action, elapsed_seconds)
+
+    await playback_session_repo.update_playback_session(
+        playback_session.playbackSessionId, updates, session=session
+    )
+
+    return await refresh_room_state(room_id, "playback_updated", session=session)
+
+
+async def _initialize_playback_session(
+    room_id: str, session: AsyncSession | None = None
+) -> PlaybackSession:
+    """Initialize a new playback session if none exists."""
+    if session is None:
+        session_factory = get_session_factory()
+        async with session_factory() as new_session:
+            result = await _initialize_playback_session(room_id, session=new_session)
+            await new_session.commit()
+            return result
+
+    current_queue_entry = await queue_entry_repo.get_first_queued_entry(
+        room_id, session=session
+    )
+
+    if not current_queue_entry:
+        raise HTTPException(status_code=400, detail="No queued songs")
+
+    await queue_entry_repo.update_queue_entry(
+        current_queue_entry.queueEntryId,
+        {"status": QueueEntryStatus.PLAYING},
+        session=session,
+    )
+
+    return await playback_session_repo.create_playback_session(
+        {
+            "playbackSessionId": str(uuid.uuid4()),
+            "roomId": room_id,
+            "queueEntryId": current_queue_entry.queueEntryId,
+            "state": PlaybackState.PLAYING,
+            "elapsedTime": 0,
+        },
+        session=session,
+    )
+
+
+def _determine_playback_updates(
+    action: str, elapsed_seconds: int | None
+) -> dict[str, object]:
+    """Determine the updates for a playback session based on the action."""
+    now = datetime.now(UTC).replace(tzinfo=None)
     updates: dict[str, object] = {"state": PlaybackState.PLAYING, "pausedAt": None}
+
     if action == "pause":
-        updates = {
-            "state": PlaybackState.PAUSED,
-            "pausedAt": datetime.now(UTC).replace(tzinfo=None),
-        }
+        updates = {"state": PlaybackState.PAUSED, "pausedAt": now}
     elif action == "stop":
-        updates = {
-            "state": PlaybackState.STOPPED,
-            "pausedAt": datetime.now(UTC).replace(tzinfo=None),
-        }
+        updates = {"state": PlaybackState.STOPPED, "pausedAt": now}
 
     if elapsed_seconds is not None:
         updates["elapsedTime"] = elapsed_seconds
 
-    await playback_session_repo.update_playback_session(
-        playback_session.playbackSessionId, updates
-    )
-
-    return await refresh_room_state(room_id, "playback_updated")
+    return updates
 
 
-async def _advance_to_next(room_id: str) -> dict[str, object]:
+async def _advance_to_next(
+    room_id: str, session: AsyncSession | None = None
+) -> dict[str, object]:
     """Mark the current song as played and start the next highest-voted song."""
-    current_session = await playback_session_repo.get_current_playback_session(room_id)
+    if session is None:
+        session_factory = get_session_factory()
+        async with session_factory() as new_session:
+            result = await _advance_to_next(room_id, session=new_session)
+            await new_session.commit()
+            return result
+
+    current_session = await playback_session_repo.get_current_playback_session(
+        room_id, session=session
+    )
     if current_session:
         await playback_session_repo.update_playback_session(
             current_session.playbackSessionId,
@@ -675,9 +963,12 @@ async def _advance_to_next(room_id: str) -> dict[str, object]:
                 "state": PlaybackState.STOPPED,
                 "pausedAt": datetime.now(UTC).replace(tzinfo=None),
             },
+            session=session,
         )
         await queue_entry_repo.update_queue_entry(
-            current_session.queueEntryId, {"status": QueueEntryStatus.PLAYED}
+            current_session.queueEntryId,
+            {"status": QueueEntryStatus.PLAYED},
+            session=session,
         )
 
         await playback_history_repo.add_history_entry(
@@ -686,17 +977,20 @@ async def _advance_to_next(room_id: str) -> dict[str, object]:
                 "queueEntryId": current_session.queueEntryId,
                 "playedAt": current_session.startedAt,
                 "replayCount": 1,
-            }
+            },
+            session=session,
         )
 
-    next_entry = await queue_entry_repo.get_next_queued_entry(room_id)
+    next_entry = await queue_entry_repo.get_next_queued_entry(room_id, session=session)
     if next_entry:
         await queue_entry_repo.update_queue_entry(
-            next_entry.queueEntryId, {"status": QueueEntryStatus.PLAYING}
+            next_entry.queueEntryId,
+            {"status": QueueEntryStatus.PLAYING},
+            session=session,
         )
         # Playback deadline: once the song reaches the playback all votes to skip it will be removed and the song will play.
         await song_feedback_repo.delete_song_feedback(
-            next_entry.queueEntryId, feedback_type=FeedbackType.SKIP
+            next_entry.queueEntryId, feedback_type=FeedbackType.SKIP, session=session
         )
 
         await playback_session_repo.create_playback_session(
@@ -706,21 +1000,31 @@ async def _advance_to_next(room_id: str) -> dict[str, object]:
                 "queueEntryId": next_entry.queueEntryId,
                 "state": PlaybackState.PLAYING,
                 "elapsedTime": 0,
-            }
+            },
+            session=session,
         )
 
-    return await refresh_room_state(room_id, "playback_advanced")
+    return await refresh_room_state(room_id, "playback_updated", session=session)
 
 
-async def leave_room_service(room_id: str, user_id: str) -> dict[str, object]:
+async def leave_room_service(
+    room_id: str, user_id: str, session: AsyncSession | None = None
+) -> dict[str, object]:
+    if session is None:
+        session_factory = get_session_factory()
+        async with session_factory() as new_session:
+            result = await leave_room_service(room_id, user_id, session=new_session)
+            await new_session.commit()
+            return result
+
     try:
         try:
-            await user_repo.get_user(user_id)
+            await user_repo.get_user(user_id, session=session)
         except ResourceNotFoundError:
             raise HTTPException(status_code=404, detail="User not found")
 
         try:
-            room = await room_repo.get_room(room_id)
+            room = await room_repo.get_room(room_id, session=session)
         except ResourceNotFoundError:
             raise HTTPException(status_code=404, detail="Room not found")
 
@@ -730,8 +1034,8 @@ async def leave_room_service(room_id: str, user_id: str) -> dict[str, object]:
                 detail="Hosts cannot leave the room. Please delete the room instead.",
             )
 
-        await membership_repo.leave_room(user_id, room_id)
-        return await refresh_room_state(room_id, "participant_left")
+        await membership_repo.leave_room(user_id, room_id, session=session)
+        return await refresh_room_state(room_id, "participant_left", session=session)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
@@ -740,15 +1044,54 @@ async def leave_room_service(room_id: str, user_id: str) -> dict[str, object]:
         raise HTTPException(status_code=500, detail=f"Failed to leave room: {str(e)}")
 
 
+async def handle_disconnect(
+    room_id: str, user_id: str, session: AsyncSession | None = None
+) -> dict[str, object]:
+    """Handle a participant's disconnect by marking them as inactive."""
+    if session is None:
+        session_factory = get_session_factory()
+        async with session_factory() as new_session:
+            result = await handle_disconnect(room_id, user_id, session=new_session)
+            await new_session.commit()
+            return result
+
+    try:
+        await membership_repo.update_room_membership_status(
+            user_id, room_id, MembershipStatus.INACTIVE, session=session
+        )
+        return await refresh_room_state(
+            room_id, "participant_disconnected", session=session
+        )
+    except ResourceNotFoundError:
+        # If no membership was found, nothing to do.
+        return {"success": True, "message": "No membership to disconnect"}
+    except Exception as e:
+        print(f"Error handling disconnect for user {user_id} in room {room_id}: {e}")
+        return {"success": False, "message": str(e)}
+
+
 async def create_room_service(
-    name: str, user_id: str, display_name: str, supported_provider_id: str
+    name: str,
+    user_id: str,
+    display_name: str,
+    supported_provider_id: str,
+    session: AsyncSession | None = None,
 ) -> dict[str, object]:
     """Create a new room, validating user and provider."""
-    await ensure_user_display_name(user_id, display_name)
-    await ensure_provider_exists(supported_provider_id)
+    if session is None:
+        session_factory = get_session_factory()
+        async with session_factory() as new_session:
+            result = await create_room_service(
+                name, user_id, display_name, supported_provider_id, session=new_session
+            )
+            await new_session.commit()
+            return result
+
+    await ensure_user_display_name(user_id, display_name, session=session)
+    await ensure_provider_exists(supported_provider_id, session=session)
 
     pa = await music_provider_repo.get_provider_account_by_user(
-        user_id, supported_provider_id
+        user_id, supported_provider_id, session=session
     )
     if not pa or not pa.refreshToken:
         raise HTTPException(
@@ -761,9 +1104,9 @@ async def create_room_service(
             user_id,
             supported_provider_id,
             name,
+            session=session,
         )
-        await ensure_active_membership(user_id, room.roomId)
-        await refresh_room_state(room.roomId, "room_created")
+        await ensure_active_membership(user_id, room.roomId, session=session)
         return {
             "success": True,
             "message": f"Successfully created room {room.roomId}",
@@ -782,9 +1125,18 @@ async def create_room_service(
 
 
 async def join_room_service(
-    join_code: str, user_id: str, display_name: str
+    join_code: str, user_id: str, display_name: str, session: AsyncSession | None = None
 ) -> dict[str, object]:
     """Validate and join a room by its join code."""
+    if session is None:
+        session_factory = get_session_factory()
+        async with session_factory() as new_session:
+            result = await join_room_service(
+                join_code, user_id, display_name, session=new_session
+            )
+            await new_session.commit()
+            return result
+
     if display_name is None or not display_name.strip():
         raise HTTPException(status_code=400, detail="Display name is required")
 
@@ -795,10 +1147,10 @@ async def join_room_service(
             detail="Join code must be exactly 6 characters (A-Z, 2-9, no I/O/0/1).",
         )
 
-    await ensure_user_display_name(user_id, display_name)
+    await ensure_user_display_name(user_id, display_name, session=session)
 
     try:
-        room = await room_repo.get_room_by_join_code(normalized_code)
+        room = await room_repo.get_room_by_join_code(normalized_code, session=session)
     except ResourceNotFoundError:
         raise HTTPException(status_code=404, detail="Room not found")
 
@@ -809,8 +1161,7 @@ async def join_room_service(
         )
 
     try:
-        await ensure_active_membership(user_id, room.roomId)
-        await refresh_room_state(room.roomId, "participant_joined")
+        await ensure_active_membership(user_id, room.roomId, session=session)
         return {
             "success": True,
             "message": f"Successfully joined room {room.roomId}",
@@ -825,31 +1176,40 @@ async def join_room_service(
         raise HTTPException(status_code=500, detail=f"Failed to join room: {str(e)}")
 
 
-async def delete_room_service(room_id: str, user_id: str) -> dict[str, object]:
+async def delete_room_service(
+    room_id: str, user_id: str, session: AsyncSession | None = None
+) -> dict[str, object]:
+    if session is None:
+        session_factory = get_session_factory()
+        async with session_factory() as new_session:
+            result = await delete_room_service(room_id, user_id, session=new_session)
+            await new_session.commit()
+            return result
+
     try:
         # Get room and validate
-        room = await room_repo.get_room(room_id)
+        room = await room_repo.get_room(room_id, session=session)
         if room.hostedBy != user_id:
             raise HTTPException(status_code=403, detail="Only host can delete room")
 
         # Update room status
-        await room_repo.update_room_status(room_id, RoomStatus.DELETED)
+        await room_repo.update_room_status(room_id, RoomStatus.DELETED, session=session)
 
         # Update all memberships
-        memberships_list = await membership_repo.get_room_memberships(room_id)
-        from core.database import get_session_factory
+        from sqlalchemy import select
 
-        session_factory = get_session_factory()
-        async with session_factory() as session:
-            for membership in memberships_list:
-                # Re-fetch or merge into session if needed, but here we can just update
-                membership = await session.merge(membership)
-                membership.membershipStatus = MembershipStatus.INACTIVE
-                if membership.leftAt is None:
-                    membership.leftAt = datetime.now(UTC).replace(tzinfo=None)
-            await session.commit()
+        from models.domain import RoomMembership
 
-        return await refresh_room_state(room_id, "room_deleted")
+        membership_stmt = select(RoomMembership).where(RoomMembership.roomId == room_id)
+        membership_result = await session.execute(membership_stmt)
+        memberships_list = membership_result.scalars().all()
+
+        for membership in memberships_list:
+            membership.membershipStatus = MembershipStatus.INACTIVE
+            if membership.leftAt is None:
+                membership.leftAt = datetime.now(UTC).replace(tzinfo=None)
+
+        return {"success": True, "message": "Room deleted"}
     except ResourceNotFoundError:
         raise HTTPException(status_code=404, detail="Room not found")
     except ValueError as e:
@@ -860,7 +1220,9 @@ async def delete_room_service(room_id: str, user_id: str) -> dict[str, object]:
         raise HTTPException(status_code=500, detail=f"Failed to delete room: {str(e)}")
 
 
-async def ensure_user_display_name(user_id: str, display_name: str) -> None:
+async def ensure_user_display_name(
+    user_id: str, display_name: str, session: AsyncSession | None = None
+) -> None:
     trimmed = display_name.strip()
     if not trimmed:
         raise HTTPException(status_code=400, detail="Display name is required")
@@ -869,55 +1231,70 @@ async def ensure_user_display_name(user_id: str, display_name: str) -> None:
 
     user_exists = True
     try:
-        await user_repo.get_user(user_id)
+        await user_repo.get_user(user_id, session=session)
     except ResourceNotFoundError:
         user_exists = False
 
     if not user_exists:
         try:
-            await user_repo.create_user(user_id, trimmed)
+            await user_repo.create_user(user_id, trimmed, session=session)
             return
         except ValueError as e:
             if "already exists" not in str(e):
                 raise HTTPException(status_code=400, detail=str(e)) from e
     try:
-        await user_repo.update_user_display_name(user_id, trimmed)
+        await user_repo.update_user_display_name(user_id, trimmed, session=session)
     except ResourceNotFoundError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
 
 
-async def ensure_provider_exists(provider_id: str) -> None:
+async def ensure_provider_exists(
+    provider_id: str, session: AsyncSession | None = None
+) -> None:
     from core.exceptions import ResourceNotFoundError
 
     try:
-        await music_provider_repo.get_music_provider(provider_id)
+        await music_provider_repo.get_music_provider(provider_id, session=session)
     except ResourceNotFoundError:
         raise HTTPException(
             status_code=400, detail=f"Unsupported music provider: {provider_id}. "
         )
 
 
-async def ensure_active_membership(user_id: str, room_id: str) -> None:
+async def ensure_active_membership(
+    user_id: str, room_id: str, session: AsyncSession | None = None
+) -> None:
     try:
         await membership_repo.update_room_membership_status(
-            user_id, room_id, MembershipStatus.ACTIVE
+            user_id, room_id, MembershipStatus.ACTIVE, session=session
         )
     except ResourceNotFoundError:
         # Membership doesn't exist, create it
-        await membership_repo.create_room_membership(user_id, room_id)
+        await membership_repo.create_room_membership(user_id, room_id, session=session)
 
 
 async def rename_participant(
-    room_id: str, user_id: str, display_name: str
+    room_id: str, user_id: str, display_name: str, session: AsyncSession | None = None
 ) -> dict[str, object]:
+    if session is None:
+        session_factory = get_session_factory()
+        async with session_factory() as new_session:
+            result = await rename_participant(
+                room_id, user_id, display_name, session=new_session
+            )
+            await new_session.commit()
+            return result
+
     try:
         try:
-            await room_repo.get_room(room_id)
+            await room_repo.get_room(room_id, session=session)
         except ResourceNotFoundError:
             raise HTTPException(status_code=404, detail="Room not found")
 
         try:
-            membership = await membership_repo.get_room_membership(user_id, room_id)
+            membership = await membership_repo.get_room_membership(
+                user_id, room_id, session=session
+            )
         except ResourceNotFoundError:
             raise HTTPException(
                 status_code=403, detail="Only active room participants can rename"
@@ -928,8 +1305,8 @@ async def rename_participant(
                 status_code=403, detail="Only active room participants can rename"
             )
 
-        await ensure_user_display_name(user_id, display_name)
-        return await refresh_room_state(room_id, "participant_renamed")
+        await ensure_user_display_name(user_id, display_name, session=session)
+        return await refresh_room_state(room_id, "participant_renamed", session=session)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:

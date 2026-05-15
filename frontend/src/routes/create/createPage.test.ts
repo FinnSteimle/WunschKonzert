@@ -77,7 +77,9 @@ describe('create room route', () => {
 
 		render(CreatePage);
 
-		await fireEvent.input(screen.getByLabelText('Room name'), { target: { value: 'Friday vibes' } });
+		await fireEvent.input(screen.getByLabelText('Room name'), {
+			target: { value: 'Friday vibes' }
+		});
 		await fireEvent.click(screen.getByRole('button', { name: 'Create room' }));
 
 		await waitFor(() => expect(goto).toHaveBeenCalledWith('/room/ZX9WV8'));
@@ -100,7 +102,9 @@ describe('create room route', () => {
 
 		render(CreatePage);
 
-		await fireEvent.input(screen.getByLabelText('Room name'), { target: { value: 'Friday vibes' } });
+		await fireEvent.input(screen.getByLabelText('Room name'), {
+			target: { value: 'Friday vibes' }
+		});
 		await fireEvent.click(screen.getByRole('button', { name: 'Create room' }));
 
 		await waitFor(() => expect(toast.error).toHaveBeenCalledWith('Could not create'));
@@ -118,7 +122,9 @@ describe('create room route', () => {
 
 		render(CreatePage);
 
-		await fireEvent.input(screen.getByLabelText('Room name'), { target: { value: 'Friday vibes' } });
+		await fireEvent.input(screen.getByLabelText('Room name'), {
+			target: { value: 'Friday vibes' }
+		});
 		const submitButton = screen.getByRole('button', { name: 'Create room' });
 		await fireEvent.click(submitButton);
 		await fireEvent.click(screen.getByRole('button', { name: 'Creating…' }));

@@ -21,7 +21,10 @@
 {#if tracks.length === 0}
 	<EmptyState title="No results" description="Try another search." />
 {:else}
-	<ul class="flex max-h-[min(24rem,55vh)] flex-col gap-2 overflow-y-auto pr-1" aria-label="Search results">
+	<ul
+		class="flex max-h-[min(24rem,55vh)] flex-col gap-2 overflow-y-auto pr-1"
+		aria-label="Search results"
+	>
 		{#each tracks as track (track.trackId)}
 			{@const inQueue = !!queuedTrackIds?.has(track.trackId)}
 			<li
@@ -43,9 +46,7 @@
 					</div>
 				{/if}
 				<div class="min-w-0 flex-1 text-center sm:text-start">
-					<div
-						class="flex flex-wrap items-center justify-center gap-2 sm:justify-start"
-					>
+					<div class="flex flex-wrap items-center justify-center gap-2 sm:justify-start">
 						<p class="line-clamp-2 text-sm font-medium">{track.title}</p>
 						{#if inQueue}
 							<Badge variant="secondary" class="shrink-0">In queue</Badge>

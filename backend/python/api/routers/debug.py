@@ -5,6 +5,7 @@ from pydantic import BaseModel
 
 import repositories.music_provider_repo as music_provider_repo
 import repositories.user_repo as user_repo
+from core.exceptions import ResourceNotFoundError
 
 router = APIRouter(prefix="/debug", tags=["debug"])
 
@@ -18,24 +19,33 @@ class SeedUserRequest(BaseModel):
 async def seed_user(data: SeedUserRequest) -> dict[str, object]:
     """
     Seeds a user with a linked Spotify account for load testing.
-    Only available in development environment.
+    Available in development and staging environments.
     """
-    try:
-        # 1. Ensure user exists
-        try:
-            await user_repo.get_user(data.user_id)
-        except Exception:
-            await user_repo.create_user(data.user_id, data.display_name)
+    from core.database import get_session_factory
 
-        # 2. Link a dummy Spotify account so create_room_service passes
-        await music_provider_repo.create_or_update_provider_account_tokens(
-            user_id=data.user_id,
-            provider_id="spotify",
-            external_user_id=f"ext-{data.user_id}",
-            access_token="mock-access-token",
-            refresh_token="mock-refresh-token",
-            token_expires_at=datetime.now(UTC) + timedelta(days=1),
-        )
+    session_factory = get_session_factory()
+
+    try:
+        async with session_factory() as session:
+            # Ensure user exists
+            try:
+                await user_repo.get_user(data.user_id, session=session)
+            except ResourceNotFoundError:
+                await user_repo.create_user(
+                    data.user_id, data.display_name, session=session
+                )
+
+            # Link a dummy Spotify account so create_room_service passes
+            await music_provider_repo.create_or_update_provider_account_tokens(
+                user_id=data.user_id,
+                provider_id="spotify",
+                external_user_id=f"ext-{data.user_id}",
+                access_token="mock-access-token",
+                refresh_token="mock-refresh-token",
+                token_expires_at=datetime.now(UTC) + timedelta(days=1),
+                session=session,
+            )
+            await session.commit()
 
         return {
             "success": True,

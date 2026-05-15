@@ -48,9 +48,7 @@
 	<Card class="min-w-0 shadow-sm">
 		<CardHeader>
 			<CardTitle>Recent rooms</CardTitle>
-			<CardDescription
-				>Jump back to a room you hosted or joined on this device.</CardDescription
-			>
+			<CardDescription>Jump back to a room you hosted or joined on this device.</CardDescription>
 		</CardHeader>
 		<CardContent class="flex flex-col gap-1">
 			{#each entries as r (r.joinCode)}
@@ -63,9 +61,7 @@
 						{#if r.isHost}
 							<Badge variant="secondary">Host</Badge>
 						{/if}
-						<span class="text-muted-foreground font-mono text-xs tracking-wide"
-							>{r.joinCode}</span
-						>
+						<span class="text-muted-foreground font-mono text-xs tracking-wide">{r.joinCode}</span>
 					</div>
 				</a>
 			{/each}

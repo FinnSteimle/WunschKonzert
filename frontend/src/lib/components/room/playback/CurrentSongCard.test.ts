@@ -59,7 +59,9 @@ describe('CurrentSongCard', () => {
 	});
 
 	it('shows placeholder when coverUrl is empty', () => {
-		render(CurrentSongCard, { entry: makeEntry({ track: { ...makeEntry().track, coverUrl: '' } }) });
+		render(CurrentSongCard, {
+			entry: makeEntry({ track: { ...makeEntry().track, coverUrl: '' } })
+		});
 		expect(screen.getByText('No art')).toBeTruthy();
 	});
 
@@ -93,7 +95,12 @@ describe('CurrentSongCard', () => {
 	});
 
 	it('highlights skip when user voted', () => {
-		render(CurrentSongCard, { entry: makeEntry(), hasSkipVoted: true, skipCount: 1, requiredVotes: 2 });
+		render(CurrentSongCard, {
+			entry: makeEntry(),
+			hasSkipVoted: true,
+			skipCount: 1,
+			requiredVotes: 2
+		});
 		expect(screen.getByRole('button', { name: 'Skip (1/2)' })).toBeTruthy();
 	});
 

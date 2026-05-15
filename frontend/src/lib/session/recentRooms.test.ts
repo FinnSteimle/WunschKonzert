@@ -91,7 +91,9 @@ describe('recentRooms', () => {
 
 		removeRecentRoom(' ab2 cd3 ');
 
-		expect(getRecentRooms()).toEqual([{ joinCode: 'ZX9WV8', name: 'B', isHost: false, visitedAt: 2 }]);
+		expect(getRecentRooms()).toEqual([
+			{ joinCode: 'ZX9WV8', name: 'B', isHost: false, visitedAt: 2 }
+		]);
 	});
 
 	it('keeps only available recent rooms after backend sync', async () => {
@@ -116,7 +118,9 @@ describe('recentRooms', () => {
 
 		expect(fetchMock).toHaveBeenCalledOnce();
 		expect(synced).toEqual([{ joinCode: 'ZX9WV8', name: 'B', isHost: false, visitedAt: 2 }]);
-		expect(getRecentRooms()).toEqual([{ joinCode: 'ZX9WV8', name: 'B', isHost: false, visitedAt: 2 }]);
+		expect(getRecentRooms()).toEqual([
+			{ joinCode: 'ZX9WV8', name: 'B', isHost: false, visitedAt: 2 }
+		]);
 	});
 
 	it('keeps local recent rooms when availability request fails', async () => {
@@ -132,7 +136,9 @@ describe('recentRooms', () => {
 
 		expect(fetchMock).toHaveBeenCalledOnce();
 		expect(synced).toEqual([{ joinCode: 'AB2CD3', name: 'A', isHost: true, visitedAt: 1 }]);
-		expect(getRecentRooms()).toEqual([{ joinCode: 'AB2CD3', name: 'A', isHost: true, visitedAt: 1 }]);
+		expect(getRecentRooms()).toEqual([
+			{ joinCode: 'AB2CD3', name: 'A', isHost: true, visitedAt: 1 }
+		]);
 	});
 });
 

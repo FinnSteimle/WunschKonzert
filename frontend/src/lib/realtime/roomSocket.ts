@@ -13,10 +13,13 @@ export class RoomSocketClient {
 	private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
 	private disposed = false;
 	private readonly roomId: string;
+	private readonly userId: string | null;
 	private readonly handlers: RoomSocketHandlers;
+	private readonly unloadHandler = () => this.disconnect();
 
-	constructor(roomId: string, handlers: RoomSocketHandlers) {
+	constructor(roomId: string, handlers: RoomSocketHandlers, userId: string | null = null) {
 		this.roomId = roomId;
+		this.userId = userId;
 		this.handlers = handlers;
 	}
 
@@ -27,11 +30,22 @@ export class RoomSocketClient {
 		const url = `${getWsBaseUrl()}/ws/${encodeURIComponent(this.roomId)}`;
 		this.socket = new WebSocket(url);
 
+		if (typeof window !== 'undefined') {
+			window.addEventListener('beforeunload', this.unloadHandler);
+		}
+
 		this.socket.onopen = () => {
 			this.handlers.onConnectionChange?.(true);
+			if (this.userId) {
+				this.send({ type: 'identify', user_id: this.userId });
+			}
 		};
 
 		this.socket.onmessage = (event) => {
+			if (event.data === 'ping') {
+				this.socket?.send('pong');
+				return;
+			}
 			try {
 				const payload = JSON.parse(event.data) as RoomStateDto;
 				this.handlers.onState(payload);
@@ -89,7 +103,12 @@ export class RoomSocketClient {
 		});
 	}
 
-	setPlayback(userId: string, action: 'pause' | 'resume', positionMs?: number) {
+	setPlayback(
+		userId: string,
+		action: 'pause' | 'resume',
+		positionMs?: number,
+		queueEntryId?: string
+	) {
 		const payload: Record<string, unknown> = {
 			type: 'playback',
 			user_id: userId,
@@ -97,6 +116,9 @@ export class RoomSocketClient {
 		};
 		if (positionMs !== undefined) {
 			payload.position_ms = Math.round(positionMs);
+		}
+		if (queueEntryId) {
+			payload.queue_entry_id = queueEntryId;
 		}
 		return this.send(payload);
 	}
@@ -111,6 +133,9 @@ export class RoomSocketClient {
 
 	disconnect() {
 		this.disposed = true;
+		if (typeof window !== 'undefined') {
+			window.removeEventListener('beforeunload', this.unloadHandler);
+		}
 		if (this.reconnectTimer) {
 			clearTimeout(this.reconnectTimer);
 		}

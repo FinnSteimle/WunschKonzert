@@ -8,7 +8,7 @@ import {
 	type RoomResponse,
 	type RoomStateDto,
 	type SearchResponseDto,
-	type TrackDto,
+	type TrackDto
 } from '$lib/types/api';
 
 /**
@@ -103,9 +103,7 @@ export const apiClient = {
 	},
 
 	async getRoomState(roomId: string): Promise<RoomStateDto> {
-		const response = await fetch(
-			`${getApiBaseUrl()}/rooms/${encodeURIComponent(roomId)}/state`
-		);
+		const response = await fetch(`${getApiBaseUrl()}/rooms/${encodeURIComponent(roomId)}/state`);
 		return parseResponse<RoomStateDto>(response);
 	},
 
@@ -116,7 +114,11 @@ export const apiClient = {
 		return parseResponse<SearchResponseDto>(response);
 	},
 
-	async addQueueEntry(roomId: string, userId: string, track: TrackDto): Promise<{ success: boolean }> {
+	async addQueueEntry(
+		roomId: string,
+		userId: string,
+		track: TrackDto
+	): Promise<{ success: boolean }> {
 		return postJson<{ success: boolean }>(`/rooms/${encodeURIComponent(roomId)}/queue`, {
 			type: 'addqueue',
 			user_id: userId,
@@ -124,10 +126,7 @@ export const apiClient = {
 		});
 	},
 
-	async getSpotifyLoginUrl(
-		userId: string,
-		returnTo: string
-	): Promise<{ auth_url: string }> {
+	async getSpotifyLoginUrl(userId: string, returnTo: string): Promise<{ auth_url: string }> {
 		const params = new URLSearchParams({ user_id: userId, return_to: returnTo });
 		const response = await fetch(`${getApiBaseUrl()}/auth/spotify/login?${params}`);
 		return parseResponse<{ auth_url: string }>(response);

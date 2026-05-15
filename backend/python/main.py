@@ -76,8 +76,11 @@ app.include_router(playback.router)
 app.include_router(spotify_auth.router)
 app.include_router(websockets.router)
 
-# Include debug router only in development for load testing
-if os.getenv("ENVIRONMENT") == "development":
+# Include debug router in development, staging or if load testing is explicitly enabled
+if (
+    os.getenv("ENVIRONMENT") in ("development", "staging")
+    or os.getenv("ENABLE_DEBUG_ROUTES", "").lower() == "true"
+):
     app.include_router(debug.router)
 
 
@@ -91,7 +94,7 @@ async def health() -> JSONResponse:
 
 @app.get("/hello")
 async def root() -> dict[str, str]:
-    return {"message": "Hello World"}
+    return {"message": "hello"}
 
 
 if __name__ == "__main__":

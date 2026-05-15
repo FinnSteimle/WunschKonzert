@@ -43,9 +43,7 @@
 
 	const historyRows = $derived.by((): PlaybackHistoryEntryDto[] => {
 		const raw = roomState?.history ?? [];
-		return [...raw].sort(
-			(a, b) => new Date(b.playedAt).getTime() - new Date(a.playedAt).getTime()
-		);
+		return [...raw].sort((a, b) => new Date(b.playedAt).getTime() - new Date(a.playedAt).getTime());
 	});
 </script>
 
@@ -74,9 +72,7 @@
 	<Dialog.Content class="max-w-2xl">
 		<Dialog.Header>
 			<Dialog.Title>Song History</Dialog.Title>
-			<Dialog.Description>
-				Recent songs played in this room.
-			</Dialog.Description>
+			<Dialog.Description>Recent songs played in this room.</Dialog.Description>
 		</Dialog.Header>
 		<div class="max-h-[60vh] overflow-y-auto">
 			{#if historyRows.length === 0}

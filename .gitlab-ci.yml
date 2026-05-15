@@ -404,10 +404,6 @@ docker:push_backend:
   extends: .docker_template
   rules:
     - if: '$CI_COMMIT_BRANCH == "dev" || $CI_COMMIT_BRANCH == "main"'
-      changes:
-        - backend/**/*
-        # or changes to gitlab ci
-        - .gitlab-ci.yml
   script:
     - |
       if [ "$CI_COMMIT_BRANCH" = "dev" ]; then
@@ -416,7 +412,7 @@ docker:push_backend:
         BRANCH_TAG="main"
       fi
     - IMAGE_NAME="$CI_REGISTRY_IMAGE/backend"
-    - docker build -t "$IMAGE_NAME:$BRANCH_TAG" -t "$IMAGE_NAME:$CI_COMMIT_SHORT_SHA" -f backend/Dockerfile backend
+    - docker build --no-cache --pull -t "$IMAGE_NAME:$BRANCH_TAG" -t "$IMAGE_NAME:$CI_COMMIT_SHORT_SHA" -f backend/Dockerfile backend
     - docker push "$IMAGE_NAME:$BRANCH_TAG"
     - docker push "$IMAGE_NAME:$CI_COMMIT_SHORT_SHA"
 
@@ -425,10 +421,6 @@ docker:push_frontend:
   extends: .docker_template
   rules:
     - if: '$CI_COMMIT_BRANCH == "dev" || $CI_COMMIT_BRANCH == "main"'
-      changes:
-        - frontend/**/*
-        # or changes to gitlab ci
-        - .gitlab-ci.yml
   script:
     - |
       if [ "$CI_COMMIT_BRANCH" = "dev" ]; then
@@ -448,7 +440,7 @@ docker:push_frontend:
         export PUBLIC_WS_URL="ws://localhost:8000"
       fi
     - IMAGE_NAME="$CI_REGISTRY_IMAGE/frontend"
-    - docker build --build-arg "PUBLIC_API_URL=${PUBLIC_API_URL}" --build-arg "PUBLIC_WS_URL=${PUBLIC_WS_URL}" -t "$IMAGE_NAME:$BRANCH_TAG" -t "$IMAGE_NAME:$CI_COMMIT_SHORT_SHA" -f frontend/Dockerfile frontend
+    - docker build --no-cache --pull --build-arg "PUBLIC_API_URL=${PUBLIC_API_URL}" --build-arg "PUBLIC_WS_URL=${PUBLIC_WS_URL}" -t "$IMAGE_NAME:$BRANCH_TAG" -t "$IMAGE_NAME:$CI_COMMIT_SHORT_SHA" -f frontend/Dockerfile frontend
     - docker push "$IMAGE_NAME:$BRANCH_TAG"
     - docker push "$IMAGE_NAME:$CI_COMMIT_SHORT_SHA"
 
@@ -540,19 +532,23 @@ deploy:production:
       set -euo pipefail
       docker network inspect wunschkonzert_edge >/dev/null 2>&1 || docker network create wunschkonzert_edge
       echo "$CI_JOB_TOKEN" | docker login -u gitlab-ci-token --password-stdin "$CI_REGISTRY"
-      export BACKEND_IMAGE="$CI_REGISTRY_IMAGE/backend:main"
-      export FRONTEND_IMAGE="$CI_REGISTRY_IMAGE/frontend:main"
+      export BACKEND_IMAGE="$CI_REGISTRY_IMAGE/backend:$CI_COMMIT_SHORT_SHA"
+      export FRONTEND_IMAGE="$CI_REGISTRY_IMAGE/frontend:$CI_COMMIT_SHORT_SHA"
       cd "$DEPLOY_PATH"
+      
+      # Always force a pull of the unique tag
       docker compose --env-file .env -f compose.prod.yaml pull
       
-      # Run database migrations before starting services
+      # Run database migrations
       echo "Running database migrations..."
-      # Wait for database to be ready
       docker compose --env-file .env -f compose.prod.yaml up -d db
       sleep 5
-      docker compose --env-file .env -f compose.prod.yaml run --rm api uv run alembic upgrade head
+      docker compose --env-file .env -f compose.prod.yaml run --rm -T api uv run --no-dev alembic upgrade head < /dev/null
       
-      docker compose --env-file .env -f compose.prod.yaml up -d --remove-orphans
+      # Final up with force-recreate
+      echo "Restarting services with new images..."
+      docker compose --env-file .env -f compose.prod.yaml up -d --force-recreate --remove-orphans
+      echo "PRODUCTION DEPLOYMENT COMPLETE"
       REMOTE
 
 deploy:staging:
@@ -574,17 +570,21 @@ deploy:staging:
       set -euo pipefail
       docker network inspect wunschkonzert_edge >/dev/null 2>&1 || docker network create wunschkonzert_edge
       echo "$CI_JOB_TOKEN" | docker login -u gitlab-ci-token --password-stdin "$CI_REGISTRY"
-      export BACKEND_IMAGE="$CI_REGISTRY_IMAGE/backend:dev"
-      export FRONTEND_IMAGE="$CI_REGISTRY_IMAGE/frontend:dev"
+      export BACKEND_IMAGE="$CI_REGISTRY_IMAGE/backend:$CI_COMMIT_SHORT_SHA"
+      export FRONTEND_IMAGE="$CI_REGISTRY_IMAGE/frontend:$CI_COMMIT_SHORT_SHA"
       cd "$DEPLOY_PATH_STAGING"
+
+      # Always force a pull of the unique tag
       docker compose --env-file .env.staging -f compose.staging.yaml pull
-      
-      # Run database migrations before starting services
+
+      # Run database migrations
       echo "Running database migrations..."
-      # Wait for database to be ready
       docker compose --env-file .env.staging -f compose.staging.yaml up -d db
       sleep 5
-      docker compose --env-file .env.staging -f compose.staging.yaml run --rm api uv run alembic upgrade head
-      
-      docker compose --env-file .env.staging -f compose.staging.yaml up -d --remove-orphans
+      docker compose --env-file .env.staging -f compose.staging.yaml run --rm -T api uv run --no-dev alembic upgrade head < /dev/null
+
+      # Final up with force-recreate
+      echo "Restarting services with new images..."
+      docker compose --env-file .env.staging -f compose.staging.yaml up -d --force-recreate --remove-orphans
+      echo "STAGING DEPLOYMENT COMPLETE"
       REMOTE

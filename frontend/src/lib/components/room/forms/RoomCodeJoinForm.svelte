@@ -6,11 +6,11 @@
 	import { Button } from '$lib/components/ui/button';
 	import { Label } from '$lib/components/ui/label';
 	import DisplayNameInput from '$lib/components/room/forms/DisplayNameInput.svelte';
-import {
-	generateRandomDisplayName,
-	getOrCreateSessionUser,
-	saveSessionDisplayName
-} from '$lib/session/userSession';
+	import {
+		generateRandomDisplayName,
+		getOrCreateSessionUser,
+		saveSessionDisplayName
+	} from '$lib/session/userSession';
 	import { toast } from 'svelte-sonner';
 
 	let codeChars = $state<string[]>(Array(6).fill(''));
@@ -19,14 +19,14 @@ import {
 	let busy = $state(false);
 
 	onMount(() => {
-	const existingDisplayName = getOrCreateSessionUser().displayName.trim();
-	if (existingDisplayName) {
-		displayName = existingDisplayName;
-		return;
-	}
-	const generatedDisplayName = generateRandomDisplayName();
-	displayName = generatedDisplayName;
-	saveSessionDisplayName(generatedDisplayName);
+		const existingDisplayName = getOrCreateSessionUser().displayName.trim();
+		if (existingDisplayName) {
+			displayName = existingDisplayName;
+			return;
+		}
+		const generatedDisplayName = generateRandomDisplayName();
+		displayName = generatedDisplayName;
+		saveSessionDisplayName(generatedDisplayName);
 	});
 
 	const JOIN_ALPHABET_RE = /^[A-HJ-NP-Z2-9]{6}$/i;
