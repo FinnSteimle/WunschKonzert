@@ -12,7 +12,8 @@
 		activeQueuedTrackIds,
 		countActiveRoomMembers,
 		clientReplayVoteFromPlayingEntry,
-		replayMajorityThreshold
+		replayMajorityThreshold,
+		displayNameForUser
 	} from '$lib/stores/room';
 	import { RoomSocketClient } from '$lib/realtime/roomSocket';
 	import {
@@ -42,6 +43,8 @@
 	import QueueList from '$lib/components/room/queue/QueueList.svelte';
 	import SongSearchPanel from '$lib/components/room/queue/SongSearchPanel.svelte';
 	import UserList from '$lib/components/room/participants/UserList.svelte';
+	import HostTransferPanel from '$lib/components/room/host-transfer/HostTransferPanel.svelte';
+	import SystemMessagesList from '$lib/components/room/host-transfer/SystemMessagesList.svelte';
 	import LeaveRoomButton from '$lib/components/room/actions/LeaveRoomButton.svelte';
 	import DeleteRoomButton from '$lib/components/room/actions/DeleteRoomButton.svelte';
 	import InvitePanelDialog from '$lib/components/room/invite/InvitePanelDialog.svelte';
@@ -54,6 +57,7 @@
 	import DisplayNameInput from '$lib/components/room/forms/DisplayNameInput.svelte';
 	import { toast } from 'svelte-sonner';
 	import { parseRoomSlug } from '$lib/room/slug';
+	import { isSpotifyLinkedForUser } from '$lib/session/spotifyLink';
 	import { get } from 'svelte/store';
 
 	let sessionUser = $state<{ userId: string; displayName: string } | null>(null);
@@ -64,6 +68,10 @@
 	let renameDisplayName = $state('');
 	let renameBusy = $state(false);
 	let renameDialogOpen = $state(false);
+	let hostTransferBusyUserId = $state<string | null>(null);
+	let hostTransferActionBusy = $state(false);
+	let hostTransferLinkBusy = $state(false);
+	let spotifyLinkedForTransfer = $state(false);
 
 	// Spotify SDK playback (host only)
 	let musicPlayer = $state<MusicPlayer | null>(null);
@@ -236,6 +244,103 @@
 		handleRenameSave();
 	}
 
+	async function handleOfferHostTransfer(targetUserId: string) {
+		const uid = sessionUser?.userId;
+		const rs = get(roomStore).roomState;
+		if (!uid || !rs || rs.host.userId !== uid) return;
+		if (rs.transfer) {
+			toast.error('A host transfer is already pending.');
+			return;
+		}
+		if (!socketClient || !socketClient.isConnected()) {
+			toast.error('Not connected to room');
+			return;
+		}
+		hostTransferBusyUserId = targetUserId;
+		try {
+			const sent = socketClient.initiateHostTransfer(uid, targetUserId);
+			if (!sent) throw new Error('Could not send host transfer invite');
+			toast.message('Host invite sent to ' + displayNameForUser(rs, targetUserId) + '.');
+		} catch (err) {
+			hostTransferBusyUserId = null;
+			toast.error(err instanceof Error ? err.message : 'Host transfer failed');
+		}
+	}
+
+	async function refreshSpotifyLinkStatus(): Promise<boolean> {
+		const uid = sessionUser?.userId;
+		if (!uid) {
+			spotifyLinkedForTransfer = false;
+			return false;
+		}
+		const linked = await isSpotifyLinkedForUser(uid);
+		spotifyLinkedForTransfer = linked;
+		return linked;
+	}
+
+	async function handleAcceptHostTransfer() {
+		const uid = sessionUser?.userId;
+		const rs = get(roomStore).roomState;
+		const transfer = rs?.transfer;
+		if (!uid || !transfer || transfer.toUserId !== uid) return;
+		if (!socketClient || !socketClient.isConnected()) {
+			toast.error('Not connected to room');
+			return;
+		}
+		hostTransferActionBusy = true;
+		try {
+			const linked = await refreshSpotifyLinkStatus();
+			if (!linked) {
+				toast.error(
+					'Spotify is not linked for this browser session. Use “Link Spotify account” below, then accept again.'
+				);
+				return;
+			}
+			const sent = socketClient.acceptHostTransfer(uid, transfer.transferId);
+			if (!sent) throw new Error('Could not accept host transfer');
+		} catch (err) {
+			toast.error(err instanceof Error ? err.message : 'Could not accept host transfer');
+		} finally {
+			hostTransferActionBusy = false;
+		}
+	}
+
+	async function handleRejectHostTransfer() {
+		const uid = sessionUser?.userId;
+		const rs = get(roomStore).roomState;
+		const transfer = rs?.transfer;
+		if (!uid || !transfer || transfer.toUserId !== uid) return;
+		if (!socketClient || !socketClient.isConnected()) {
+			toast.error('Not connected to room');
+			return;
+		}
+		hostTransferActionBusy = true;
+		try {
+			const sent = socketClient.rejectHostTransfer(uid, transfer.transferId);
+			if (!sent) throw new Error('Could not decline host transfer');
+		} catch (err) {
+			toast.error(err instanceof Error ? err.message : 'Could not decline host transfer');
+		} finally {
+			hostTransferActionBusy = false;
+		}
+	}
+
+	async function linkSpotifyForHostTransfer() {
+		const uid = sessionUser?.userId;
+		if (!uid) return;
+		hostTransferLinkBusy = true;
+		try {
+			const returnTo = `${window.location.origin}${window.location.pathname}`;
+			const { auth_url } = await apiClient.getSpotifyLoginUrl(uid, returnTo, {
+				forceConsent: true
+			});
+			window.location.href = auth_url;
+		} catch (err) {
+			toast.error(err instanceof Error ? err.message : 'Could not start Spotify login');
+			hostTransferLinkBusy = false;
+		}
+	}
+
 	$effect(() => {
 		if (!browser) return;
 		const rs = $roomStore.roomState;
@@ -250,7 +355,33 @@
 	});
 
 	const REPLAY_SUCCESS_EVENTS = new Set(['replay_scheduled', 'playback_replayed']);
+	const HOST_TRANSFER_EVENTS = new Set([
+		'host_transfer_initiated',
+		'host_transfer_rejected',
+		'host_transfer_completed'
+	]);
 	let lastReplayEventSignature = $state<string | undefined>(undefined);
+	let lastHostTransferEventSignature = $state<string | undefined>(undefined);
+	let lastKnownHostUserId = $state<string | undefined>(undefined);
+	let spotifyOAuthQueryHandled = false;
+
+	const SPOTIFY_OAUTH_QUERY_KEYS = [
+		'spotify_linked',
+		'spotify_error',
+		'spotify_profile_warning'
+	] as const;
+	const SPOTIFY_LINK_TOAST_KEY = 'wk_spotify_link_toast';
+
+	function reloadWithoutSpotifyQueryParams() {
+		const url = new URL(window.location.href);
+		for (const key of SPOTIFY_OAUTH_QUERY_KEYS) {
+			url.searchParams.delete(key);
+		}
+		const search = url.searchParams.toString();
+		const target = search ? `${url.pathname}?${search}` : url.pathname;
+		window.location.replace(target);
+	}
+
 	$effect(() => {
 		if (!browser) return;
 		const ev = $roomStore.roomState?.lastEvent;
@@ -261,6 +392,135 @@
 			toast.success(
 				'The group voted to replay this track. It has been added to the top of the queue.'
 			);
+		}
+	});
+
+	$effect(() => {
+		if (!browser) return;
+		const rs = $roomStore.roomState;
+		const su = sessionUser;
+		const ev = rs?.lastEvent;
+		const sig = ev ? `${ev.type}:${ev.at}` : '';
+		const prev = lastHostTransferEventSignature;
+		const prevHostId = lastKnownHostUserId;
+
+		if (rs?.transfer) {
+			hostTransferBusyUserId = null;
+		}
+
+		if (ev && HOST_TRANSFER_EVENTS.has(ev.type) && prev !== undefined && sig !== prev && su && rs) {
+			if (ev.type === 'host_transfer_completed') {
+				if (rs.host.userId === su.userId && prevHostId !== su.userId) {
+					toast.success('You are now the room host.');
+				} else if (prevHostId === su.userId && rs.host.userId !== su.userId) {
+					toast.message(
+						'Host role transferred to ' + displayNameForUser(rs, rs.host.userId) + '.'
+					);
+				}
+			} else if (ev.type === 'host_transfer_rejected' && rs.host.userId === su.userId) {
+				toast.message('Host transfer was declined.');
+			}
+		}
+
+		lastHostTransferEventSignature = sig;
+	});
+
+	$effect(() => {
+		if (!browser) return;
+		const rs = $roomStore.roomState;
+		const su = sessionUser;
+		if (!rs || !su) return;
+
+		const hostId = rs.host.userId;
+		const wasHost = lastKnownHostUserId === su.userId;
+		const isHostNow = hostId === su.userId;
+
+		if (wasHost && !isHostNow && musicPlayer) {
+			if (positionSyncInterval) {
+				clearInterval(positionSyncInterval);
+				positionSyncInterval = null;
+			}
+			musicPlayer.disconnect();
+			musicPlayer = null;
+			sdkPlayerState = null;
+			lastPlayedQueueEntryId = null;
+			playInitiatedEntryId = null;
+		}
+
+		lastKnownHostUserId = hostId;
+	});
+
+	$effect(() => {
+		if (!browser || spotifyOAuthQueryHandled) return;
+		const params = page.url.searchParams;
+		if (!params) return;
+
+		const spotifyError = params.get('spotify_error');
+		const spotifyLinked = params.get('spotify_linked') === 'true';
+		const hasSpotifyOAuthQuery =
+			spotifyError !== null ||
+			spotifyLinked ||
+			params.get('spotify_profile_warning') !== null;
+		if (!hasSpotifyOAuthQuery) return;
+
+		spotifyOAuthQueryHandled = true;
+
+		if (spotifyError) {
+			spotifyLinkedForTransfer = false;
+			const hint =
+				spotifyError === 'profile_fetch_failed'
+					? ' Add your Spotify email under Users in the Spotify Developer Dashboard (development mode), then link again.'
+					: '';
+			sessionStorage.setItem(
+				SPOTIFY_LINK_TOAST_KEY,
+				JSON.stringify({ type: 'error', message: `Spotify link failed (${spotifyError}).${hint}` })
+			);
+			reloadWithoutSpotifyQueryParams();
+			return;
+		}
+
+		if (!spotifyLinked) {
+			reloadWithoutSpotifyQueryParams();
+			return;
+		}
+
+		void refreshSpotifyLinkStatus().then((linked) => {
+			const profileWarning = params.get('spotify_profile_warning');
+			if (linked) {
+				if (profileWarning === 'profile_fetch_failed') {
+					sessionStorage.setItem(
+						SPOTIFY_LINK_TOAST_KEY,
+						JSON.stringify({
+							type: 'message',
+							message:
+								'Spotify linked for playback. Profile lookup failed — add your Spotify account under Users in the Spotify Developer Dashboard if playback fails.'
+						})
+					);
+				} else {
+					sessionStorage.setItem(
+						SPOTIFY_LINK_TOAST_KEY,
+						JSON.stringify({ type: 'success', message: 'Spotify account linked' })
+					);
+				}
+			} else {
+				sessionStorage.setItem(
+					SPOTIFY_LINK_TOAST_KEY,
+					JSON.stringify({
+						type: 'error',
+						message:
+							'Spotify login finished but this browser is still not linked on the server. Check API URL / redirect URI, then link again.'
+					})
+				);
+			}
+			reloadWithoutSpotifyQueryParams();
+		});
+	});
+
+	$effect(() => {
+		if (!browser || !sessionUser) return;
+		const transfer = $roomStore.roomState?.transfer;
+		if (transfer?.toUserId === sessionUser.userId) {
+			void refreshSpotifyLinkStatus();
 		}
 	});
 
@@ -543,6 +803,20 @@
 		}
 	}
 
+	function showPendingSpotifyLinkToast() {
+		const raw = sessionStorage.getItem(SPOTIFY_LINK_TOAST_KEY);
+		if (!raw) return;
+		sessionStorage.removeItem(SPOTIFY_LINK_TOAST_KEY);
+		try {
+			const payload = JSON.parse(raw) as { type: string; message: string };
+			if (payload.type === 'success') toast.success(payload.message);
+			else if (payload.type === 'message') toast.message(payload.message);
+			else toast.error(payload.message);
+		} catch {
+			// ignore malformed persisted toast
+		}
+	}
+
 	onMount(() => {
 		linkJoinLifecycle.cancelled = false;
 		linkJoinLifecycle.endSession = undefined;
@@ -551,6 +825,7 @@
 
 		sessionUser = getOrCreateSessionUser();
 		renameDisplayName = sessionUser.displayName;
+		showPendingSpotifyLinkToast();
 
 		if (parsed.kind === 'invalid') {
 			roomStore.reset();
@@ -802,12 +1077,33 @@
 
 				<section class="min-w-0 lg:col-span-4" aria-labelledby="wk-people">
 					<h2 id="wk-people" class="mb-3 text-sm font-medium">Who is here</h2>
-					<UserList
-						users={rs.users}
-						hostUserId={rs.host.userId}
-						currentUserId={sessionUser.userId}
-						onEditSelf={openRenameDialog}
-					/>
+					<div class="flex flex-col gap-3">
+						{#if rs.transfer}
+							<HostTransferPanel
+								transfer={rs.transfer}
+								roomState={rs}
+								currentUserId={sessionUser.userId}
+								spotifyLinked={spotifyLinkedForTransfer}
+								busy={hostTransferActionBusy}
+								linkBusy={hostTransferLinkBusy}
+								onAccept={() => void handleAcceptHostTransfer()}
+								onReject={() => void handleRejectHostTransfer()}
+								onLinkSpotify={() => void linkSpotifyForHostTransfer()}
+							/>
+						{/if}
+						{#if rs.systemMessages?.length}
+							<SystemMessagesList messages={rs.systemMessages} />
+						{/if}
+						<UserList
+							users={rs.users}
+							hostUserId={rs.host.userId}
+							currentUserId={sessionUser.userId}
+							canOfferHostTransfer={isHost && !rs.transfer}
+							{hostTransferBusyUserId}
+							onEditSelf={openRenameDialog}
+							onOfferHostTransfer={(userId) => void handleOfferHostTransfer(userId)}
+						/>
+					</div>
 				</section>
 			</main>
 

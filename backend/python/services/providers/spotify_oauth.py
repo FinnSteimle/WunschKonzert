@@ -78,7 +78,9 @@ def spotify_state_secret() -> str:
     return secret
 
 
-async def create_authorize_url(user_id: str, return_to: str) -> str:
+async def create_authorize_url(
+    user_id: str, return_to: str, *, prompt_consent: bool = False
+) -> str:
     client_id, _ = spotify_credentials()
     redirect_uri = spotify_redirect_uri()
     state = await oauth_state.issue_state(
@@ -88,15 +90,16 @@ async def create_authorize_url(user_id: str, return_to: str) -> str:
         return_to=return_to,
         ttl_seconds=STATE_TTL_SECONDS,
     )
-    params = urlencode(
-        {
-            "response_type": "code",
-            "client_id": client_id,
-            "scope": SPOTIFY_SCOPES,
-            "redirect_uri": redirect_uri,
-            "state": state,
-        }
-    )
+    query: dict[str, str] = {
+        "response_type": "code",
+        "client_id": client_id,
+        "scope": SPOTIFY_SCOPES,
+        "redirect_uri": redirect_uri,
+        "state": state,
+    }
+    if prompt_consent:
+        query["prompt"] = "consent"
+    params = urlencode(query)
     return f"https://accounts.spotify.com/authorize?{params}"
 
 

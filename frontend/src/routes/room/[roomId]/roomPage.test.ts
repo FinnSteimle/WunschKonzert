@@ -20,7 +20,7 @@ vi.mock('$app/paths', () => ({
 vi.mock('$app/state', () => ({
 	page: {
 		params: { roomId: 'AB2CD3' },
-		url: { origin: 'http://localhost:5173' }
+		url: { origin: 'http://localhost:5173', searchParams: new URLSearchParams() }
 	}
 }));
 
