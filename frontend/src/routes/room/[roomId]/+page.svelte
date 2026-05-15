@@ -57,10 +57,20 @@
 	import DisplayNameInput from '$lib/components/room/forms/DisplayNameInput.svelte';
 	import { toast } from 'svelte-sonner';
 	import { parseRoomSlug } from '$lib/room/slug';
+	import {
+		buildPathWithoutSpotifyOAuthParams,
+		hasSpotifyOAuthQueryParams,
+		readAndClearSpotifyLinkToast,
+		spotifyErrorHint,
+		toastPayloadAfterSpotifyLink,
+		writeSpotifyLinkToast
+	} from '$lib/room/spotifyOAuthReturn';
 	import { isSpotifyLinkedForUser } from '$lib/session/spotifyLink';
 	import { get } from 'svelte/store';
 
-	let sessionUser = $state<{ userId: string; displayName: string } | null>(null);
+	let sessionUser = $state<{ userId: string; displayName: string } | null>(
+		browser ? getOrCreateSessionUser() : null
+	);
 	let recordedRecentThisMount = false;
 	let socketClient = $state<RoomSocketClient | null>(null);
 	let voteBusyId = $state<string | null>(null);
@@ -365,21 +375,8 @@
 	let lastKnownHostUserId = $state<string | undefined>(undefined);
 	let spotifyOAuthQueryHandled = false;
 
-	const SPOTIFY_OAUTH_QUERY_KEYS = [
-		'spotify_linked',
-		'spotify_error',
-		'spotify_profile_warning'
-	] as const;
-	const SPOTIFY_LINK_TOAST_KEY = 'wk_spotify_link_toast';
-
 	function reloadWithoutSpotifyQueryParams() {
-		const url = new URL(window.location.href);
-		for (const key of SPOTIFY_OAUTH_QUERY_KEYS) {
-			url.searchParams.delete(key);
-		}
-		const search = url.searchParams.toString();
-		const target = search ? `${url.pathname}?${search}` : url.pathname;
-		window.location.replace(target);
+		window.location.replace(buildPathWithoutSpotifyOAuthParams(window.location.href));
 	}
 
 	$effect(() => {
@@ -455,26 +452,19 @@
 		const params = page.url.searchParams;
 		if (!params) return;
 
-		const spotifyError = params.get('spotify_error');
-		const spotifyLinked = params.get('spotify_linked') === 'true';
-		const hasSpotifyOAuthQuery =
-			spotifyError !== null ||
-			spotifyLinked ||
-			params.get('spotify_profile_warning') !== null;
-		if (!hasSpotifyOAuthQuery) return;
+		if (!hasSpotifyOAuthQueryParams(params)) return;
 
 		spotifyOAuthQueryHandled = true;
 
+		const spotifyError = params.get('spotify_error');
+		const spotifyLinked = params.get('spotify_linked') === 'true';
+
 		if (spotifyError) {
 			spotifyLinkedForTransfer = false;
-			const hint =
-				spotifyError === 'profile_fetch_failed'
-					? ' Add your Spotify email under Users in the Spotify Developer Dashboard (development mode), then link again.'
-					: '';
-			sessionStorage.setItem(
-				SPOTIFY_LINK_TOAST_KEY,
-				JSON.stringify({ type: 'error', message: `Spotify link failed (${spotifyError}).${hint}` })
-			);
+			writeSpotifyLinkToast({
+				type: 'error',
+				message: `Spotify link failed (${spotifyError}).${spotifyErrorHint(spotifyError)}`
+			});
 			reloadWithoutSpotifyQueryParams();
 			return;
 		}
@@ -486,32 +476,9 @@
 
 		void refreshSpotifyLinkStatus().then((linked) => {
 			const profileWarning = params.get('spotify_profile_warning');
-			if (linked) {
-				if (profileWarning === 'profile_fetch_failed') {
-					sessionStorage.setItem(
-						SPOTIFY_LINK_TOAST_KEY,
-						JSON.stringify({
-							type: 'message',
-							message:
-								'Spotify linked for playback. Profile lookup failed — add your Spotify account under Users in the Spotify Developer Dashboard if playback fails.'
-						})
-					);
-				} else {
-					sessionStorage.setItem(
-						SPOTIFY_LINK_TOAST_KEY,
-						JSON.stringify({ type: 'success', message: 'Spotify account linked' })
-					);
-				}
-			} else {
-				sessionStorage.setItem(
-					SPOTIFY_LINK_TOAST_KEY,
-					JSON.stringify({
-						type: 'error',
-						message:
-							'Spotify login finished but this browser is still not linked on the server. Check API URL / redirect URI, then link again.'
-					})
-				);
-			}
+			writeSpotifyLinkToast(
+				toastPayloadAfterSpotifyLink(linked, profileWarning)
+			);
 			reloadWithoutSpotifyQueryParams();
 		});
 	});
@@ -804,17 +771,11 @@
 	}
 
 	function showPendingSpotifyLinkToast() {
-		const raw = sessionStorage.getItem(SPOTIFY_LINK_TOAST_KEY);
-		if (!raw) return;
-		sessionStorage.removeItem(SPOTIFY_LINK_TOAST_KEY);
-		try {
-			const payload = JSON.parse(raw) as { type: string; message: string };
-			if (payload.type === 'success') toast.success(payload.message);
-			else if (payload.type === 'message') toast.message(payload.message);
-			else toast.error(payload.message);
-		} catch {
-			// ignore malformed persisted toast
-		}
+		const payload = readAndClearSpotifyLinkToast();
+		if (!payload) return;
+		if (payload.type === 'success') toast.success(payload.message);
+		else if (payload.type === 'message') toast.message(payload.message);
+		else toast.error(payload.message);
 	}
 
 	onMount(() => {
