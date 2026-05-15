@@ -738,7 +738,7 @@ async def _handle_replay_vote(
     )
 
     eligible = max(1, len(active_members))
-    required = math.ceil(eligible * 0.5)
+    required = math.floor(eligible / 2) + 1
 
     if replay_count >= required:
         # Threshold reached, requeue the track to play next
@@ -764,7 +764,7 @@ async def _handle_replay_vote(
         await song_feedback_repo.delete_song_feedback(
             queue_entry_id, feedback_type=FeedbackType.REPLAY, session=session
         )
-        return {"success": True, "message": "Playback replayed"}
+        return await refresh_room_state(room_id, "vote_updated", session=session)
 
     return await _recalculate_and_refresh(
         room_id, queue_entry_id, "vote_updated", session=session

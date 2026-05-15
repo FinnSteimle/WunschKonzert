@@ -196,6 +196,9 @@ async def test_queue_add_remove(db_session, init_room):
     ]
     assert len(active) == 0
 
+    room_state = await room_service.refresh_room_state(room.roomId)
+    assert room_state["queue"] == []
+
 
 #
 # --- room_service.vote_queue_entry() tests ---
@@ -722,6 +725,53 @@ async def test_playback_no_session_resume_creates_session(db_session, init_room)
     session = await playback_session_repo.get_current_playback_session(room.roomId)
     assert session is not None
     assert session.state == domain.PlaybackState.PLAYING
+
+
+@pytest.mark.asyncio
+async def test_vote_replay_refreshes_room_state(db_session, init_room):
+    room = await init_room()
+
+    guest_id = str(uuid.uuid4())
+    await user_repo.create_user(guest_id, "guest")
+    await membership_repo.create_room_membership(guest_id, room.roomId)
+
+    track = {
+        "trackId": str(uuid.uuid4()),
+        "providerTrackId": "spotify:track:replay",
+        "title": "Replay Song",
+        "artist": "Artist",
+        "album": "",
+        "duration": 180,
+        "coverUrl": "",
+        "deepLink": "",
+    }
+    await room_service.add_to_queue(room.roomId, track, room.hostedBy)
+
+    entry = await queue_entry_repo.get_queue_entry_by_track(
+        room.roomId, track["trackId"]
+    )
+    assert entry is not None
+
+    first_state = await room_service.vote_queue_entry(
+        room.roomId, entry.queueEntryId, guest_id, "replay"
+    )
+
+    assert first_state["lastEvent"]["type"] == "vote_updated"  # type: ignore[index]
+    first_queue = cast(list[dict], first_state["queue"])
+    assert len(first_queue) == 1
+    assert all(item["position"] != 0 for item in first_queue)
+
+    second_state = await room_service.vote_queue_entry(
+        room.roomId, entry.queueEntryId, room.hostedBy, "replay"
+    )
+
+    assert second_state["lastEvent"]["type"] == "vote_updated"  # type: ignore[index]
+    queue = cast(list[dict], second_state["queue"])
+    assert len(queue) == 2
+    replay_entry = next(
+        item for item in queue if item["status"] == "queued" and item["position"] == 0
+    )
+    assert replay_entry["track"]["title"] == "Replay Song"
 
 
 @pytest.mark.asyncio
