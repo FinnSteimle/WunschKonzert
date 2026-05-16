@@ -126,8 +126,15 @@ export const apiClient = {
 		});
 	},
 
-	async getSpotifyLoginUrl(userId: string, returnTo: string): Promise<{ auth_url: string }> {
+	async getSpotifyLoginUrl(
+		userId: string,
+		returnTo: string,
+		options?: { forceConsent?: boolean }
+	): Promise<{ auth_url: string }> {
 		const params = new URLSearchParams({ user_id: userId, return_to: returnTo });
+		if (options?.forceConsent) {
+			params.set('force_consent', 'true');
+		}
 		const response = await fetch(`${getApiBaseUrl()}/auth/spotify/login?${params}`);
 		return parseResponse<{ auth_url: string }>(response);
 	},

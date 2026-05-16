@@ -91,6 +91,20 @@ export interface ReplayVoteStateDto {
 	status: ReplayVoteStatus;
 }
 
+/** Pending host hand-off invite (in-memory on server, included in room state). */
+export interface HostTransferDto {
+	transferId: string;
+	fromUserId: string;
+	toUserId: string;
+	createdAt: string;
+}
+
+export interface SystemMessageDto {
+	id: string;
+	text: string;
+	at: string;
+}
+
 /** One finished play from server `history` (playback_history). */
 export interface PlaybackHistoryEntryDto {
 	historyId: number;
@@ -134,6 +148,8 @@ export interface RoomStateDto {
 		positionMs: number;
 	};
 	replayVote?: ReplayVoteStateDto | null;
+	transfer?: HostTransferDto | null;
+	systemMessages?: SystemMessageDto[];
 	lastEvent?: {
 		type: string;
 		at: string;

@@ -74,6 +74,16 @@ export function countActiveRoomMembers(roomState: RoomStateDto | null): number {
 	).length;
 }
 
+export function displayNameForUser(
+	roomState: RoomStateDto | null,
+	userId: string
+): string {
+	if (!roomState) return 'Someone';
+	if (roomState.host.userId === userId) return roomState.host.displayName;
+	const row = roomState.users.find((u) => u.user.userId === userId);
+	return row?.user.displayName ?? 'Someone';
+}
+
 /** Minimum votes for strict majority (>50%) of active listeners; backend should match. */
 export function replayMajorityThreshold(activeUserCount: number): number {
 	if (activeUserCount <= 0) return 1;

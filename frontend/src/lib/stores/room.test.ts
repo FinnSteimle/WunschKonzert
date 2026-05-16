@@ -9,6 +9,7 @@ import {
 	countActiveRoomMembers,
 	replayMajorityThreshold,
 	clientReplayVoteFromPlayingEntry,
+	displayNameForUser,
 	type RoomUiState
 } from './room';
 import type { QueueEntryDto, RoomStateDto } from '$lib/types/api';
@@ -414,6 +415,29 @@ describe('clientReplayVoteFromPlayingEntry', () => {
 			}
 		});
 		expect(clientReplayVoteFromPlayingEntry(entry, state, 0, 60_000)).toBeNull();
+	});
+});
+
+describe('displayNameForUser', () => {
+	it('returns host display name', () => {
+		const state = makeRoomState();
+		expect(displayNameForUser(state, 'host-1')).toBe('Host');
+	});
+
+	it('returns member display name', () => {
+		const state = makeRoomState({
+			users: [
+				{
+					user: { userId: 'u2', displayName: 'Bob', createdAt: '2025-01-01T00:00:00Z' },
+					membership: {
+						joinedAt: '2025-01-01T00:00:00Z',
+						leftAt: null,
+						membershipStatus: 'active'
+					}
+				}
+			]
+		});
+		expect(displayNameForUser(state, 'u2')).toBe('Bob');
 	});
 });
 

@@ -113,4 +113,22 @@ describe('UserList', () => {
 
 		expect(screen.getByRole('list', { name: 'Room members' })).toBeTruthy();
 	});
+
+	it('shows Make host for other members when host can transfer', async () => {
+		const onOfferHostTransfer = vi.fn();
+		const users = makeUsers(
+			{ userId: 'u1', displayName: 'Alice' },
+			{ userId: 'u2', displayName: 'Bob' }
+		);
+		render(UserList, {
+			users,
+			hostUserId: 'u1',
+			currentUserId: 'u1',
+			canOfferHostTransfer: true,
+			onOfferHostTransfer
+		});
+
+		await fireEvent.click(screen.getByRole('button', { name: 'Make host' }));
+		expect(onOfferHostTransfer).toHaveBeenCalledWith('u2');
+	});
 });

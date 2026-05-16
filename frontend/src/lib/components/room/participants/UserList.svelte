@@ -16,12 +16,18 @@
 		users,
 		hostUserId,
 		currentUserId,
-		onEditSelf
+		canOfferHostTransfer = false,
+		hostTransferBusyUserId = null,
+		onEditSelf,
+		onOfferHostTransfer
 	}: {
 		users: RoomStateDto['users'];
 		hostUserId: string;
 		currentUserId: string;
+		canOfferHostTransfer?: boolean;
+		hostTransferBusyUserId?: string | null;
 		onEditSelf?: () => void;
+		onOfferHostTransfer?: (userId: string) => void;
 	} = $props();
 
 	const active = $derived(users.filter((u) => u.membership.leftAt == null));
@@ -64,6 +70,19 @@
 							{/if}
 						</div>
 						<div class="flex shrink-0 flex-wrap items-center justify-end gap-1">
+							{#if canOfferHostTransfer && !isSelf && row.user.userId !== hostUserId}
+								<Button
+									type="button"
+									variant="outline"
+									size="sm"
+									class="h-7 text-xs"
+									disabled={hostTransferBusyUserId !== null}
+									aria-busy={hostTransferBusyUserId === row.user.userId}
+									onclick={() => onOfferHostTransfer?.(row.user.userId)}
+								>
+									{hostTransferBusyUserId === row.user.userId ? 'Inviting…' : 'Make host'}
+								</Button>
+							{/if}
 							{#if isSelf}
 								<Badge variant="default" class="text-[10px] font-semibold">You</Badge>
 							{/if}

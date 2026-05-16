@@ -1,11 +1,17 @@
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import joinedload, selectinload
+from sqlalchemy.orm import joinedload, selectinload, with_loader_criteria
 
 from core.database import get_session_factory
 from core.exceptions import ResourceNotFoundError
 from core.identifiers import generate_join_code, generate_room_id
-from models.domain import QueueEntry, Room, RoomMembership, RoomStatus
+from models.domain import (
+    QueueEntry,
+    QueueEntryStatus,
+    Room,
+    RoomMembership,
+    RoomStatus,
+)
 
 
 # helper methods to make sure room_id and join_code are unique
@@ -169,6 +175,11 @@ async def get_room_with_full_state(
                 joinedload(QueueEntry.track),
                 joinedload(QueueEntry.added_by),
                 selectinload(QueueEntry.song_feedback),
+            ),
+            with_loader_criteria(
+                QueueEntry,
+                QueueEntry.status != QueueEntryStatus.REMOVED,
+                include_aliases=True,
             ),
             selectinload(Room.playback_sessions),
         )

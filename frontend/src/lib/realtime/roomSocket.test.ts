@@ -376,4 +376,54 @@ describe('RoomSocketClient', () => {
 			client.disconnect();
 		});
 	});
+
+	describe('host transfer', () => {
+		it('sends initiate payload', () => {
+			const client = new RoomSocketClient('room-1', { onState: vi.fn() });
+			client.connect();
+			createdSockets[0].simulateOpen();
+
+			client.initiateHostTransfer('host-1', 'user-2');
+
+			expect(JSON.parse(createdSockets[0].sent[0])).toEqual({
+				type: 'host_transfer_initiate',
+				from_user_id: 'host-1',
+				to_user_id: 'user-2'
+			});
+
+			client.disconnect();
+		});
+
+		it('sends accept payload', () => {
+			const client = new RoomSocketClient('room-1', { onState: vi.fn() });
+			client.connect();
+			createdSockets[0].simulateOpen();
+
+			client.acceptHostTransfer('user-2', 'transfer-1');
+
+			expect(JSON.parse(createdSockets[0].sent[0])).toEqual({
+				type: 'host_transfer_accept',
+				user_id: 'user-2',
+				transfer_id: 'transfer-1'
+			});
+
+			client.disconnect();
+		});
+
+		it('sends reject payload', () => {
+			const client = new RoomSocketClient('room-1', { onState: vi.fn() });
+			client.connect();
+			createdSockets[0].simulateOpen();
+
+			client.rejectHostTransfer('user-2', 'transfer-1');
+
+			expect(JSON.parse(createdSockets[0].sent[0])).toEqual({
+				type: 'host_transfer_reject',
+				user_id: 'user-2',
+				transfer_id: 'transfer-1'
+			});
+
+			client.disconnect();
+		});
+	});
 });

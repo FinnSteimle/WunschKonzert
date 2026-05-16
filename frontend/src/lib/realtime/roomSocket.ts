@@ -131,6 +131,30 @@ export class RoomSocketClient {
 		});
 	}
 
+	initiateHostTransfer(fromUserId: string, toUserId: string) {
+		return this.send({
+			type: 'host_transfer_initiate',
+			from_user_id: fromUserId,
+			to_user_id: toUserId
+		});
+	}
+
+	acceptHostTransfer(userId: string, transferId: string) {
+		return this.send({
+			type: 'host_transfer_accept',
+			user_id: userId,
+			transfer_id: transferId
+		});
+	}
+
+	rejectHostTransfer(userId: string, transferId: string) {
+		return this.send({
+			type: 'host_transfer_reject',
+			user_id: userId,
+			transfer_id: transferId
+		});
+	}
+
 	disconnect() {
 		this.disposed = true;
 		if (typeof window !== 'undefined') {

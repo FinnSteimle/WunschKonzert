@@ -3,7 +3,14 @@ import uuid
 import pytest
 
 from core.exceptions import ResourceNotFoundError
-from repositories import music_provider_repo, room_repo, user_repo
+from models.domain import QueueEntryStatus
+from repositories import (
+    music_provider_repo,
+    queue_entry_repo,
+    room_repo,
+    track_repo,
+    user_repo,
+)
 
 pytestmark = pytest.mark.integration
 
@@ -56,3 +63,39 @@ async def test_get_room_by_join_code_not_found(db_session, init_room):
 
     with pytest.raises(ResourceNotFoundError):
         await room_repo.get_room_by_join_code("invalid_code")
+
+
+@pytest.mark.asyncio
+async def test_get_room_with_full_state_filters_removed_queue_entries(
+    db_session, init_room
+):
+    room = await init_room()
+    track_id = str(uuid.uuid4())
+    await track_repo.create_track(
+        {
+            "trackId": track_id,
+            "providerTrackId": "spotify:track:test",
+            "title": "Test Song",
+            "artist": "Test Artist",
+        }
+    )
+
+    entry = await queue_entry_repo.create_queue_entry(
+        {
+            "queueEntryId": str(uuid.uuid4()),
+            "roomId": room.roomId,
+            "trackId": track_id,
+            "addedBy": room.hostedBy,
+            "position": 1,
+            "status": QueueEntryStatus.PLAYING,
+            "voteScore": 0,
+        }
+    )
+
+    await queue_entry_repo.update_queue_entry(
+        entry.queueEntryId, {"status": QueueEntryStatus.REMOVED}, session=db_session
+    )
+    await db_session.commit()
+
+    full_state = await room_repo.get_room_with_full_state(room.roomId)
+    assert full_state.queue_entries == []
