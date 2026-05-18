@@ -118,7 +118,7 @@ test-system:
 	docker compose -f compose.yaml -f compose.system.yaml up -d --build
 	@echo "Waiting for backend health at http://api:8000/health..."
 	@MAX_RETRIES=45; COUNT=0; \
-	until docker compose -f compose.yaml -f compose.system.yaml exec -T api uv run python -c "import urllib.request; urllib.request.urlopen('http://api:8000/health', timeout=5)"; do \
+	until docker compose -f compose.yaml -f compose.system.yaml exec -T api uv run python -c "exec('import sys, urllib.request\\ntry:\\n    urllib.request.urlopen(\\\"http://api:8000/health\\\", timeout=5)\\nexcept Exception:\\n    sys.exit(1)')"; do \
 		printf '.'; \
 		sleep 2; \
 		COUNT=$$((COUNT+1)); \
@@ -133,7 +133,7 @@ test-system:
 	@echo ""
 	@echo "Waiting for frontend readiness at http://frontend:3000..."
 	@MAX_RETRIES=45; COUNT=0; \
-	until docker compose -f compose.yaml -f compose.system.yaml exec -T api uv run python -c "import urllib.request; urllib.request.urlopen('http://frontend:3000', timeout=5)"; do \
+	until docker compose -f compose.yaml -f compose.system.yaml exec -T api uv run python -c "exec('import sys, urllib.request\\ntry:\\n    urllib.request.urlopen(\\\"http://frontend:3000\\\", timeout=5)\\nexcept Exception:\\n    sys.exit(1)')"; do \
 		printf '.'; \
 		sleep 2; \
 		COUNT=$$((COUNT+1)); \

@@ -215,6 +215,15 @@ backend:integration:
   after_script:
     - cd backend
     - docker compose -f compose.test.yaml down -v
+  artifacts:
+    when: always
+    expire_in: 7 days
+    paths:
+      - backend/python/cobertura.xml
+    reports:
+      coverage_report:
+        coverage_format: cobertura
+        path: backend/python/cobertura.xml
 
 system:e2e:
   stage: system_test
