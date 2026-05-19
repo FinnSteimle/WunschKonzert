@@ -172,6 +172,7 @@ class ProviderAccount(Base):
     tokenExpiresAt: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
+    storefront: Mapped[str | None] = mapped_column(String, nullable=True)
 
     # Relationships
     user: Mapped["User"] = relationship("User", back_populates="provider_accounts")

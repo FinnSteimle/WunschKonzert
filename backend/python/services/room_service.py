@@ -29,6 +29,7 @@ from models.domain import (
     Room,
     RoomStatus,
 )
+from services.providers.account_status import is_account_linked
 
 # Shared state moved to service (or could be in core if needed by multiple services)
 room_state_cache: dict[str, dict[str, object]] = {}
@@ -1093,10 +1094,10 @@ async def create_room_service(
     pa = await music_provider_repo.get_provider_account_by_user(
         user_id, supported_provider_id, session=session
     )
-    if not pa or not pa.refreshToken:
+    if not is_account_linked(supported_provider_id, pa):
         raise HTTPException(
             status_code=403,
-            detail="You must link your Spotify account before creating a room",
+            detail=f"You must link your {supported_provider_id} account before creating a room",
         )
 
     try:

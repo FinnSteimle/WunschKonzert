@@ -7,6 +7,8 @@ from datetime import UTC, datetime, timedelta
 import httpx
 from fastapi import HTTPException
 
+import repositories.music_provider_repo as music_provider_repo
+from models.domain import ProviderAccount
 from services.providers import spotify_oauth
 from services.providers.base import ProviderTrack
 
@@ -57,9 +59,23 @@ class SpotifyProviderClient:
         )
         return token
 
-    async def search_tracks(self, query: str) -> list[ProviderTrack]:
+    def is_linked(self, account: ProviderAccount) -> bool:
+        return bool(account.refreshToken)
+
+    async def _resolve_market(self, user_id: str | None) -> str:
+        if user_id is not None:
+            pa = await music_provider_repo.get_provider_account_by_user(
+                user_id, "spotify"
+            )
+            if pa and pa.storefront:
+                return pa.storefront
+        return os.getenv("SPOTIFY_MARKET", "CH")
+
+    async def search_tracks(
+        self, query: str, user_id: str | None = None
+    ) -> list[ProviderTrack]:
         token = await self._get_access_token()
-        spotify_market = os.getenv("SPOTIFY_MARKET", "CH")
+        market = await self._resolve_market(user_id)
         search_url = os.getenv(
             "SPOTIFY_SEARCH_URL", "https://api.spotify.com/v1/search"
         )
@@ -71,7 +87,7 @@ class SpotifyProviderClient:
                     "q": query,
                     "type": "track",
                     "limit": 10,
-                    "market": spotify_market,
+                    "market": market,
                 },
                 headers={"Authorization": f"Bearer {token}"},
             )
@@ -93,6 +109,7 @@ class SpotifyProviderClient:
     ) -> ProviderTrack | None:
         """Search Spotify on behalf of the user and return the best Title+Artist match."""
         token = await spotify_oauth.get_user_access_token(user_id)
+        market = await self._resolve_market(user_id)
         search_url = os.getenv(
             "SPOTIFY_SEARCH_URL", "https://api.spotify.com/v1/search"
         )
@@ -105,7 +122,7 @@ class SpotifyProviderClient:
                     "q": query,
                     "type": "track",
                     "limit": 5,
-                    "market": "from_token",
+                    "market": market,
                 },
                 headers={"Authorization": f"Bearer {token}"},
             )

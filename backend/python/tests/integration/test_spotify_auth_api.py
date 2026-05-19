@@ -39,7 +39,7 @@ class _SequencedAsyncClient:
             raise AssertionError("Unexpected POST call to Spotify token endpoint")
         return _SequencedAsyncClient.post_responses.pop(0)
 
-    async def get(self, url: str, headers: dict[str, str]):
+    async def get(self, url: str, headers: dict[str, str], **kwargs):
         assert url == "https://api.spotify.com/v1/me"
         assert headers["Authorization"].startswith("Bearer ")
         if not _SequencedAsyncClient.get_responses:
@@ -239,7 +239,9 @@ async def test_spotify_callback_success_stores_tokens_and_redirects(
             }
         )
     ]
-    _SequencedAsyncClient.get_responses = [_FakeResponse({"id": "spotify-external-id"})]
+    _SequencedAsyncClient.get_responses = [
+        _FakeResponse({"id": "spotify-external-id", "country": "CH"})
+    ]
     monkeypatch.setattr(
         "services.providers.spotify_oauth.httpx.AsyncClient", _SequencedAsyncClient
     )
@@ -260,6 +262,7 @@ async def test_spotify_callback_success_stores_tokens_and_redirects(
     assert provider_account.externalUserId == "spotify-external-id"
     assert provider_account.accessToken == "access-token"
     assert provider_account.refreshToken == "refresh-token"
+    assert provider_account.storefront == "CH"
 
 
 @pytest.mark.asyncio

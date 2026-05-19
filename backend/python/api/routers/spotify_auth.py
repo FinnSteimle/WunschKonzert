@@ -41,7 +41,7 @@ async def spotify_callback(
         sep = "&" if "?" in return_to else "?"
         return RedirectResponse(f"{return_to}{sep}spotify_error={exc.code}")
     try:
-        external_user_id = await spotify_oauth.fetch_profile_user_id(
+        profile = await spotify_oauth.fetch_spotify_profile(
             access_token=token_data.access_token, token_type=token_data.token_type
         )
     except spotify_oauth.SpotifyOAuthError as exc:
@@ -51,10 +51,11 @@ async def spotify_callback(
     await music_provider_repo.create_or_update_provider_account_tokens(
         user_id=user_id,
         provider_id="spotify",
-        external_user_id=external_user_id,
+        external_user_id=profile.user_id,
         access_token=token_data.access_token,
         refresh_token=token_data.refresh_token,
         token_expires_at=token_data.token_expires_at,
+        storefront=profile.country,
     )
 
     sep = "&" if "?" in return_to else "?"

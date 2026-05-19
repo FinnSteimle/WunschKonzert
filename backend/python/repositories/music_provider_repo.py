@@ -129,11 +129,13 @@ async def create_or_update_provider_account_tokens(
     provider_id: str,
     external_user_id: str,
     access_token: str,
-    refresh_token: str,
-    token_expires_at: datetime,
+    refresh_token: str | None = None,
+    token_expires_at: datetime | None = None,
+    storefront: str | None = None,
     session: AsyncSession | None = None,
 ) -> ProviderAccount:
-    """Create or update a provider account with OAuth tokens."""
+    """Create or update a provider account with tokens. refresh_token and
+    token_expires_at are optional for providers like Apple Music that don't issue them."""
     if session is None:
         session_factory = get_session_factory()
         async with session_factory() as new_session:
@@ -144,6 +146,7 @@ async def create_or_update_provider_account_tokens(
                 access_token,
                 refresh_token,
                 token_expires_at,
+                storefront,
                 session=new_session,
             )
             await new_session.commit()
@@ -163,6 +166,8 @@ async def create_or_update_provider_account_tokens(
         existing.refreshToken = refresh_token
         existing.tokenExpiresAt = token_expires_at
         existing.status = AccountStatus.ACTIVE
+        if storefront is not None:
+            existing.storefront = storefront
         await session.flush()
         await session.refresh(existing)
         return existing
@@ -176,6 +181,7 @@ async def create_or_update_provider_account_tokens(
         accessToken=access_token,
         refreshToken=refresh_token,
         tokenExpiresAt=token_expires_at,
+        storefront=storefront,
     )
     session.add(provider_account)
     await session.flush()

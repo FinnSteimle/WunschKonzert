@@ -202,7 +202,13 @@ async def get_user_access_token(user_id: str) -> str:
     return new_access
 
 
-async def fetch_profile_user_id(access_token: str, token_type: str) -> str:
+@dataclass(frozen=True)
+class SpotifyProfile:
+    user_id: str
+    country: str | None
+
+
+async def fetch_spotify_profile(access_token: str, token_type: str) -> SpotifyProfile:
     async with httpx.AsyncClient(timeout=10) as http:
         profile_resp = await http.get(
             "https://api.spotify.com/v1/me",
@@ -213,6 +219,11 @@ async def fetch_profile_user_id(access_token: str, token_type: str) -> str:
         profile = profile_resp.json()
 
     external_user_id = profile.get("id")
-    if not isinstance(external_user_id, str) or not external_user_id:
-        return "unknown"
-    return external_user_id
+    user_id = (
+        external_user_id
+        if isinstance(external_user_id, str) and external_user_id
+        else "unknown"
+    )
+    country_raw = profile.get("country")
+    country = country_raw if isinstance(country_raw, str) and country_raw else None
+    return SpotifyProfile(user_id=user_id, country=country)

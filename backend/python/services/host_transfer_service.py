@@ -13,6 +13,7 @@ import repositories.track_repo as track_repo
 import services.room_service as room_service
 from core.exceptions import ResourceNotFoundError
 from models.domain import MembershipStatus, QueueEntryStatus, Room
+from services.providers.account_status import is_account_linked
 from services.providers.base import MusicProviderClient, ProviderTrack
 from services.providers.registry import get_provider_client
 
@@ -181,7 +182,7 @@ async def _validate_accept(room_id: str, transfer_id: str, user_id: str) -> Room
     pa = await music_provider_repo.get_provider_account_by_user(
         user_id, room.supportedProviderId
     )
-    if not pa or not pa.refreshToken:
+    if not is_account_linked(room.supportedProviderId, pa):
         raise HTTPException(
             400, "Link your music provider account before accepting host transfer"
         )
