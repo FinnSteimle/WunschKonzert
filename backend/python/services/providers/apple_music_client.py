@@ -11,7 +11,6 @@ from services.providers.apple_music_jwt import get_developer_token
 from services.providers.base import ProviderTrack
 
 APPLE_MUSIC_ARTWORK_SIZE = 640
-_DEFAULT_STOREFRONT = "us"
 
 
 class AppleMusicProviderClient:
@@ -20,18 +19,16 @@ class AppleMusicProviderClient:
     def _api_url(self) -> str:
         return os.getenv("APPLE_MUSIC_API_URL", "https://api.music.apple.com")
 
-    def _default_storefront(self) -> str:
-        return os.getenv("APPLE_MUSIC_DEFAULT_STOREFRONT", _DEFAULT_STOREFRONT)
-
-    async def _resolve_storefront(self, user_id: str | None) -> str:
-        if user_id is None:
-            return self._default_storefront()
+    async def _resolve_storefront(self, user_id: str) -> str:
         pa = await music_provider_repo.get_provider_account_by_user(
             user_id, "apple-music"
         )
         if pa and pa.storefront:
             return pa.storefront
-        return self._default_storefront()
+        raise HTTPException(
+            status_code=400,
+            detail="User's Apple Music account storefront not found. Please re-link your account.",
+        )
 
     async def _catalog_search(self, query: str, storefront: str) -> list[ProviderTrack]:
         # Catalog search uses the developer token only — MUT is not required.
@@ -55,9 +52,7 @@ class AppleMusicProviderClient:
         songs = payload.get("results", {}).get("songs", {}).get("data", [])
         return [self._to_track(item) for item in songs]
 
-    async def search_tracks(
-        self, query: str, user_id: str | None = None
-    ) -> list[ProviderTrack]:
+    async def search_tracks(self, query: str, user_id: str) -> list[ProviderTrack]:
         storefront = await self._resolve_storefront(user_id)
         return await self._catalog_search(query, storefront)
 

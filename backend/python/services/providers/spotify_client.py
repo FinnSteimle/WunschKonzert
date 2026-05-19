@@ -62,18 +62,16 @@ class SpotifyProviderClient:
     def is_linked(self, account: ProviderAccount) -> bool:
         return bool(account.refreshToken)
 
-    async def _resolve_market(self, user_id: str | None) -> str:
-        if user_id is not None:
-            pa = await music_provider_repo.get_provider_account_by_user(
-                user_id, "spotify"
-            )
-            if pa and pa.storefront:
-                return pa.storefront
-        return os.getenv("SPOTIFY_MARKET", "CH")
+    async def _resolve_market(self, user_id: str) -> str:
+        pa = await music_provider_repo.get_provider_account_by_user(user_id, "spotify")
+        if pa and pa.storefront:
+            return pa.storefront
+        raise HTTPException(
+            status_code=400,
+            detail="User's Spotify account storefront not found. Please re-link your account.",
+        )
 
-    async def search_tracks(
-        self, query: str, user_id: str | None = None
-    ) -> list[ProviderTrack]:
+    async def search_tracks(self, query: str, user_id: str) -> list[ProviderTrack]:
         token = await self._get_access_token()
         market = await self._resolve_market(user_id)
         search_url = os.getenv(

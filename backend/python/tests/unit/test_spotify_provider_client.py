@@ -1,4 +1,4 @@
-from unittest.mock import patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
 from fastapi import HTTPException
@@ -65,6 +65,10 @@ async def test_spotify_client_maps_tracks_and_reuses_cached_token(monkeypatch):
     async def mock_get(*args, **kwargs):
         return track_response
 
+    # Mock the provider account lookup to return a storefront
+    mock_get_account = AsyncMock()
+    mock_get_account.return_value.storefront = "US"
+
     with (
         patch(
             "services.providers.spotify_client.httpx.AsyncClient.post",
@@ -74,10 +78,14 @@ async def test_spotify_client_maps_tracks_and_reuses_cached_token(monkeypatch):
             "services.providers.spotify_client.httpx.AsyncClient.get",
             side_effect=mock_get,
         ),
+        patch(
+            "services.providers.spotify_client.music_provider_repo.get_provider_account_by_user",
+            side_effect=mock_get_account,
+        ),
     ):
         client = SpotifyProviderClient()
-        first = await client.search_tracks("fire")
-        second = await client.search_tracks("fire again")
+        first = await client.search_tracks("fire", user_id="user1")
+        second = await client.search_tracks("fire again", user_id="user1")
 
         assert len(first) == 1
         assert first[0].title == "Fire"
@@ -91,11 +99,19 @@ async def test_spotify_client_missing_credentials_raises_503(monkeypatch):
     monkeypatch.delenv("SPOTIFY_CLIENT_ID", raising=False)
     monkeypatch.delenv("SPOTIFY_CLIENT_SECRET", raising=False)
 
-    client = SpotifyProviderClient()
-    with pytest.raises(HTTPException) as exc_info:
-        await client.search_tracks("anything")
-    assert exc_info.value.status_code == 503
-    assert "Spotify credentials are not configured" in exc_info.value.detail
+    # Mock the provider account lookup
+    mock_get_account = AsyncMock()
+    mock_get_account.return_value.storefront = "US"
+
+    with patch(
+        "services.providers.spotify_client.music_provider_repo.get_provider_account_by_user",
+        side_effect=mock_get_account,
+    ):
+        client = SpotifyProviderClient()
+        with pytest.raises(HTTPException) as exc_info:
+            await client.search_tracks("anything", user_id="user1")
+        assert exc_info.value.status_code == 503
+        assert "Spotify credentials are not configured" in exc_info.value.detail
 
 
 @pytest.mark.asyncio
@@ -118,6 +134,10 @@ async def test_spotify_client_uses_configurable_urls(monkeypatch):
         assert url == "http://spotify-mock:9090/v1/search"
         return track_response
 
+    # Mock the provider account lookup
+    mock_get_account = AsyncMock()
+    mock_get_account.return_value.storefront = "US"
+
     with (
         patch(
             "services.providers.spotify_client.httpx.AsyncClient.post",
@@ -127,8 +147,12 @@ async def test_spotify_client_uses_configurable_urls(monkeypatch):
             "services.providers.spotify_client.httpx.AsyncClient.get",
             side_effect=mock_get,
         ),
+        patch(
+            "services.providers.spotify_client.music_provider_repo.get_provider_account_by_user",
+            side_effect=mock_get_account,
+        ),
     ):
         client = SpotifyProviderClient()
-        tracks = await client.search_tracks("fire")
+        tracks = await client.search_tracks("fire", user_id="user1")
 
     assert tracks == []
