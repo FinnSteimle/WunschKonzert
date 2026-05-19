@@ -14,7 +14,7 @@ from services.providers.base import ProviderTrack
 
 
 class SpotifyProviderClient:
-    provider_id = "spotify"
+    provider_id: str = "spotify"
 
     def __init__(self) -> None:
         self._token: str | None = None
@@ -71,7 +71,13 @@ class SpotifyProviderClient:
             detail="User's Spotify account storefront not found. Please re-link your account.",
         )
 
-    async def search_tracks(self, query: str, user_id: str) -> list[ProviderTrack]:
+    async def search_tracks(
+        self, query: str, user_id: str | None = None
+    ) -> list[ProviderTrack]:
+        if user_id is None:
+            raise HTTPException(
+                status_code=400, detail="user_id is required for Spotify search"
+            )
         token = await self._get_access_token()
         market = await self._resolve_market(user_id)
         search_url = os.getenv(
