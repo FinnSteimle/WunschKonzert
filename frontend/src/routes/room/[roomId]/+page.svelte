@@ -28,7 +28,11 @@
 	} from '$lib/session/recentRooms';
 	import type { TrackDto, VoteRequest } from '$lib/types/api';
 	import type { MusicPlayer, MusicPlayerState } from '$lib/playback/types';
-	import { SpotifyPlayer } from '$lib/playback/spotifyPlayer';
+	import { createMusicPlayer } from '$lib/playback/createMusicPlayer';
+	import { linkAppleMusicAccount } from '$lib/providers/appleMusicAuth';
+	import { providerLabel } from '$lib/providers/constants';
+	import { isProviderLinkedForUser } from '$lib/providers/linkStatus';
+	import type { ProviderId } from '$lib/types/api';
 	import { Badge } from '$lib/components/ui/badge';
 	import {
 		Card,
@@ -65,7 +69,6 @@
 		toastPayloadAfterSpotifyLink,
 		writeSpotifyLinkToast
 	} from '$lib/room/spotifyOAuthReturn';
-	import { isSpotifyLinkedForUser } from '$lib/session/spotifyLink';
 	import { get } from 'svelte/store';
 
 	let sessionUser = $state<{ userId: string; displayName: string } | null>(
@@ -81,9 +84,9 @@
 	let hostTransferBusyUserId = $state<string | null>(null);
 	let hostTransferActionBusy = $state(false);
 	let hostTransferLinkBusy = $state(false);
-	let spotifyLinkedForTransfer = $state(false);
+	let providerLinkedForTransfer = $state(false);
 
-	// Spotify SDK playback (host only)
+	// Host music SDK playback
 	let musicPlayer = $state<MusicPlayer | null>(null);
 	let sdkPlayerState = $state<MusicPlayerState | null>(null);
 	let lastPlayedQueueEntryId = $state<string | null>(null);
@@ -277,14 +280,20 @@
 		}
 	}
 
-	async function refreshSpotifyLinkStatus(): Promise<boolean> {
+	function roomProviderId(): ProviderId | undefined {
+		const id = get(roomStore).roomState?.room.supportedProviderId;
+		return id === 'spotify' || id === 'apple-music' ? id : undefined;
+	}
+
+	async function refreshProviderLinkStatus(forProvider?: ProviderId): Promise<boolean> {
 		const uid = sessionUser?.userId;
-		if (!uid) {
-			spotifyLinkedForTransfer = false;
+		const providerId = forProvider ?? roomProviderId();
+		if (!uid || !providerId) {
+			providerLinkedForTransfer = false;
 			return false;
 		}
-		const linked = await isSpotifyLinkedForUser(uid);
-		spotifyLinkedForTransfer = linked;
+		const linked = await isProviderLinkedForUser(providerId, uid);
+		providerLinkedForTransfer = linked;
 		return linked;
 	}
 
@@ -299,10 +308,12 @@
 		}
 		hostTransferActionBusy = true;
 		try {
-			const linked = await refreshSpotifyLinkStatus();
+			const linked = await refreshProviderLinkStatus();
+			const providerId = roomProviderId();
 			if (!linked) {
+				const label = providerLabel(providerId);
 				toast.error(
-					'Spotify is not linked for this browser session. Use “Link Spotify account” below, then accept again.'
+					`${label} is not linked for this browser session. Use “Link ${label} account” below, then accept again.`
 				);
 				return;
 			}
@@ -335,18 +346,31 @@
 		}
 	}
 
-	async function linkSpotifyForHostTransfer() {
+	async function linkProviderForHostTransfer() {
 		const uid = sessionUser?.userId;
-		if (!uid) return;
+		const providerId = roomProviderId();
+		if (!uid || !providerId) return;
 		hostTransferLinkBusy = true;
 		try {
-			const returnTo = `${window.location.origin}${window.location.pathname}`;
-			const { auth_url } = await apiClient.getSpotifyLoginUrl(uid, returnTo, {
-				forceConsent: true
-			});
-			window.location.href = auth_url;
+			if (providerId === 'spotify') {
+				const returnTo = `${window.location.origin}${window.location.pathname}`;
+				const { auth_url } = await apiClient.getSpotifyLoginUrl(uid, returnTo, {
+					forceConsent: true
+				});
+				window.location.href = auth_url;
+				return;
+			}
+			const displayName = sessionUser?.displayName?.trim();
+			if (!displayName) {
+				toast.error('Set your display name before linking Apple Music.');
+				return;
+			}
+			await linkAppleMusicAccount(uid, displayName);
+			await refreshProviderLinkStatus();
+			toast.success('Apple Music account linked');
 		} catch (err) {
-			toast.error(err instanceof Error ? err.message : 'Could not start Spotify login');
+			toast.error(err instanceof Error ? err.message : 'Could not link music account');
+		} finally {
 			hostTransferLinkBusy = false;
 		}
 	}
@@ -460,7 +484,7 @@
 		const spotifyLinked = params.get('spotify_linked') === 'true';
 
 		if (spotifyError) {
-			spotifyLinkedForTransfer = false;
+			providerLinkedForTransfer = false;
 			writeSpotifyLinkToast({
 				type: 'error',
 				message: `Spotify link failed (${spotifyError}).${spotifyErrorHint(spotifyError)}`
@@ -474,7 +498,7 @@
 			return;
 		}
 
-		void refreshSpotifyLinkStatus().then((linked) => {
+		void refreshProviderLinkStatus('spotify').then((linked) => {
 			const profileWarning = params.get('spotify_profile_warning');
 			writeSpotifyLinkToast(
 				toastPayloadAfterSpotifyLink(linked, profileWarning)
@@ -487,7 +511,7 @@
 		if (!browser || !sessionUser) return;
 		const transfer = $roomStore.roomState?.transfer;
 		if (transfer?.toUserId === sessionUser.userId) {
-			void refreshSpotifyLinkStatus();
+			void refreshProviderLinkStatus();
 		}
 	});
 
@@ -608,8 +632,8 @@
 		}
 	}
 
-	function initMusicPlayer(userId: string): void {
-		const player = new SpotifyPlayer(userId);
+	function initMusicPlayer(userId: string, providerId: ProviderId): void {
+		const player = createMusicPlayer(providerId, userId);
 		player.onStateChange((s) => {
 			sdkPlayerState = s;
 
@@ -688,14 +712,15 @@
 				void goto(resolve('/'));
 			}
 
-			// Initialize the Spotify player once we know this user is the host.
+			// Initialize the host player once we know this user is the host.
+			const providerId = ui.roomState?.room.supportedProviderId;
 			if (
 				!musicPlayer &&
 				sessionUser &&
 				ui.roomState?.host.userId === sessionUser.userId &&
-				ui.roomState.room.supportedProviderId === 'spotify'
+				(providerId === 'spotify' || providerId === 'apple-music')
 			) {
-				initMusicPlayer(sessionUser.userId);
+				initMusicPlayer(sessionUser.userId, providerId);
 			}
 		});
 
@@ -1024,7 +1049,9 @@
 					<Card>
 						<CardHeader class="pb-2">
 							<CardTitle class="text-base">Search</CardTitle>
-							<CardDescription>Results come from the room provider (Spotify).</CardDescription>
+							<CardDescription>
+								Results come from the room provider ({providerLabel(rs.room.supportedProviderId)}).
+							</CardDescription>
 						</CardHeader>
 						<CardContent>
 							<SongSearchPanel
@@ -1044,12 +1071,12 @@
 								transfer={rs.transfer}
 								roomState={rs}
 								currentUserId={sessionUser.userId}
-								spotifyLinked={spotifyLinkedForTransfer}
+								providerLinked={providerLinkedForTransfer}
 								busy={hostTransferActionBusy}
 								linkBusy={hostTransferLinkBusy}
 								onAccept={() => void handleAcceptHostTransfer()}
 								onReject={() => void handleRejectHostTransfer()}
-								onLinkSpotify={() => void linkSpotifyForHostTransfer()}
+								onLinkProvider={() => void linkProviderForHostTransfer()}
 							/>
 						{/if}
 						{#if rs.systemMessages?.length}

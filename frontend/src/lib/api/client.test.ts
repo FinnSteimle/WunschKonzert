@@ -296,4 +296,35 @@ describe('apiClient', () => {
 		expect(result).toEqual({ access_token: 'tok' });
 		expect(fetchMock).toHaveBeenCalledWith('http://localhost:8000/auth/spotify/token?user_id=U_1');
 	});
+
+	it('fetches Apple Music developer token', async () => {
+		const fetchMock = vi
+			.fn()
+			.mockResolvedValue(mockJsonResponse(true, { developer_token: 'dev-jwt' }));
+		vi.stubGlobal('fetch', fetchMock);
+
+		const result = await apiClient.getAppleMusicDeveloperToken('U_1');
+
+		expect(result).toEqual({ developer_token: 'dev-jwt' });
+		expect(fetchMock).toHaveBeenCalledWith(
+			'http://localhost:8000/auth/apple-music/developer-token?user_id=U_1'
+		);
+	});
+
+	it('maps structured Apple Music API errors', async () => {
+		const fetchMock = vi.fn().mockResolvedValue({
+			ok: false,
+			status: 403,
+			json: async () => ({ detail: { code: 'subscription_error' } })
+		});
+		vi.stubGlobal('fetch', fetchMock);
+
+		await expect(
+			apiClient.linkAppleMusic({
+				user_id: 'U_1',
+				music_user_token: 'mut',
+				display_name: 'Alice'
+			})
+		).rejects.toThrow('An active Apple Music subscription is required.');
+	});
 });

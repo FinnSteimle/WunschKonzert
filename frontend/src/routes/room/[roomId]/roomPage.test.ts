@@ -7,7 +7,7 @@ import { roomStore } from '$lib/stores/room';
 import { apiClient } from '$lib/api/client';
 import { getOrCreateSessionUser, saveSessionDisplayName } from '$lib/session/userSession';
 import { isJoinFailureForRemovedRoom, removeRecentRoom } from '$lib/session/recentRooms';
-import { isSpotifyLinkedForUser } from '$lib/session/spotifyLink';
+import { isProviderLinkedForUser } from '$lib/providers/linkStatus';
 import { writeSpotifyLinkToast } from '$lib/room/spotifyOAuthReturn';
 import { page } from '$app/state';
 import { toast } from 'svelte-sonner';
@@ -45,8 +45,9 @@ vi.mock('$lib/api/client', () => ({
 	}
 }));
 
-vi.mock('$lib/session/spotifyLink', () => ({
-	isSpotifyLinkedForUser: vi.fn()
+vi.mock('$lib/providers/linkStatus', () => ({
+	isProviderLinkedForUser: vi.fn(),
+	getAppleMusicLinkStatus: vi.fn()
 }));
 
 vi.mock('$lib/session/userSession', () => ({
@@ -162,7 +163,7 @@ describe('room/[roomId]/+page.svelte', () => {
 			displayName: 'Alice'
 		});
 		vi.mocked(isJoinFailureForRemovedRoom).mockReturnValue(false);
-		vi.mocked(isSpotifyLinkedForUser).mockResolvedValue(false);
+		vi.mocked(isProviderLinkedForUser).mockResolvedValue(false);
 	});
 
 	describe('invalid slug', () => {
@@ -577,7 +578,7 @@ describe('room/[roomId]/+page.svelte', () => {
 		});
 
 		it('invitee cannot accept without a linked Spotify account', async () => {
-			vi.mocked(isSpotifyLinkedForUser).mockResolvedValue(false);
+			vi.mocked(isProviderLinkedForUser).mockResolvedValue(false);
 			await renderJoinedRoom();
 			roomStore.setRoomState(
 				spotifyRoomState({
@@ -596,7 +597,7 @@ describe('room/[roomId]/+page.svelte', () => {
 		});
 
 		it('invitee accepts when Spotify is linked', async () => {
-			vi.mocked(isSpotifyLinkedForUser).mockResolvedValue(true);
+			vi.mocked(isProviderLinkedForUser).mockResolvedValue(true);
 			await renderJoinedRoom();
 			roomStore.setRoomState(
 				spotifyRoomState({
@@ -683,7 +684,7 @@ describe('room/[roomId]/+page.svelte', () => {
 		});
 
 		it('reloads after successful spotify link and stores success toast', async () => {
-			vi.mocked(isSpotifyLinkedForUser).mockResolvedValue(true);
+			vi.mocked(isProviderLinkedForUser).mockResolvedValue(true);
 			(page as { url: { searchParams: URLSearchParams } }).url.searchParams = new URLSearchParams(
 				'spotify_linked=true'
 			);

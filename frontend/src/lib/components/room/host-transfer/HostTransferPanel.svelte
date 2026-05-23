@@ -7,6 +7,7 @@
 		CardHeader,
 		CardTitle
 	} from '$lib/components/ui/card';
+	import { providerLabel } from '$lib/providers/constants';
 	import type { HostTransferDto, RoomStateDto } from '$lib/types/api';
 	import { displayNameForUser } from '$lib/stores/room';
 
@@ -14,30 +15,37 @@
 		transfer,
 		roomState,
 		currentUserId,
-		spotifyLinked = false,
+		providerLinked = false,
 		busy = false,
 		linkBusy = false,
 		onAccept,
 		onReject,
-		onLinkSpotify
+		onLinkProvider
 	}: {
 		transfer: HostTransferDto;
 		roomState: RoomStateDto;
 		currentUserId: string;
-		spotifyLinked?: boolean;
+		providerLinked?: boolean;
 		busy?: boolean;
 		linkBusy?: boolean;
 		onAccept?: () => void;
 		onReject?: () => void;
-		onLinkSpotify?: () => void;
+		onLinkProvider?: () => void;
 	} = $props();
 
+	const roomProviderId = $derived(roomState.room.supportedProviderId);
+	const roomProviderLabel = $derived(providerLabel(roomProviderId));
 	const isInvitee = $derived(transfer.toUserId === currentUserId);
 	const isInviter = $derived(transfer.fromUserId === currentUserId);
 	const inviteeName = $derived(displayNameForUser(roomState, transfer.toUserId));
 	const inviterName = $derived(displayNameForUser(roomState, transfer.fromUserId));
-	const needsSpotify = $derived(
-		isInvitee && roomState.room.supportedProviderId === 'spotify' && !spotifyLinked
+	const needsProviderLink = $derived(
+		isInvitee &&
+			(roomProviderId === 'spotify' || roomProviderId === 'apple-music') &&
+			!providerLinked
+	);
+	const linkButtonLabel = $derived(
+		roomProviderId === 'apple-music' ? 'Link Apple Music account' : 'Link Spotify account'
 	);
 </script>
 
@@ -54,7 +62,7 @@
 			<CardDescription>
 				{#if isInvitee}
 					{inviterName} invited you to become the room host. The queue will be mapped to your
-					{roomState.room.supportedProviderId === 'spotify' ? 'Spotify' : 'music'} library.
+					{roomProviderLabel} library.
 				{:else}
 					Waiting for {inviteeName} to accept or decline.
 				{/if}
@@ -62,25 +70,25 @@
 		</CardHeader>
 		{#if isInvitee}
 			<CardContent class="flex flex-col gap-3 pt-0">
-				{#if needsSpotify}
+				{#if needsProviderLink}
 					<p class="text-muted-foreground text-sm">
-						Link Spotify before accepting — playback runs on the new host's account.
+						Link {roomProviderLabel} before accepting — playback runs on the new host's account.
 					</p>
 					<Button
 						type="button"
 						variant="outline"
 						class="w-full min-[400px]:w-auto"
 						disabled={linkBusy || busy}
-						onclick={() => onLinkSpotify?.()}
+						onclick={() => onLinkProvider?.()}
 					>
-						{linkBusy ? 'Redirecting…' : 'Link Spotify account'}
+						{linkBusy ? 'Connecting…' : linkButtonLabel}
 					</Button>
 				{/if}
 				<div class="flex flex-col gap-2 min-[400px]:flex-row">
 					<Button
 						type="button"
 						class="w-full min-[400px]:flex-1"
-						disabled={busy || needsSpotify}
+						disabled={busy || needsProviderLink}
 						onclick={() => onAccept?.()}
 					>
 						{busy ? 'Accepting…' : 'Accept host role'}

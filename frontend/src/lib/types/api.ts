@@ -1,4 +1,17 @@
-export type ProviderId = 'spotify';
+export type ProviderId = 'spotify' | 'apple-music';
+
+export interface AppleMusicProfileDto {
+	linked: boolean;
+	storefront: string | null;
+	display_name: string | null;
+	needs_relink: boolean;
+}
+
+export interface AppleMusicLinkRequest {
+	user_id: string;
+	music_user_token: string;
+	display_name: string;
+}
 
 export interface AuthResponse {
 	success: boolean;

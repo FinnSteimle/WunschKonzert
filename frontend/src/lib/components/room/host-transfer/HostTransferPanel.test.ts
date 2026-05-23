@@ -52,7 +52,7 @@ describe('HostTransferPanel', () => {
 			transfer,
 			roomState: makeRoomState(),
 			currentUserId: 'guest-1',
-			spotifyLinked: true,
+			providerLinked: true,
 			onAccept,
 			onReject
 		});
@@ -81,7 +81,7 @@ describe('HostTransferPanel', () => {
 			transfer,
 			roomState: makeRoomState(),
 			currentUserId: 'guest-1',
-			spotifyLinked: false
+			providerLinked: false
 		});
 
 		expect((screen.getByRole('button', { name: 'Accept host role' }) as HTMLButtonElement).disabled).toBe(

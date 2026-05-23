@@ -9,6 +9,9 @@
 	import { apiClient } from '$lib/api/client';
 	import { getOrCreateSessionUser, saveSessionDisplayName } from '$lib/session/userSession';
 	import { recordRecentRoom } from '$lib/session/recentRooms';
+	import { linkAppleMusicAccount } from '$lib/providers/appleMusicAuth';
+	import { PROVIDER_LABELS, SUPPORTED_PROVIDERS } from '$lib/providers/constants';
+	import { getAppleMusicLinkStatus, isProviderLinkedForUser } from '$lib/providers/linkStatus';
 	import type { ProviderId } from '$lib/types/api';
 	import { toast } from 'svelte-sonner';
 
@@ -17,6 +20,7 @@
 		spotifyLinked = false
 	}: {
 		onsuccess?: (payload: { roomId: string; joinCode: string }) => void;
+		/** Set after Spotify OAuth redirect (`?spotify_linked=true`). */
 		spotifyLinked?: boolean;
 	} = $props();
 
@@ -25,21 +29,33 @@
 	let provider = $state<ProviderId>('spotify');
 	let busy = $state(false);
 	let linkBusy = $state(false);
+	let linkStatus = $state<Record<ProviderId, boolean>>({
+		spotify: false,
+		'apple-music': false
+	});
+	let appleNeedsRelink = $state(false);
 
-	const providerLinked = $derived(provider === 'spotify' && spotifyLinked);
+	const providerLinked = $derived(linkStatus[provider] === true);
 	const canCreate = $derived(providerLinked);
 	const MAX_ROOM_NAME_LENGTH = 40;
-	const SUPPORTED_PROVIDERS: ProviderId[] = ['spotify'];
 
 	onMount(() => {
 		displayName = getOrCreateSessionUser().displayName;
-		// Restore room name if returning from Spotify OAuth
 		const savedName = sessionStorage.getItem('wk_pending_room_name');
 		if (savedName) {
 			name = savedName;
 			sessionStorage.removeItem('wk_pending_room_name');
 		}
+		void refreshLinkStatus();
 	});
+
+	async function refreshLinkStatus(): Promise<void> {
+		const { userId } = getOrCreateSessionUser();
+		linkStatus.spotify = spotifyLinked || (await isProviderLinkedForUser('spotify', userId));
+		const appleStatus = await getAppleMusicLinkStatus(userId);
+		appleNeedsRelink = appleStatus.needsRelink;
+		linkStatus['apple-music'] = appleStatus.linked;
+	}
 
 	async function linkSpotify() {
 		const trimmedDisplay = displayName.trim();
@@ -50,7 +66,6 @@
 		linkBusy = true;
 		try {
 			saveSessionDisplayName(trimmedDisplay);
-			// Save room name so it persists across OAuth redirect
 			if (name.trim()) {
 				sessionStorage.setItem('wk_pending_room_name', name.trim());
 			}
@@ -60,6 +75,29 @@
 			window.location.href = auth_url;
 		} catch (err) {
 			toast.error(err instanceof Error ? err.message : 'Could not start Spotify login');
+			linkBusy = false;
+		}
+	}
+
+	async function linkAppleMusic() {
+		const trimmedDisplay = displayName.trim();
+		if (!trimmedDisplay) {
+			toast.error('Please enter your display name first.');
+			return;
+		}
+		linkBusy = true;
+		try {
+			saveSessionDisplayName(trimmedDisplay);
+			if (name.trim()) {
+				sessionStorage.setItem('wk_pending_room_name', name.trim());
+			}
+			const { userId } = getOrCreateSessionUser();
+			await linkAppleMusicAccount(userId, trimmedDisplay);
+			await refreshLinkStatus();
+			toast.success('Apple Music account linked');
+		} catch (err) {
+			toast.error(err instanceof Error ? err.message : 'Could not link Apple Music');
+		} finally {
 			linkBusy = false;
 		}
 	}
@@ -84,7 +122,7 @@
 			return;
 		}
 		if (!canCreate) {
-			toast.error('Please link your Spotify account first.');
+			toast.error(`Please link your ${PROVIDER_LABELS[provider]} account first.`);
 			return;
 		}
 		if (!SUPPORTED_PROVIDERS.includes(provider)) {
@@ -136,13 +174,15 @@
 	<div class="flex w-full min-w-0 flex-col gap-2">
 		<Label for="wk-provider">Music provider</Label>
 		<NativeSelect id="wk-provider" bind:value={provider} class="w-full" disabled={busy}>
-			<NativeSelectOption value="spotify">Spotify</NativeSelectOption>
+			{#each SUPPORTED_PROVIDERS as providerId (providerId)}
+				<NativeSelectOption value={providerId}>{PROVIDER_LABELS[providerId]}</NativeSelectOption>
+			{/each}
 		</NativeSelect>
 	</div>
 
 	{#if provider === 'spotify'}
 		<div class="flex flex-col gap-2">
-			{#if spotifyLinked}
+			{#if linkStatus.spotify}
 				<div class="text-sm flex items-center gap-1.5 text-green-600 dark:text-green-400">
 					<CheckIcon class="size-4" aria-hidden="true" />
 					Spotify account linked
@@ -159,6 +199,32 @@
 				</Button>
 				<p class="text-muted-foreground text-xs">
 					A Spotify Premium account is required to play music in the room.
+				</p>
+			{/if}
+		</div>
+	{:else if provider === 'apple-music'}
+		<div class="flex flex-col gap-2">
+			{#if linkStatus['apple-music']}
+				<div class="text-sm flex items-center gap-1.5 text-green-600 dark:text-green-400">
+					<CheckIcon class="size-4" aria-hidden="true" />
+					Apple Music account linked
+				</div>
+			{:else}
+				<Button
+					type="button"
+					variant="outline"
+					class="w-full min-[400px]:w-auto"
+					disabled={linkBusy}
+					onclick={linkAppleMusic}
+				>
+					{linkBusy
+						? 'Connecting…'
+						: appleNeedsRelink
+							? 'Re-link Apple Music account'
+							: 'Link Apple Music account'}
+				</Button>
+				<p class="text-muted-foreground text-xs">
+					An active Apple Music subscription is required to play music in the room.
 				</p>
 			{/if}
 		</div>

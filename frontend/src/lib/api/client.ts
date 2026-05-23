@@ -1,4 +1,6 @@
 import {
+	type AppleMusicLinkRequest,
+	type AppleMusicProfileDto,
 	type CreateRoomRequest,
 	type DeleteRoomRequest,
 	type LeaveRoomRequest,
@@ -58,12 +60,42 @@ function shouldUseDirectLocalApiFromBrowser(): boolean {
 	return port === '3000' || port === '5173' || port === '4173';
 }
 
+const APPLE_MUSIC_ERROR_MESSAGES: Record<string, string> = {
+	subscription_error: 'An active Apple Music subscription is required.',
+	invalid_music_user_token: 'Apple Music authorization failed. Please try linking again.',
+	invalid_request: 'Apple Music link request was invalid.',
+	apple_music_not_configured: 'Apple Music is not configured on this server.',
+	not_linked: 'Apple Music account is not linked.',
+	needs_relink: 'Your Apple Music link expired. Please link again.'
+};
+
+function formatApiErrorMessage(status: number, payload: unknown): string {
+	if (payload && typeof payload === 'object') {
+		const record = payload as Record<string, unknown>;
+		const detail = record.detail;
+		if (detail && typeof detail === 'object' && detail !== null && 'code' in detail) {
+			const code = String((detail as { code: unknown }).code);
+			if (code in APPLE_MUSIC_ERROR_MESSAGES) {
+				return APPLE_MUSIC_ERROR_MESSAGES[code];
+			}
+			return code;
+		}
+		if (typeof detail === 'string' && detail.trim()) {
+			return detail;
+		}
+		if (typeof record.message === 'string' && record.message.trim()) {
+			return record.message;
+		}
+	}
+	return `Request failed: ${status}`;
+}
+
 async function parseResponse<T>(response: Response): Promise<T> {
 	if (!response.ok) {
 		let message = `Request failed: ${response.status}`;
 		try {
 			const payload = await response.json();
-			message = payload?.detail ?? payload?.message ?? message;
+			message = formatApiErrorMessage(response.status, payload);
 		} catch {
 			// Ignore parse failures and keep the fallback message.
 		}
@@ -143,5 +175,34 @@ export const apiClient = {
 		const params = new URLSearchParams({ user_id: userId });
 		const response = await fetch(`${getApiBaseUrl()}/auth/spotify/token?${params}`);
 		return parseResponse<{ access_token: string }>(response);
+	},
+
+	async getAppleMusicDeveloperToken(userId: string): Promise<{ developer_token: string }> {
+		const params = new URLSearchParams({ user_id: userId });
+		const response = await fetch(
+			`${getApiBaseUrl()}/auth/apple-music/developer-token?${params}`
+		);
+		return parseResponse<{ developer_token: string }>(response);
+	},
+
+	async linkAppleMusic(
+		body: AppleMusicLinkRequest
+	): Promise<{ storefront: string; display_name: string | null }> {
+		return postJson<{ storefront: string; display_name: string | null }>(
+			'/auth/apple-music/link',
+			body
+		);
+	},
+
+	async getAppleMusicToken(userId: string): Promise<{ music_user_token: string }> {
+		const params = new URLSearchParams({ user_id: userId });
+		const response = await fetch(`${getApiBaseUrl()}/auth/apple-music/token?${params}`);
+		return parseResponse<{ music_user_token: string }>(response);
+	},
+
+	async getAppleMusicProfile(userId: string): Promise<AppleMusicProfileDto> {
+		const params = new URLSearchParams({ user_id: userId });
+		const response = await fetch(`${getApiBaseUrl()}/auth/apple-music/profile?${params}`);
+		return parseResponse<AppleMusicProfileDto>(response);
 	}
 };
