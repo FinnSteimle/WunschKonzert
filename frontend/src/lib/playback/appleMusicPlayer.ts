@@ -3,7 +3,6 @@ import type { MusicPlayer, MusicPlayerState } from './types';
 
 /** MusicKit playbackState values we care about. */
 const PLAYBACK_PLAYING = 2;
-const PLAYBACK_PAUSED = 3;
 const PLAYBACK_ENDED = 5;
 const PLAYBACK_COMPLETED = 6;
 

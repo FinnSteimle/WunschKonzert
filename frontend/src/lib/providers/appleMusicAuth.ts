@@ -72,11 +72,9 @@ export async function configureMusicKit(
 
 	const configured = window.MusicKit.configure(config);
 	const instance =
-		configured &&
-		typeof (configured as MusicKit.MusicKitInstance | Promise<MusicKit.MusicKitInstance>)
-			.then === 'function'
-			? await (configured as Promise<MusicKit.MusicKitInstance>)
-			: window.MusicKit.getInstance();
+		configured instanceof Promise
+			? await configured
+			: (configured ?? window.MusicKit.getInstance());
 
 	if (!instance) {
 		throw new Error('MusicKit instance not available after configure');
