@@ -12,6 +12,8 @@ export interface MusicPlayer {
 	connect(): Promise<void>;
 	disconnect(): void;
 	play(providerTrackId: string, positionMs?: number): Promise<void>;
+	/** Load a track without starting playback (Apple Music host initial sync). */
+	prepare?(providerTrackId: string, positionMs?: number): Promise<void>;
 	pause(): Promise<void>;
 	resume(): Promise<void>;
 	seekTo(positionMs: number): Promise<void>;

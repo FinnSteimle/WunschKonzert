@@ -16,23 +16,28 @@ function loadMusicKitScript(): Promise<void> {
 	scriptLoading = new Promise<void>((resolve, reject) => {
 		const onLoaded = () => {
 			document.removeEventListener('musickitloaded', onLoaded);
+			if (!window.MusicKit) {
+				scriptLoading = null;
+				reject(new Error('MusicKit failed to initialize'));
+				return;
+			}
 			resolve();
 		};
 		document.addEventListener('musickitloaded', onLoaded);
 
-		const script = document.createElement('script');
-		script.src = MUSICKIT_SCRIPT_URL;
-		script.async = true;
-		script.onerror = () => {
-			document.removeEventListener('musickitloaded', onLoaded);
-			scriptLoading = null;
-			reject(new Error('Failed to load Apple MusicKit'));
-		};
-		document.head.appendChild(script);
-
-		if (window.MusicKit) {
-			document.removeEventListener('musickitloaded', onLoaded);
-			resolve();
+		const existing = document.querySelector<HTMLScriptElement>(
+			`script[src="${MUSICKIT_SCRIPT_URL}"]`
+		);
+		if (!existing) {
+			const script = document.createElement('script');
+			script.src = MUSICKIT_SCRIPT_URL;
+			script.async = true;
+			script.onerror = () => {
+				document.removeEventListener('musickitloaded', onLoaded);
+				scriptLoading = null;
+				reject(new Error('Failed to load Apple MusicKit'));
+			};
+			document.head.appendChild(script);
 		}
 	});
 
@@ -55,6 +60,7 @@ export async function configureMusicKit(
 
 	const config: MusicKit.MusicKitConfig = {
 		developerToken: options.developerToken,
+		suppressErrorDialog: true,
 		app: {
 			name: 'WunschKonzert',
 			build: '1.0'
@@ -64,8 +70,18 @@ export async function configureMusicKit(
 		config.musicUserToken = options.musicUserToken;
 	}
 
-	window.MusicKit.configure(config);
-	return window.MusicKit.getInstance();
+	const configured = window.MusicKit.configure(config);
+	const instance =
+		configured &&
+		typeof (configured as MusicKit.MusicKitInstance | Promise<MusicKit.MusicKitInstance>)
+			.then === 'function'
+			? await (configured as Promise<MusicKit.MusicKitInstance>)
+			: window.MusicKit.getInstance();
+
+	if (!instance) {
+		throw new Error('MusicKit instance not available after configure');
+	}
+	return instance;
 }
 
 /** Run MusicKit authorize flow and persist the Music User Token on the backend. */

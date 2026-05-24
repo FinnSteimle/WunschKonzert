@@ -32,6 +32,15 @@ export class AppleMusicPlayer implements MusicPlayer {
 	async connect(): Promise<void> {
 		if (this.disposed) return;
 		this.music = await configureMusicKitForUser(this.userId);
+		if (!this.music) {
+			throw new Error('MusicKit failed to initialize');
+		}
+		const linked =
+			Boolean(this.music.musicUserToken) ||
+			('isAuthorized' in this.music && this.music.isAuthorized);
+		if (!linked) {
+			throw new Error('Apple Music account not linked');
+		}
 		this.attachListeners();
 		this.emitState({ isReady: true });
 	}
@@ -46,38 +55,53 @@ export class AppleMusicPlayer implements MusicPlayer {
 				this.music.removeEventListener('nowPlayingItemDidChange', this.onNowPlayingChange);
 			}
 		}
-		this.music?.player.pause().catch(() => {});
+		this.music?.pause().catch(() => {});
 		this.music = null;
+	}
+
+	async prepare(providerTrackId: string, positionMs?: number): Promise<void> {
+		if (!this.music) throw new Error('Apple Music player not ready');
+		const songId = toSongId(providerTrackId);
+		await this.music.setQueue({ song: songId, startPlaying: false });
+		const seekSeconds = positionMs !== undefined ? Math.max(0, positionMs) / 1000 : 0;
+		if (seekSeconds > 0) {
+			await this.music.seekToTime(seekSeconds);
+		}
+		await this.music.pause();
+		this.lastTrackId = songId;
+		this.hasPlayedPastStart = false;
+		this.emitFromPlayer();
 	}
 
 	async play(providerTrackId: string, positionMs?: number): Promise<void> {
 		if (!this.music) throw new Error('Apple Music player not ready');
 		const songId = toSongId(providerTrackId);
-		await this.music.setQueue({ songs: [songId], startPlaying: false });
-		const seekSeconds = positionMs !== undefined ? Math.max(0, positionMs) / 1000 : 0;
-		if (seekSeconds > 0) {
-			await this.music.player.seekToTime(seekSeconds);
+		const sameTrack = this.lastTrackId === songId;
+		if (!sameTrack) {
+			await this.prepare(providerTrackId, positionMs);
+		} else if (positionMs !== undefined) {
+			await this.music.seekToTime(Math.max(0, positionMs) / 1000);
 		}
-		await this.music.player.play();
+		await this.music.play();
 		this.lastTrackId = songId;
-		this.hasPlayedPastStart = seekSeconds > 1;
+		this.hasPlayedPastStart = (positionMs ?? 0) > 1000;
 		this.emitFromPlayer();
 	}
 
 	async pause(): Promise<void> {
-		await this.music?.player.pause();
+		await this.music?.pause();
 	}
 
 	async resume(): Promise<void> {
-		await this.music?.player.play();
+		await this.music?.play();
 	}
 
 	async seekTo(positionMs: number): Promise<void> {
-		await this.music?.player.seekToTime(Math.max(0, positionMs) / 1000);
+		await this.music?.seekToTime(Math.max(0, positionMs) / 1000);
 	}
 
 	async getPositionMs(): Promise<number> {
-		const seconds = this.music?.player.currentPlaybackTime ?? 0;
+		const seconds = this.music?.currentPlaybackTime ?? 0;
 		return Math.round(seconds * 1000);
 	}
 
@@ -101,13 +125,12 @@ export class AppleMusicPlayer implements MusicPlayer {
 
 	private emitFromPlayer(): void {
 		if (!this.music) return;
-		const player = this.music.player;
-		const item = player.nowPlayingItem;
+		const item = this.music.nowPlayingItem;
 		const trackId = item?.id ?? null;
-		const playbackState = player.playbackState;
+		const playbackState = this.music.playbackState;
 		const playing = playbackState === PLAYBACK_PLAYING;
-		const positionMs = Math.round(player.currentPlaybackTime * 1000);
-		const durationMs = Math.round(player.currentPlaybackDuration * 1000);
+		const positionMs = Math.round(this.music.currentPlaybackTime * 1000);
+		const durationMs = Math.round(this.music.currentPlaybackDuration * 1000);
 
 		if (playing && positionMs > 1000) {
 			this.hasPlayedPastStart = true;

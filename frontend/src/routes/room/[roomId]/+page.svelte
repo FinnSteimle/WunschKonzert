@@ -28,6 +28,7 @@
 	} from '$lib/session/recentRooms';
 	import type { TrackDto, VoteRequest } from '$lib/types/api';
 	import type { MusicPlayer, MusicPlayerState } from '$lib/playback/types';
+	import { isAutoplayBlockedError } from '$lib/playback/autoplayPolicy';
 	import { createMusicPlayer } from '$lib/playback/createMusicPlayer';
 	import { linkAppleMusicAccount } from '$lib/providers/appleMusicAuth';
 	import { providerLabel } from '$lib/providers/constants';
@@ -93,6 +94,16 @@
 	let advanceSent = false;
 	let positionSyncInterval: ReturnType<typeof setInterval> | null = null;
 	let playInitiatedEntryId = $state<string | null>(null);
+	let hostPlaybackGestureUnlocked = $state(false);
+	let playbackNeedsGesture = $state(false);
+	let pendingHostPlay = $state<{
+		queueEntryId: string;
+		providerTrackId: string;
+		positionMs: number;
+	} | null>(null);
+	/** Apple Music: first track load stays paused until host presses Resume. */
+	let appleMusicDeferInitialPlay = $state(false);
+	let suppressHostAutoSync = $state(false);
 
 	/** Direct link /room/{code}: ask for name before calling join API. */
 	let linkJoinCode = $state<string | null>(null);
@@ -149,8 +160,14 @@
 			toast.error('Not connected to room');
 			return;
 		}
+		hostPlaybackGestureUnlocked = true;
+		playbackNeedsGesture = false;
+		suppressHostAutoSync = true;
 		playbackBusy = true;
 		try {
+			if (action === 'resume' && isAppleMusicHost()) {
+				appleMusicDeferInitialPlay = false;
+			}
 			const currentEntryId = rs?.playback?.currentQueueEntryId;
 			const currentEntry = rs?.queue.find((e) => e.queueEntryId === currentEntryId);
 			const serverProviderTrackId = currentEntry?.track.providerTrackId;
@@ -166,15 +183,18 @@
 			}
 
 			if (musicPlayer) {
-				if (action === 'pause') await musicPlayer.pause();
-				else {
-					if (localTrackId) {
-						await musicPlayer.resume();
-					} else if (serverProviderTrackId) {
-						// If tracks don't match, we'll let the server know we're resuming,
-						// and the $effect will trigger player.play() when the state update comes back.
-						// We don't call musicPlayer.resume() here to avoid playing the wrong track briefly.
-					}
+				if (action === 'pause') {
+					await musicPlayer.pause();
+				} else if (localTrackId) {
+					await runHostResume(musicPlayer);
+				} else if (serverProviderTrackId && currentEntryId) {
+					await runHostPlay(
+						musicPlayer,
+						currentEntryId,
+						serverProviderTrackId,
+						rs?.playback?.positionMs ?? 0,
+						true
+					);
 				}
 			}
 
@@ -198,6 +218,9 @@
 			toast.error(err instanceof Error ? err.message : 'Playback command failed');
 		} finally {
 			playbackBusy = false;
+			setTimeout(() => {
+				suppressHostAutoSync = false;
+			}, 600);
 		}
 	}
 
@@ -283,6 +306,127 @@
 	function roomProviderId(): ProviderId | undefined {
 		const id = get(roomStore).roomState?.room.supportedProviderId;
 		return id === 'spotify' || id === 'apple-music' ? id : undefined;
+	}
+
+	function requiresPlaybackGesture(): boolean {
+		return roomProviderId() === 'apple-music' && !hostPlaybackGestureUnlocked;
+	}
+
+	function isAppleMusicHost(): boolean {
+		return roomProviderId() === 'apple-music';
+	}
+
+	async function runHostPrepare(
+		player: MusicPlayer,
+		queueEntryId: string,
+		providerTrackId: string,
+		positionMs: number
+	): Promise<void> {
+		if (!player.prepare) {
+			await runHostPlay(player, queueEntryId, providerTrackId, positionMs, true);
+			return;
+		}
+		if (requiresPlaybackGesture()) {
+			pendingHostPlay = { queueEntryId, providerTrackId, positionMs };
+			playbackNeedsGesture = true;
+			return;
+		}
+		playbackNeedsGesture = false;
+		await player.prepare(providerTrackId, positionMs);
+		pendingHostPlay = null;
+	}
+
+	async function flushPendingHostPlayback(): Promise<void> {
+		const player = musicPlayer;
+		const pending = pendingHostPlay;
+		if (!player || !sdkPlayerState?.isReady || !pending) return;
+
+		const rs = get(roomStore).roomState;
+		if (!rs || rs.playback?.currentQueueEntryId !== pending.queueEntryId) {
+			pendingHostPlay = null;
+			return;
+		}
+
+		lastPlayedQueueEntryId = pending.queueEntryId;
+		playInitiatedEntryId = pending.queueEntryId;
+		playbackNeedsGesture = false;
+
+		try {
+			if (isAppleMusicHost() && appleMusicDeferInitialPlay) {
+				await runHostPrepare(
+					player,
+					pending.queueEntryId,
+					pending.providerTrackId,
+					pending.positionMs
+				);
+			} else {
+				await player.play(pending.providerTrackId, pending.positionMs);
+			}
+			pendingHostPlay = null;
+		} catch (err) {
+			if (isAutoplayBlockedError(err)) {
+				playbackNeedsGesture = true;
+				lastPlayedQueueEntryId = null;
+				playInitiatedEntryId = null;
+				return;
+			}
+			console.error('[HostPlayer] play failed:', err);
+			lastPlayedQueueEntryId = null;
+			playInitiatedEntryId = null;
+			pendingHostPlay = null;
+		}
+	}
+
+	function unlockHostPlayback(): void {
+		hostPlaybackGestureUnlocked = true;
+		void flushPendingHostPlayback();
+	}
+
+	async function runHostPlay(
+		player: MusicPlayer,
+		queueEntryId: string,
+		providerTrackId: string,
+		positionMs: number,
+		forcePlay = false
+	): Promise<void> {
+		if (!forcePlay && isAppleMusicHost() && appleMusicDeferInitialPlay) {
+			await runHostPrepare(player, queueEntryId, providerTrackId, positionMs);
+			return;
+		}
+
+		if (requiresPlaybackGesture()) {
+			pendingHostPlay = { queueEntryId, providerTrackId, positionMs };
+			playbackNeedsGesture = true;
+			return;
+		}
+
+		playbackNeedsGesture = false;
+		try {
+			await player.play(providerTrackId, positionMs);
+			pendingHostPlay = null;
+		} catch (err) {
+			if (isAutoplayBlockedError(err)) {
+				pendingHostPlay = { queueEntryId, providerTrackId, positionMs };
+				playbackNeedsGesture = true;
+				lastPlayedQueueEntryId = null;
+				playInitiatedEntryId = null;
+				return;
+			}
+			throw err;
+		}
+	}
+
+	async function runHostResume(player: MusicPlayer): Promise<void> {
+		if (playbackNeedsGesture || requiresPlaybackGesture()) return;
+		try {
+			await player.resume();
+		} catch (err) {
+			if (isAutoplayBlockedError(err)) {
+				playbackNeedsGesture = true;
+				return;
+			}
+			throw err;
+		}
 	}
 
 	async function refreshProviderLinkStatus(forProvider?: ProviderId): Promise<boolean> {
@@ -515,6 +659,22 @@
 		}
 	});
 
+	$effect(() => {
+		if (!browser) return;
+		const onGesture = () => {
+			if (!hostPlaybackGestureUnlocked) {
+				hostPlaybackGestureUnlocked = true;
+				void flushPendingHostPlayback();
+			}
+		};
+		document.addEventListener('pointerdown', onGesture, { capture: true });
+		document.addEventListener('keydown', onGesture, { capture: true });
+		return () => {
+			document.removeEventListener('pointerdown', onGesture, { capture: true });
+			document.removeEventListener('keydown', onGesture, { capture: true });
+		};
+	});
+
 	// When the server's current track changes (or the SDK becomes ready), play it.
 	$effect(() => {
 		if (!browser) return;
@@ -552,8 +712,9 @@
 		}, 10000);
 
 		const resumePos = rs.playback?.positionMs ?? 0;
-		player.play(entry.track.providerTrackId, resumePos).catch((err) => {
-			console.error('[SpotifyPlayer] play failed:', err);
+		void runHostPlay(player, queueEntryId, entry.track.providerTrackId, resumePos).catch((err) => {
+			if (isAutoplayBlockedError(err)) return;
+			console.error('[HostPlayer] play failed:', err);
 			lastPlayedQueueEntryId = null;
 			playInitiatedEntryId = null;
 		});
@@ -591,14 +752,17 @@
 		}
 
 		if (serverPlaying && !localPlaying) {
+			if (suppressHostAutoSync) return;
+			if (isAppleMusicHost() && appleMusicDeferInitialPlay) return;
 			// Only resume if we are already on the correct track AND we didn't just initiate a play
 			if (
 				rs.playback.currentQueueEntryId === lastPlayedQueueEntryId &&
 				playInitiatedEntryId !== rs.playback.currentQueueEntryId
 			) {
-				musicPlayer
-					.resume()
-					.catch((err) => console.error('[SpotifyPlayer] sync resume failed:', err));
+				void runHostResume(musicPlayer).catch((err) => {
+					if (isAutoplayBlockedError(err)) return;
+					console.error('[HostPlayer] sync resume failed:', err);
+				});
 			}
 		} else if (!serverPlaying && localPlaying) {
 			// Aggressively pause if the server says we should be paused/stopped
@@ -633,6 +797,8 @@
 	}
 
 	function initMusicPlayer(userId: string, providerId: ProviderId): void {
+		appleMusicDeferInitialPlay = providerId === 'apple-music';
+		hostPlaybackGestureUnlocked = providerId !== 'apple-music';
 		const player = createMusicPlayer(providerId, userId);
 		player.onStateChange((s) => {
 			sdkPlayerState = s;
@@ -750,6 +916,11 @@
 			musicPlayer?.disconnect();
 			musicPlayer = null;
 			sdkPlayerState = null;
+			hostPlaybackGestureUnlocked = false;
+			playbackNeedsGesture = false;
+			pendingHostPlay = null;
+			appleMusicDeferInitialPlay = false;
+			suppressHostAutoSync = false;
 			roomStore.reset();
 		};
 	}
@@ -1015,6 +1186,23 @@
 					/>
 					{#if current && durationMs > 0}
 						<PlaybackProgress {positionMs} {durationMs} playbackState={rs.playback?.state} />
+					{/if}
+					{#if isHost && playbackNeedsGesture}
+						<div
+							role="status"
+							class="rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm"
+						>
+							<p class="mb-2">
+								{#if appleMusicDeferInitialPlay}
+									Tap to load the current song, then press Resume to play.
+								{:else}
+									Your browser blocked autoplay. Tap below or anywhere on the page to continue.
+								{/if}
+							</p>
+							<Button type="button" size="sm" onclick={() => unlockHostPlayback()}>
+								{appleMusicDeferInitialPlay ? 'Load track' : 'Continue'}
+							</Button>
+						</div>
 					{/if}
 					{#if isHost}
 						<PlaybackControls
