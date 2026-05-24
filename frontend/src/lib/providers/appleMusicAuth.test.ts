@@ -81,8 +81,10 @@ describe('appleMusicAuth', () => {
 	});
 
 	it('configureMusicKit throws when instance missing after configure', async () => {
-		installMusicKit(createInstance(), undefined);
-		window.MusicKit!.getInstance = vi.fn().mockReturnValue(undefined);
+		window.MusicKit = {
+			configure: vi.fn().mockReturnValue(undefined),
+			getInstance: vi.fn().mockReturnValue(undefined)
+		};
 		const { configureMusicKit } = await loadModule();
 
 		await expect(configureMusicKit({ developerToken: 'dev-token' })).rejects.toThrow(
