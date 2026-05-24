@@ -757,6 +757,8 @@ async def test_vote_replay_refreshes_room_state(db_session, init_room):
     )
 
     assert first_state["lastEvent"]["type"] == "vote_updated"  # type: ignore[index]
+    assert first_state["lastActivity"]["type"] == "replay_vote"  # type: ignore[index]
+    assert first_state["lastActivity"]["userId"] == guest_id  # type: ignore[index]
     first_queue = cast(list[dict], first_state["queue"])
     assert len(first_queue) == 1
     assert all(item["position"] != 0 for item in first_queue)
@@ -766,6 +768,8 @@ async def test_vote_replay_refreshes_room_state(db_session, init_room):
     )
 
     assert second_state["lastEvent"]["type"] == "vote_updated"  # type: ignore[index]
+    assert second_state["lastActivity"]["type"] == "replay_vote"  # type: ignore[index]
+    assert second_state["lastActivity"]["userId"] == room.hostedBy  # type: ignore[index]
     queue = cast(list[dict], second_state["queue"])
     assert len(queue) == 2
     replay_entry = next(
@@ -812,10 +816,13 @@ async def test_leave_room_success(db_session, init_room):
     await user_repo.create_user(guest_id, "guest")
     await membership_repo.create_room_membership(guest_id, room.roomId)
 
-    await room_service.leave_room_service(room.roomId, guest_id)
+    state = await room_service.leave_room_service(room.roomId, guest_id)
 
     membership = await membership_repo.get_room_membership(guest_id, room.roomId)
     assert membership.membershipStatus == domain.MembershipStatus.INACTIVE
+
+    assert state["lastActivity"]["type"] == "user_left"  # type: ignore[index]
+    assert state["lastActivity"]["userId"] == guest_id  # type: ignore[index]
 
 
 @pytest.mark.asyncio

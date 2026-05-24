@@ -5,6 +5,7 @@ from datetime import UTC, datetime
 from typing import Sequence
 
 from fastapi import HTTPException
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 import repositories.membership_repo as membership_repo
@@ -20,6 +21,7 @@ from core import identifiers
 from core.database import get_session_factory
 from core.exceptions import ResourceNotFoundError
 from models.domain import (
+    Account,
     FeedbackType,
     MembershipStatus,
     PlaybackHistoryEntry,
@@ -294,8 +296,52 @@ def _preserve_ephemeral_fields(room_id: str, state: dict[str, object]) -> None:
         state["systemMessages"] = messages
 
 
+async def build_last_activity(
+    activity_type: str,
+    user_id: str,
+    session: AsyncSession | None = None,
+    queue_entry_id: str | None = None,
+) -> dict[str, object]:
+    """Build a user-facing activity payload for the room state cache."""
+    if session is None:
+        session_factory = get_session_factory()
+        async with session_factory() as new_session:
+            return await build_last_activity(
+                activity_type,
+                user_id,
+                session=new_session,
+                queue_entry_id=queue_entry_id,
+            )
+
+    user = await user_repo.get_user(user_id, session=session)
+    username = user.displayName
+
+    # Prefer the stored account username when available, but keep the visible
+    # display name as a safe fallback for rooms without a linked account.
+    account_username = None
+    result = await session.execute(
+        select(Account.username).where(Account.userId == user_id)
+    )
+    account_username = result.scalar_one_or_none()
+    if account_username:
+        username = account_username
+
+    activity: dict[str, object] = {
+        "type": activity_type,
+        "userId": user_id,
+        "username": username,
+        "at": _now_iso(),
+    }
+    if queue_entry_id:
+        activity["queueEntryId"] = queue_entry_id
+    return activity
+
+
 async def refresh_room_state(
-    room_id: str, event_type: str | None = None, session: AsyncSession | None = None
+    room_id: str,
+    event_type: str | None = None,
+    session: AsyncSession | None = None,
+    last_activity: dict[str, object] | None = None,
 ) -> dict[str, object]:
     room_state = await _build_room_state(room_id, session=session)
     if room_state is None:
@@ -303,6 +349,8 @@ async def refresh_room_state(
 
     if event_type:
         room_state["lastEvent"] = {"type": event_type, "at": _now_iso()}
+    if last_activity is not None:
+        room_state["lastActivity"] = last_activity
 
     room_state_cache[room_id] = room_state
     return room_state
@@ -457,7 +505,12 @@ async def add_to_queue(
             session=session,
         )
 
-    return await refresh_room_state(room_id, "queue_updated", session=session)
+    activity = await build_last_activity(
+        "track_added", user_id, session, queue_entry_id=queue_entry_id
+    )
+    return await refresh_room_state(
+        room_id, "queue_updated", session=session, last_activity=activity
+    )
 
 
 async def remove_queue_entry(
@@ -516,7 +569,12 @@ async def remove_queue_entry(
             queue_entry_id, {"status": QueueEntryStatus.REMOVED}, session=session
         )
 
-    return await refresh_room_state(room_id, "queue_updated", session=session)
+    activity = await build_last_activity(
+        "track_removed", user_id, session, queue_entry_id=queue_entry_id
+    )
+    return await refresh_room_state(
+        room_id, "queue_updated", session=session, last_activity=activity
+    )
 
 
 async def _handle_neutral_vote(
@@ -537,8 +595,15 @@ async def _handle_neutral_vote(
         feedback_type=FeedbackType.DISLIKE,
         session=session,
     )
+    activity = await build_last_activity(
+        "vote_cleared", user_id, session, queue_entry_id=queue_entry_id
+    )
     return await _recalculate_and_refresh(
-        room_id, queue_entry_id, "vote_updated", session=session
+        room_id,
+        queue_entry_id,
+        "vote_updated",
+        session=session,
+        last_activity=activity,
     )
 
 
@@ -557,7 +622,13 @@ async def _toggle_feedback(
             queue_entry_id, user_id, feedback_type=feedback_type, session=session
         )
         return await _recalculate_and_refresh(
-            room_id, queue_entry_id, "vote_updated", session=session
+            room_id,
+            queue_entry_id,
+            "vote_updated",
+            session=session,
+            last_activity=await build_last_activity(
+                "vote_cleared", user_id, session, queue_entry_id=queue_entry_id
+            ),
         )
     return None
 
@@ -601,6 +672,13 @@ async def vote_queue_entry(
     if not mapped_type:
         raise HTTPException(status_code=400, detail="Invalid vote type")
 
+    activity_type = {
+        FeedbackType.LIKE: "up_vote",
+        FeedbackType.DISLIKE: "down_vote",
+        FeedbackType.SKIP: "skip_vote",
+        FeedbackType.REPLAY: "replay_vote",
+    }[mapped_type]
+
     toggle_result = await _toggle_feedback(
         room_id, queue_entry_id, user_id, mapped_type, session
     )
@@ -621,7 +699,12 @@ async def vote_queue_entry(
     )
 
     return await _handle_vote_side_effects(
-        room_id, queue_entry_id, user_id, mapped_type, session
+        room_id,
+        queue_entry_id,
+        user_id,
+        mapped_type,
+        activity_type,
+        session,
     )
 
 
@@ -648,11 +731,14 @@ async def _handle_vote_side_effects(
     queue_entry_id: str,
     user_id: str,
     mapped_type: FeedbackType,
+    activity_type: str,
     session: AsyncSession,
 ) -> dict[str, object]:
     """Handle side effects like skip/replay thresholds or just recalculate."""
     if mapped_type == FeedbackType.SKIP:
-        return await _handle_skip_vote(room_id, queue_entry_id, session=session)
+        return await _handle_skip_vote(
+            room_id, queue_entry_id, user_id, session=session
+        )
 
     if mapped_type == FeedbackType.REPLAY:
         return await _handle_replay_vote(
@@ -660,19 +746,28 @@ async def _handle_vote_side_effects(
         )
 
     return await _recalculate_and_refresh(
-        room_id, queue_entry_id, "vote_updated", session=session
+        room_id,
+        queue_entry_id,
+        "vote_updated",
+        session=session,
+        last_activity=await build_last_activity(
+            activity_type, user_id, session, queue_entry_id=queue_entry_id
+        ),
     )
 
 
 async def _handle_skip_vote(
-    room_id: str, queue_entry_id: str, session: AsyncSession | None = None
+    room_id: str,
+    queue_entry_id: str,
+    user_id: str,
+    session: AsyncSession | None = None,
 ) -> dict[str, object]:
     """Check if skip threshold is met and advance if necessary."""
     if session is None:
         session_factory = get_session_factory()
         async with session_factory() as new_session:
             result = await _handle_skip_vote(
-                room_id, queue_entry_id, session=new_session
+                room_id, queue_entry_id, user_id, session=new_session
             )
             await new_session.commit()
             return result
@@ -701,10 +796,24 @@ async def _handle_skip_vote(
         await queue_entry_repo.update_queue_entry(
             queue_entry_id, {"status": QueueEntryStatus.REMOVED}, session=session
         )
-        return await refresh_room_state(room_id, "queue_updated", session=session)
+        activity = await build_last_activity(
+            "skip_vote", user_id, session, queue_entry_id=queue_entry_id
+        )
+        return await refresh_room_state(
+            room_id,
+            "queue_updated",
+            session=session,
+            last_activity=activity,
+        )
 
     return await _recalculate_and_refresh(
-        room_id, queue_entry_id, "vote_updated", session=session
+        room_id,
+        queue_entry_id,
+        "vote_updated",
+        session=session,
+        last_activity=await build_last_activity(
+            "skip_vote", user_id, session, queue_entry_id=queue_entry_id
+        ),
     )
 
 
@@ -765,10 +874,24 @@ async def _handle_replay_vote(
         await song_feedback_repo.delete_song_feedback(
             queue_entry_id, feedback_type=FeedbackType.REPLAY, session=session
         )
-        return await refresh_room_state(room_id, "vote_updated", session=session)
+        activity = await build_last_activity(
+            "replay_vote", user_id, session, queue_entry_id=queue_entry_id
+        )
+        return await refresh_room_state(
+            room_id,
+            "vote_updated",
+            session=session,
+            last_activity=activity,
+        )
 
     return await _recalculate_and_refresh(
-        room_id, queue_entry_id, "vote_updated", session=session
+        room_id,
+        queue_entry_id,
+        "vote_updated",
+        session=session,
+        last_activity=await build_last_activity(
+            "replay_vote", user_id, session, queue_entry_id=queue_entry_id
+        ),
     )
 
 
@@ -777,6 +900,7 @@ async def _recalculate_and_refresh(
     queue_entry_id: str,
     event_type: str,
     session: AsyncSession | None = None,
+    last_activity: dict[str, object] | None = None,
 ) -> dict[str, object]:
     """Helper to recalculate vote scores and return the fresh room state."""
     if session is None:
@@ -792,7 +916,12 @@ async def _recalculate_and_refresh(
         queue_entry_id, session=session
     )
     if not queue_entry:
-        return await refresh_room_state(room_id, event_type, session=session)
+        return await refresh_room_state(
+            room_id,
+            event_type,
+            session=session,
+            last_activity=last_activity,
+        )
 
     feedback_list = await song_feedback_repo.get_song_feedback_by_queue_entry(
         queue_entry_id, session=session
@@ -814,7 +943,12 @@ async def _recalculate_and_refresh(
         session=session,
     )
 
-    return await refresh_room_state(room_id, event_type, session=session)
+    return await refresh_room_state(
+        room_id,
+        event_type,
+        session=session,
+        last_activity=last_activity,
+    )
 
 
 async def set_playback_state(
@@ -853,7 +987,7 @@ async def set_playback_state(
         )
 
     if action == "advance":
-        return await _advance_to_next(room_id, session=session)
+        return await _advance_to_next(room_id, user_id, session=session)
 
     playback_session = await playback_session_repo.get_current_playback_session(
         room_id, session=session
@@ -886,7 +1020,24 @@ async def set_playback_state(
         playback_session.playbackSessionId, updates, session=session
     )
 
-    return await refresh_room_state(room_id, "playback_updated", session=session)
+    activity_type = {
+        "pause": "playback_paused",
+        "resume": "playback_resumed",
+        "stop": "playback_stopped",
+    }[action]
+    activity = await build_last_activity(
+        activity_type,
+        user_id,
+        session,
+        queue_entry_id=playback_session.queueEntryId,
+    )
+
+    return await refresh_room_state(
+        room_id,
+        "playback_updated",
+        session=session,
+        last_activity=activity,
+    )
 
 
 async def _initialize_playback_session(
@@ -944,13 +1095,15 @@ def _determine_playback_updates(
 
 
 async def _advance_to_next(
-    room_id: str, session: AsyncSession | None = None
+    room_id: str,
+    user_id: str | None = None,
+    session: AsyncSession | None = None,
 ) -> dict[str, object]:
     """Mark the current song as played and start the next highest-voted song."""
     if session is None:
         session_factory = get_session_factory()
         async with session_factory() as new_session:
-            result = await _advance_to_next(room_id, session=new_session)
+            result = await _advance_to_next(room_id, user_id, session=new_session)
             await new_session.commit()
             return result
 
@@ -1005,7 +1158,20 @@ async def _advance_to_next(
             session=session,
         )
 
-    return await refresh_room_state(room_id, "playback_updated", session=session)
+    activity = None
+    if current_session and user_id:
+        activity = await build_last_activity(
+            "playback_advanced",
+            user_id,
+            session,
+            queue_entry_id=current_session.queueEntryId,
+        )
+    return await refresh_room_state(
+        room_id,
+        "playback_updated",
+        session=session,
+        last_activity=activity,
+    )
 
 
 async def leave_room_service(
@@ -1036,7 +1202,13 @@ async def leave_room_service(
             )
 
         await membership_repo.leave_room(user_id, room_id, session=session)
-        return await refresh_room_state(room_id, "participant_left", session=session)
+        activity = await build_last_activity("user_left", user_id, session)
+        return await refresh_room_state(
+            room_id,
+            "participant_left",
+            session=session,
+            last_activity=activity,
+        )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
@@ -1060,8 +1232,12 @@ async def handle_disconnect(
         await membership_repo.update_room_membership_status(
             user_id, room_id, MembershipStatus.INACTIVE, session=session
         )
+        activity = await build_last_activity("user_left", user_id, session)
         return await refresh_room_state(
-            room_id, "participant_disconnected", session=session
+            room_id,
+            "participant_disconnected",
+            session=session,
+            last_activity=activity,
         )
     except ResourceNotFoundError:
         # If no membership was found, nothing to do.
@@ -1307,7 +1483,13 @@ async def rename_participant(
             )
 
         await ensure_user_display_name(user_id, display_name, session=session)
-        return await refresh_room_state(room_id, "participant_renamed", session=session)
+        activity = await build_last_activity("user_renamed", user_id, session)
+        return await refresh_room_state(
+            room_id,
+            "participant_renamed",
+            session=session,
+            last_activity=activity,
+        )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:

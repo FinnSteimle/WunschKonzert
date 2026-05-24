@@ -83,7 +83,14 @@ async def initiate_transfer(
         "toUserId": to_user_id,
         "createdAt": _time_now(),
     }
-    await room_service.refresh_room_state(room_id, "host_transfer_initiated")
+    activity = await room_service.build_last_activity(
+        "host_transfer_initiated", from_user_id
+    )
+    await room_service.refresh_room_state(
+        room_id,
+        "host_transfer_initiated",
+        last_activity=activity,
+    )
     _set_transfer(room_id, transfer)
     return room_service.room_state_cache[room_id]
 
@@ -98,7 +105,12 @@ async def reject_transfer(
         raise HTTPException(403, "Only the invited user can reject this transfer")
 
     _set_transfer(room_id, None)
-    await room_service.refresh_room_state(room_id, "host_transfer_rejected")
+    activity = await room_service.build_last_activity("host_transfer_rejected", user_id)
+    await room_service.refresh_room_state(
+        room_id,
+        "host_transfer_rejected",
+        last_activity=activity,
+    )
     return room_service.room_state_cache[room_id]
 
 
@@ -202,7 +214,14 @@ async def accept_transfer(
         await room_service._advance_to_next(room_id)
 
     await room_repo.update_host(room_id, user_id)
-    await room_service.refresh_room_state(room_id, "host_transfer_completed")
+    activity = await room_service.build_last_activity(
+        "host_transfer_completed", user_id
+    )
+    await room_service.refresh_room_state(
+        room_id,
+        "host_transfer_completed",
+        last_activity=activity,
+    )
     _set_transfer(room_id, None)
 
     if removed_titles:

@@ -59,6 +59,9 @@ async def test_websocket_rename_event(db_session, init_room, websocket_client):
             u["user"]["displayName"] == "New Name" for u in updated_data["users"]
         )
         assert updated_data["lastEvent"]["type"] == "participant_renamed"
+        assert updated_data["lastActivity"]["type"] == "user_renamed"
+        assert updated_data["lastActivity"]["userId"] == host_id
+        assert updated_data["lastActivity"]["username"] == "New Name"
 
 
 @pytest.mark.asyncio
@@ -156,6 +159,12 @@ async def test_websocket_vote_updates_vote_score_and_feedback(
         assert feedback[0]["userId"] == guest_id
         assert feedback[0]["type"] == "upvote"
         assert after_state.get("lastEvent", {}).get("type") == "vote_updated"
+        assert after_state["lastActivity"]["type"] == "up_vote"
+        assert after_state["lastActivity"]["userId"] == guest_id
+        assert (
+            after_state["lastActivity"]["queueEntryId"]
+            == start_state["queue"][0]["queueEntryId"]
+        )
 
 
 @pytest.mark.asyncio
@@ -227,6 +236,9 @@ async def test_websocket_addqueue_updates_state_for_all_clients(
         )
         assert after_state_1.get("lastEvent", {}).get("type") == "queue_updated"
         assert after_state_2.get("lastEvent", {}).get("type") == "queue_updated"
+        assert after_state_1["lastActivity"]["type"] == "track_added"
+        assert after_state_1["lastActivity"]["userId"] == guest_id
+        assert after_state_1["lastActivity"]["queueEntryId"] is not None
 
 
 @pytest.mark.asyncio

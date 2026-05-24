@@ -114,6 +114,8 @@ async def test_initiate_transfer_happy_path(db_session, init_room):
     assert transfer["fromUserId"] == host_id
     assert transfer["toUserId"] == invitee_id
     assert transfer["transferId"]
+    assert state["lastActivity"]["type"] == "host_transfer_initiated"  # type: ignore[index]
+    assert state["lastActivity"]["userId"] == host_id  # type: ignore[index]
 
 
 @pytest.mark.asyncio
@@ -189,6 +191,8 @@ async def test_reject_transfer_clears_invite(db_session, init_room):
         room.roomId, transfer_id, invitee_id
     )
     assert "transfer" not in state2
+    assert state2["lastActivity"]["type"] == "host_transfer_rejected"  # type: ignore[index]
+    assert state2["lastActivity"]["userId"] == invitee_id  # type: ignore[index]
 
 
 @pytest.mark.asyncio
@@ -261,6 +265,8 @@ async def test_accept_transfer_swaps_host_and_keeps_matched_tracks(
 
     # transfer cleared, host swapped, queue entry still present
     assert "transfer" not in state2
+    assert state2["lastActivity"]["type"] == "host_transfer_completed"  # type: ignore[index]
+    assert state2["lastActivity"]["userId"] == invitee_id  # type: ignore[index]
     refreshed = await room_repo.get_room(room.roomId)
     assert refreshed.hostedBy == invitee_id
 

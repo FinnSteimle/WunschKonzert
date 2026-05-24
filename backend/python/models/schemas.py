@@ -132,6 +132,8 @@ class RoomState(BaseModel):
     host: Host
     users: list[UserEntry]
     queue: list[QueueEntry]
+    lastEvent: dict[str, str] | None = None
+    lastActivity: dict[str, object] | None = None
 
 
 class AddQueueRequest(BaseModel):
