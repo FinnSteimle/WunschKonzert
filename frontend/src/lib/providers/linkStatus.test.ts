@@ -23,6 +23,16 @@ describe('linkStatus', () => {
 		await expect(isProviderLinkedForUser('spotify', 'U_1')).resolves.toBe(true);
 	});
 
+	it('delegates Apple Music link checks to profile status', async () => {
+		vi.mocked(apiClient.getAppleMusicProfile).mockResolvedValue({
+			linked: true,
+			storefront: 'us',
+			display_name: 'Alice',
+			needs_relink: false
+		});
+		await expect(isProviderLinkedForUser('apple-music', 'U_1')).resolves.toBe(true);
+	});
+
 	it('treats Apple Music as linked only when active and not needing relink', async () => {
 		vi.mocked(apiClient.getAppleMusicProfile).mockResolvedValue({
 			linked: true,

@@ -8,6 +8,8 @@ import {
 	saveSessionDisplayName
 } from '$lib/session/userSession';
 import { recordRecentRoom } from '$lib/session/recentRooms';
+import { linkAppleMusicAccount } from '$lib/providers/appleMusicAuth';
+import { getAppleMusicLinkStatus } from '$lib/providers/linkStatus';
 import { toast } from 'svelte-sonner';
 
 vi.mock('$lib/api/client', () => ({
@@ -19,6 +21,10 @@ vi.mock('$lib/api/client', () => ({
 vi.mock('$lib/providers/linkStatus', () => ({
 	isProviderLinkedForUser: vi.fn(async (providerId: string) => providerId === 'spotify'),
 	getAppleMusicLinkStatus: vi.fn(async () => ({ linked: false, needsRelink: false }))
+}));
+
+vi.mock('$lib/providers/appleMusicAuth', () => ({
+	linkAppleMusicAccount: vi.fn()
 }));
 
 vi.mock('$lib/session/userSession', () => ({
@@ -205,6 +211,37 @@ describe('CreateRoomForm', () => {
 				(screen.getByRole('button', { name: 'Create room' }) as HTMLButtonElement).disabled
 			).toBe(false)
 		);
+	});
+
+	it('links Apple Music and refreshes link status', async () => {
+		vi.mocked(linkAppleMusicAccount).mockResolvedValue({
+			storefront: 'us',
+			display_name: 'Alice'
+		});
+		vi.mocked(getAppleMusicLinkStatus)
+			.mockResolvedValueOnce({ linked: false, needsRelink: false })
+			.mockResolvedValueOnce({ linked: true, needsRelink: false });
+
+		render(CreateRoomForm, { spotifyLinked: false });
+
+		const providerSelect = screen.getByLabelText('Music provider') as HTMLSelectElement;
+		await fireEvent.change(providerSelect, { target: { value: 'apple-music' } });
+		await fireEvent.click(screen.getByRole('button', { name: 'Link Apple Music account' }));
+
+		await waitFor(() => expect(linkAppleMusicAccount).toHaveBeenCalledWith('U_TESTUSER1', 'Alice'));
+		expect(toast.success).toHaveBeenCalledWith('Apple Music account linked');
+		expect(screen.getByText('Apple Music account linked')).toBeTruthy();
+	});
+
+	it('shows error when Apple Music link fails', async () => {
+		vi.mocked(linkAppleMusicAccount).mockRejectedValue(new Error('denied'));
+
+		render(CreateRoomForm, { spotifyLinked: false });
+		const providerSelect = screen.getByLabelText('Music provider') as HTMLSelectElement;
+		await fireEvent.change(providerSelect, { target: { value: 'apple-music' } });
+		await fireEvent.click(screen.getByRole('button', { name: 'Link Apple Music account' }));
+
+		await waitFor(() => expect(toast.error).toHaveBeenCalledWith('denied'));
 	});
 
 	it('ignores duplicate form submits while request is pending', async () => {

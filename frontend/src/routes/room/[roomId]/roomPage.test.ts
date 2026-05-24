@@ -70,6 +70,42 @@ vi.mock('svelte-sonner', () => ({
 	}
 }));
 
+const mockMusicPlayer = {
+	connect: vi.fn().mockImplementation(async () => {
+		const callback = mockMusicPlayer.onStateChange.mock.calls.at(-1)?.[0] as
+			| ((state: {
+					isReady: boolean;
+					isPlaying: boolean;
+					trackId: string | null;
+					positionMs: number;
+					durationMs: number;
+					trackEnded: boolean;
+			  }) => void)
+			| undefined;
+		callback?.({
+			isReady: true,
+			isPlaying: false,
+			trackId: null,
+			positionMs: 0,
+			durationMs: 0,
+			trackEnded: false
+		});
+	}),
+	disconnect: vi.fn(),
+	play: vi.fn().mockResolvedValue(undefined),
+	prepare: vi.fn().mockResolvedValue(undefined),
+	pause: vi.fn().mockResolvedValue(undefined),
+	resume: vi.fn().mockResolvedValue(undefined),
+	seekTo: vi.fn().mockResolvedValue(undefined),
+	getPositionMs: vi.fn().mockResolvedValue(0),
+	onStateChange: vi.fn(),
+	getLastTrackId: vi.fn(() => null)
+};
+
+vi.mock('$lib/playback/createMusicPlayer', () => ({
+	createMusicPlayer: vi.fn(() => mockMusicPlayer)
+}));
+
 vi.mock('$lib/realtime/roomSocket', () => ({
 	RoomSocketClient: class RoomSocketClientMock {
 		connect = vi.fn();
@@ -114,7 +150,10 @@ const MEMBER_HOST = {
 	}
 };
 
-function spotifyRoomState(extra?: Partial<RoomStateDto>): RoomStateDto {
+function hostRoomState(
+	providerId: 'spotify' | 'apple-music',
+	extra?: Partial<RoomStateDto>
+): RoomStateDto {
 	return {
 		room: {
 			roomId: 'room-1',
@@ -122,7 +161,7 @@ function spotifyRoomState(extra?: Partial<RoomStateDto>): RoomStateDto {
 			name: 'Friday vibes',
 			status: 'active',
 			createdAt: '2025-01-01T00:00:00Z',
-			supportedProviderId: 'spotify'
+			supportedProviderId: providerId
 		},
 		host: {
 			userId: 'U_HOST',
@@ -141,6 +180,10 @@ function spotifyRoomState(extra?: Partial<RoomStateDto>): RoomStateDto {
 	};
 }
 
+function spotifyRoomState(extra?: Partial<RoomStateDto>): RoomStateDto {
+	return hostRoomState('spotify', extra);
+}
+
 vi.mock('$lib/components/room/invite/QRCodeCard.svelte', () => ({
 	default: function QRCodeCardStub() {}
 }));
@@ -148,6 +191,9 @@ vi.mock('$lib/components/room/invite/QRCodeCard.svelte', () => ({
 describe('room/[roomId]/+page.svelte', () => {
 	beforeEach(() => {
 		vi.clearAllMocks();
+		mockMusicPlayer.connect.mockClear();
+		mockMusicPlayer.prepare.mockClear();
+		mockMusicPlayer.play.mockClear();
 		lastSocket = null;
 		roomStore.reset();
 		sessionStorage.clear();
@@ -520,6 +566,66 @@ describe('room/[roomId]/+page.svelte', () => {
 
 			await waitFor(() => expect(screen.getByRole('button', { name: 'Delete room' })).toBeTruthy());
 			expect(screen.queryByRole('button', { name: 'Leave room' })).toBeNull();
+		});
+
+		function appleMusicPlayingState() {
+			return hostRoomState('apple-music', {
+				users: [MEMBER_HOST],
+				queue: [
+					{
+						queueEntryId: 'Q_1',
+						position: 0,
+						status: 'playing',
+						voteScore: 0,
+						orderRank: 0,
+						track: {
+							trackId: 'T_1',
+							providerTrackId: 'apple:338349243',
+							title: 'Test Song',
+							artist: 'Artist',
+							album: 'Album',
+							duration: 200,
+							coverUrl: 'https://example.com/cover.jpg',
+							deepLink: 'https://example.com/track/T_1'
+						},
+						addedBy: { userId: 'U_HOST', displayName: 'Host User' },
+						queuedAt: '2025-01-01T00:00:00Z',
+						feedback: []
+					}
+				],
+				playback: {
+					state: 'playing',
+					currentQueueEntryId: 'Q_1',
+					updatedAt: '2025-01-01T00:00:00Z',
+					positionMs: 1200
+				}
+			});
+		}
+
+		async function renderAppleMusicHostPlaying() {
+			render(RoomPage);
+			await waitFor(() => expect(apiClient.joinRoom).toHaveBeenCalled());
+			roomStore.setConnected(true);
+			roomStore.setRoomState(appleMusicPlayingState());
+			await waitFor(() => expect(mockMusicPlayer.connect).toHaveBeenCalled());
+		}
+
+		it('initializes Apple Music host player and shows load-track prompt', async () => {
+			await renderAppleMusicHostPlaying();
+
+			expect(await screen.findByRole('button', { name: 'Load track' })).toBeTruthy();
+			expect(mockMusicPlayer.prepare).not.toHaveBeenCalled();
+			expect(mockMusicPlayer.play).not.toHaveBeenCalled();
+		});
+
+		it('prepares Apple Music track after host unlock gesture', async () => {
+			await renderAppleMusicHostPlaying();
+
+			await fireEvent.click(await screen.findByRole('button', { name: 'Load track' }));
+			await waitFor(() =>
+				expect(mockMusicPlayer.prepare).toHaveBeenCalledWith('apple:338349243', 1200)
+			);
+			expect(mockMusicPlayer.play).not.toHaveBeenCalled();
 		});
 	});
 
