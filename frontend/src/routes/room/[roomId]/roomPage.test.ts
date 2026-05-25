@@ -742,6 +742,100 @@ describe('room/[roomId]/+page.svelte', () => {
 			);
 		});
 
+		it('shows unread last activity updates in the popup', async () => {
+			await renderJoinedRoom();
+			const queue = [
+				{
+					queueEntryId: 'q1',
+					track: {
+						trackId: 't1',
+						providerTrackId: 'spotify:t1',
+						title: 'Song One',
+						artist: 'Artist',
+						album: 'Album',
+						duration: 180,
+						coverUrl: '',
+						deepLink: ''
+					},
+					addedBy: { userId: 'U_USER1', displayName: 'Alice' },
+					queuedAt: '2025-01-01T00:00:00Z',
+					position: 1,
+					status: 'queued',
+					voteScore: 0,
+					orderRank: 1,
+					feedback: []
+				}
+			];
+
+			roomStore.setRoomState(
+				spotifyRoomState({
+					queue,
+					lastActivity: {
+						type: 'track_added',
+						userId: 'U_USER1',
+						username: 'Alice',
+						at: '2025-01-01T00:00:00Z',
+						queueEntryId: 'q1'
+					}
+				})
+			);
+			roomStore.setRoomState(
+				spotifyRoomState({
+					queue,
+					lastActivity: {
+						type: 'host_transfer_completed',
+						userId: 'U_HOST',
+						username: 'Host User',
+						at: '2025-01-01T00:01:00Z'
+					}
+				})
+			);
+
+			await waitFor(() =>
+				expect(screen.getByRole('button', { name: 'Unread room activity: 2' })).toBeTruthy()
+			);
+			await fireEvent.click(screen.getByRole('button', { name: 'Unread room activity: 2' }));
+
+			await waitFor(() => {
+				expect(screen.getByRole('list', { name: 'Unread room activity' })).toBeTruthy();
+				expect(screen.getByText('Alice added "Song One"')).toBeTruthy();
+				expect(screen.getByText('Host User became the host')).toBeTruthy();
+			});
+		});
+
+		it('does not show pause or resume playback activity as unread', async () => {
+			await renderJoinedRoom();
+			roomStore.setRoomState(
+				spotifyRoomState({
+					lastActivity: {
+						type: 'playback_paused',
+						userId: 'U_HOST',
+						username: 'Host User',
+						at: '2025-01-01T00:00:00Z'
+					}
+				})
+			);
+			roomStore.setRoomState(
+				spotifyRoomState({
+					lastActivity: {
+						type: 'playback_resumed',
+						userId: 'U_HOST',
+						username: 'Host User',
+						at: '2025-01-01T00:01:00Z'
+					}
+				})
+			);
+
+			await waitFor(() =>
+				expect(screen.getByRole('button', { name: 'Unread room activity: 0' })).toBeTruthy()
+			);
+			await fireEvent.click(screen.getByRole('button', { name: 'Unread room activity: 0' }));
+
+			expect(screen.getByText('No unread activity.')).toBeTruthy();
+			expect(screen.queryByText(/paused/)).toBeNull();
+			expect(screen.queryByText(/resumed/)).toBeNull();
+		});
+
 		it('shows success toast when host transfer completes for the new host', async () => {
 			await renderJoinedRoom();
 			roomStore.setRoomState(
