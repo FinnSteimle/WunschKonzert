@@ -28,14 +28,14 @@ def _apple_api_url() -> str:
 
 @router.get("/auth/apple-music/developer-token")
 async def apple_music_developer_token(user_id: str) -> dict[str, str]:
-    await room_service.ensure_user_display_name(user_id, user_id)
+    await room_service.register_or_update_user(user_id, user_id)
     token = await get_developer_token()
     return {"developer_token": token}
 
 
 @router.post("/auth/apple-music/link")
 async def apple_music_link(body: LinkRequest) -> dict[str, str | None]:
-    await room_service.ensure_user_display_name(body.user_id, body.display_name)
+    await room_service.register_or_update_user(body.user_id, body.display_name)
 
     dev_token = await get_developer_token()
 

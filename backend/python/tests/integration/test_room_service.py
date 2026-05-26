@@ -25,20 +25,20 @@ async def test_delete_room(db_session, init_room):
     assert deleted_room.status == domain.RoomStatus.DELETED
 
 
-# --- room_service.ensure_user_display_name() tests ---
+# --- room_service.register_or_update_user() tests ---
 
 
 @pytest.mark.asyncio
 async def test_user_display_name_at_max_length(db_session):
     user_name = "a" * 60
-    await room_service.ensure_user_display_name(str(uuid.uuid4()), user_name)
+    await room_service.register_or_update_user(str(uuid.uuid4()), user_name)
 
 
 @pytest.mark.asyncio
 async def test_user_display_name_above_max_length(db_session):
     user_name = "a" * 61
     with pytest.raises(HTTPException) as exc_info:
-        await room_service.ensure_user_display_name(str(uuid.uuid4()), user_name)
+        await room_service.register_or_update_user(str(uuid.uuid4()), user_name)
     assert exc_info.value.status_code == 400
     assert "too long" in exc_info.value.detail
 
@@ -46,7 +46,7 @@ async def test_user_display_name_above_max_length(db_session):
 @pytest.mark.asyncio
 async def test_user_display_name_empty_raises(db_session):
     with pytest.raises(HTTPException) as exc_info:
-        await room_service.ensure_user_display_name(str(uuid.uuid4()), "   ")
+        await room_service.register_or_update_user(str(uuid.uuid4()), "   ")
     assert exc_info.value.status_code == 400
     assert "required" in exc_info.value.detail
 
@@ -54,7 +54,7 @@ async def test_user_display_name_empty_raises(db_session):
 @pytest.mark.asyncio
 async def test_user_display_name_strips_whitespace(db_session):
     user_id = str(uuid.uuid4())
-    await room_service.ensure_user_display_name(user_id, "  Alice  ")
+    await room_service.register_or_update_user(user_id, "  Alice  ")
     user = await user_repo.get_user(user_id)
     assert user.displayName == "Alice"
 

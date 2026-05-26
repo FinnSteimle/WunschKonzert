@@ -113,7 +113,7 @@ async def create_room(
             await new_session.commit()
             return result
 
-    await ensure_user_display_name(user_id, display_name, session=session)
+    await register_or_update_user(user_id, display_name, session=session)
     await ensure_provider_exists(supported_provider_id, session=session)
 
     pa = await music_provider_repo.get_provider_account_by_user(
@@ -173,7 +173,7 @@ async def join_room(
             detail="Join code must be exactly 6 characters (A-Z, 2-9, no I/O/0/1).",
         )
 
-    await ensure_user_display_name(user_id, display_name, session=session)
+    await register_or_update_user(user_id, display_name, session=session)
 
     try:
         room = await room_repo.get_room_by_join_code(normalized_code, session=session)
@@ -249,7 +249,7 @@ async def delete_room(
         raise HTTPException(status_code=500, detail=f"Failed to delete room: {str(e)}")
 
 
-async def ensure_user_display_name(
+async def register_or_update_user(
     user_id: str, display_name: str, session: AsyncSession | None = None
 ) -> None:
     trimmed = display_name.strip()
@@ -332,7 +332,7 @@ async def rename_participant(
                 status_code=403, detail="Only active room participants can rename"
             )
 
-        await ensure_user_display_name(user_id, display_name, session=session)
+        await register_or_update_user(user_id, display_name, session=session)
         activity = await build_last_activity("user_renamed", user_id, session)
         return await refresh_room_state(
             room_id,
