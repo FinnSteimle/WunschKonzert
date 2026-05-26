@@ -6,6 +6,8 @@ from fastapi import HTTPException
 from models.domain import FeedbackType, QueueEntryStatus, RoomStatus
 from services.queue_service import add_to_queue, remove_queue_entry
 
+pytestmark = pytest.mark.unit
+
 
 @pytest.mark.asyncio
 async def test_add_to_queue_inactive_room_raises_400():

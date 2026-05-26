@@ -7,6 +7,8 @@ from fastapi import HTTPException
 from models.domain import PlaybackState
 from services.playback_service import _determine_playback_updates, set_playback_state
 
+pytestmark = pytest.mark.unit
+
 
 def test_determine_playback_updates_pause():
     updates = _determine_playback_updates("pause", 120)

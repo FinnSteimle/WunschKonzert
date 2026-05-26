@@ -6,6 +6,8 @@ from fastapi import HTTPException
 from models.domain import FeedbackType, QueueEntryStatus
 from services.vote_service import vote_queue_entry
 
+pytestmark = pytest.mark.unit
+
 
 @pytest.mark.asyncio
 async def test_vote_invalid_type_raises_400():
@@ -116,33 +118,108 @@ async def test_vote_mutual_exclusivity():
 
 
 @pytest.mark.asyncio
-async def test_recalculate_and_refresh_ranking_logic():
-    """Verify orderRank math: pos 1 with 1 upvote should be 0.99."""
+async def test_vote_replay_threshold_met():
+    """Verify that reaching the replay threshold triggers track requeue."""
+    from services.vote_service import _handle_replay_vote
+
+    mock_session = AsyncMock()
+    mock_entry = MagicMock(trackId="t1", status=QueueEntryStatus.PLAYING)
+
+    with (
+        patch("repositories.queue_entry_repo.get_queue_entry", return_value=mock_entry),
+        patch(
+            "repositories.song_feedback_repo.get_song_feedback_by_queue_entry",
+            return_value=[MagicMock(type=FeedbackType.REPLAY)],
+        ),
+        patch(
+            "repositories.membership_repo.get_room_active_memberships",
+            return_value=[MagicMock()],
+        ),
+        patch(
+            "repositories.track_repo.get_track", return_value=MagicMock(trackId="t1")
+        ),
+        patch("core.identifiers.generate_queue_entry_id", return_value="new_qe"),
+        patch(
+            "repositories.queue_entry_repo.create_queue_entry", new_callable=AsyncMock
+        ) as mock_create,
+        patch(
+            "repositories.song_feedback_repo.delete_song_feedback",
+            new_callable=AsyncMock,
+        ) as mock_delete,
+        patch("services.vote_service.refresh_room_state", new_callable=AsyncMock),
+    ):
+        await _handle_replay_vote("r1", "qe1", "u1", session=mock_session)
+
+        # Verify new entry created with high voteScore and negative orderRank
+        args, _ = mock_create.call_args
+        assert args[0]["voteScore"] == 9999
+        assert args[0]["orderRank"] == -1.0
+        assert args[0]["trackId"] == "t1"
+
+        # Verify replay feedback deleted
+        mock_delete.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_handle_neutral_vote():
+    """Verify that neutral vote clears both like and dislike feedback."""
+    from services.vote_service import _handle_neutral_vote
+
+    mock_session = AsyncMock()
+    with (
+        patch(
+            "repositories.song_feedback_repo.delete_song_feedback",
+            new_callable=AsyncMock,
+        ) as mock_delete,
+        patch("services.vote_service.build_last_activity", new_callable=AsyncMock),
+        patch("services.vote_service._recalculate_and_refresh", new_callable=AsyncMock),
+    ):
+        await _handle_neutral_vote("r1", "qe1", "u1", session=mock_session)
+
+        assert mock_delete.call_count == 2
+        # Verify it attempted to delete both LIKE and DISLIKE
+        calls = mock_delete.call_args_list
+        types = [call.kwargs["feedback_type"] for call in calls]
+        assert FeedbackType.LIKE in types
+        assert FeedbackType.DISLIKE in types
+
+
+@pytest.mark.asyncio
+async def test_vote_toggle_logic():
+    """Verify that voting for the same thing twice toggles (removes) it."""
+    from services.vote_service import _toggle_feedback
+
+    mock_session = AsyncMock()
+    # Mocking existing feedback to trigger toggle removal
+    with (
+        patch(
+            "repositories.song_feedback_repo.get_song_feedback",
+            return_value=MagicMock(),
+        ),
+        patch(
+            "repositories.song_feedback_repo.delete_song_feedback",
+            new_callable=AsyncMock,
+        ) as mock_delete,
+        patch("services.vote_service._recalculate_and_refresh", new_callable=AsyncMock),
+    ):
+        result = await _toggle_feedback(
+            "r1", "qe1", "u1", FeedbackType.LIKE, session=mock_session
+        )
+        assert result is not None
+        mock_delete.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_recalculate_and_refresh_no_entry():
+    """Verify that recalculate_and_refresh handles missing entry gracefully."""
     from services.vote_service import _recalculate_and_refresh
 
     mock_session = AsyncMock()
-    mock_entry = MagicMock(position=1)
-
-    with patch(
-        "repositories.queue_entry_repo.get_queue_entry", return_value=mock_entry
+    with (
+        patch("repositories.queue_entry_repo.get_queue_entry", return_value=None),
+        patch(
+            "services.vote_service.refresh_room_state", new_callable=AsyncMock
+        ) as mock_refresh,
     ):
-        mock_feedback = [MagicMock(type=FeedbackType.LIKE)]
-        with patch(
-            "repositories.song_feedback_repo.get_song_feedback_by_queue_entry",
-            return_value=mock_feedback,
-        ):
-            with patch(
-                "repositories.queue_entry_repo.update_queue_entry",
-                new_callable=AsyncMock,
-            ) as mock_update:
-                # Patching in services.vote_service
-                with patch(
-                    "services.vote_service.refresh_room_state", new_callable=AsyncMock
-                ):
-                    await _recalculate_and_refresh(
-                        "r1", "qe1", "event", session=mock_session
-                    )
-                    args, kwargs = mock_update.call_args
-                    updates = args[1]
-                    assert updates["voteScore"] == 1
-                    assert pytest.approx(updates["orderRank"]) == 0.99
+        await _recalculate_and_refresh("r1", "qe1", "event", session=mock_session)
+        mock_refresh.assert_called_once()

@@ -1,5 +1,7 @@
 from datetime import UTC, datetime
 
+import pytest
+
 from models.domain import (
     FeedbackType,
     MembershipStatus,
@@ -20,6 +22,8 @@ from services.room_state_service import (
     _preserve_ephemeral_fields,
     room_state_cache,
 )
+
+pytestmark = pytest.mark.unit
 
 
 def test_build_user_list_removes_duplicates_and_inactive():

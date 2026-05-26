@@ -11,6 +11,8 @@ from services.room_service import (
 )
 from services.room_state_service import JOIN_CODE_RE
 
+pytestmark = pytest.mark.unit
+
 
 def test_join_code_regex_valid():
     assert JOIN_CODE_RE.match("ABCDE2")

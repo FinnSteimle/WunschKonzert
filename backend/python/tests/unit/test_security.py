@@ -1,4 +1,8 @@
+import pytest
+
 from core.security import hash_password, verify_password
+
+pytestmark = pytest.mark.unit
 
 
 def test_password_hashing():
