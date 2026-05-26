@@ -19,7 +19,9 @@ tests/system/
 ├── test_queue_voting.py     # Queue management and voting
 ├── test_playback_sync.py    # Playback synchronization
 ├── test_host_controls.py    # Host-only operations
-└── test_concurrent_rooms.py # Multi-room isolation
+├── test_host_transfer.py    # Host transfer workflow
+├── test_concurrent_rooms.py # Multi-room isolation
+└── test_responsive_design.py # Cross-browser responsive layout
 ```
 
 ## Prerequisites
@@ -59,10 +61,10 @@ System-test Docker runs route Spotify search/token calls to a dedicated local
 mock service, so song search uses deterministic stub results instead of live
 Spotify HTTP calls.
 
+Queue, voting, playback, and multi-room tests seed tracks directly through the
+room WebSocket so they stay deterministic without depending on the search UI.
+
 `make test-system` executes the full `tests/system/` suite under Docker.
-Some scenarios may be marked as skipped when the current frontend does not yet
-expose the corresponding behavior or when deterministic playback assertions are
-not available in the system-test environment.
 
 Run specific test file:
 ```bash
@@ -100,17 +102,25 @@ docker compose exec api uv run pytest tests/system/ -v --headed
 - Advance to next song
 - Position synchronization
 
-### Host Controls (SC-15 to SC-18)
+### Host Controls (SC-15, SC-17 to SC-18)
 - Delete room (host only)
-- Kick users
 - Remove songs from queue
 - User removes own song
+
+### Host Transfer (SC-23)
+- Offer host transfer
+- Accept host transfer after provider linking
+- Decline a pending host transfer
+- Host ownership changes in real time
 
 ### Concurrent Rooms (SC-19 to SC-22)
 - Room isolation
 - User isolation
 - Playback isolation
 - Vote isolation
+
+### Responsive Design (WUN-91)
+- Cross-browser layout verification at mobile and desktop breakpoints
 
 ## Writing New Tests
 

@@ -1,4 +1,6 @@
+import json
 import os
+import time
 import uuid
 from concurrent.futures import Future
 from datetime import UTC, datetime, timedelta
@@ -14,8 +16,10 @@ from playwright.sync_api import (
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.pool import NullPool
+from websockets.sync.client import connect
 
 from models.domain import AccountStatus, ProviderAccount, User
+from repositories import room_repo
 
 USER_ID_KEY = "wk_user_id"
 DISPLAY_NAME_KEY = "wk_display_name"
@@ -109,6 +113,200 @@ def add_song_helper(page: Page, song_name: str):
     page.get_by_role("list", name="Search results").get_by_role(
         "button", name="Add to queue"
     ).first.click()
+
+
+def backend_ws_url(backend_url: str) -> str:
+    """Translate an HTTP backend URL into the matching WebSocket URL."""
+    if backend_url.startswith("https://"):
+        return "wss://" + backend_url.removeprefix("https://")
+    if backend_url.startswith("http://"):
+        return "ws://" + backend_url.removeprefix("http://")
+    return backend_url.replace("http://", "ws://", 1)
+
+
+def room_ws_url(backend_url: str, room_id: str) -> str:
+    return f"{backend_ws_url(backend_url)}/ws/{room_id}"
+
+
+def _is_join_code(value: str) -> bool:
+    return len(value) == 6 and value.isalnum() and value.upper() == value
+
+
+def resolve_room_reference(backend_url: str, room_ref: str) -> str:
+    """Resolve a join code to the backend room UUID when needed."""
+    if not _is_join_code(room_ref):
+        return room_ref
+
+    database_url = os.environ["DATABASE_URL"]
+    if not database_url.startswith("postgresql+asyncpg://"):
+        if "://" in database_url:
+            _, base_url = database_url.split("://", 1)
+            database_url = f"postgresql+asyncpg://{base_url}"
+        else:
+            database_url = f"postgresql+asyncpg://{database_url}"
+
+    async def _lookup() -> str:
+        engine = create_async_engine(
+            database_url,
+            poolclass=NullPool,
+            pool_pre_ping=True,
+        )
+        session_factory = async_sessionmaker(
+            engine, class_=AsyncSession, expire_on_commit=False
+        )
+        try:
+            async with session_factory() as session:
+                room = await room_repo.get_room_by_join_code(room_ref, session=session)
+                return room.roomId
+        finally:
+            await engine.dispose()
+
+    return run_async_in_thread(_lookup())
+
+
+def receive_room_state(ws, timeout: float = 5.0) -> dict[str, object]:
+    """Receive the next JSON room-state payload from a room websocket."""
+    deadline = time.monotonic() + timeout
+    while True:
+        remaining = max(0.1, deadline - time.monotonic())
+        if remaining <= 0:
+            raise TimeoutError("Timed out waiting for room state")
+        message = ws.recv(timeout=remaining)
+        if message == "ping":
+            continue
+        return json.loads(message)
+
+
+def get_room_state_snapshot(
+    backend_url: str, room_id: str, timeout: float = 5.0
+) -> dict[str, object]:
+    """Open a short-lived websocket connection and capture the current room state."""
+    resolved_room_id = resolve_room_reference(backend_url, room_id)
+    with connect(
+        room_ws_url(backend_url, resolved_room_id),
+        open_timeout=timeout,
+        close_timeout=timeout,
+        ping_interval=None,
+    ) as ws:
+        return receive_room_state(ws, timeout=timeout)
+
+
+def send_room_event(
+    backend_url: str,
+    room_id: str,
+    event: dict[str, object],
+    expected_last_event: str | None = None,
+    timeout: float = 5.0,
+) -> dict[str, object]:
+    """Send a websocket event to a live room and return the resulting room state."""
+    resolved_room_id = resolve_room_reference(backend_url, room_id)
+    with connect(
+        room_ws_url(backend_url, resolved_room_id),
+        open_timeout=timeout,
+        close_timeout=timeout,
+        ping_interval=None,
+    ) as ws:
+        receive_room_state(ws, timeout=timeout)
+        ws.send(json.dumps(event))
+
+        deadline = time.monotonic() + timeout
+        last_state: dict[str, object] | None = None
+        while True:
+            remaining = max(0.1, deadline - time.monotonic())
+            if remaining <= 0:
+                raise TimeoutError(
+                    f"Timed out waiting for room event {expected_last_event or event.get('type')}"
+                )
+
+            message = ws.recv(timeout=remaining)
+            if message == "ping":
+                continue
+
+            last_state = json.loads(message)
+            last_event = last_state.get("lastEvent")
+            if expected_last_event is None or (
+                isinstance(last_event, dict)
+                and last_event.get("type") == expected_last_event
+            ):
+                return last_state
+
+        raise TimeoutError("Timed out waiting for room event state")
+
+
+def user_id_for_display_name(room_state: dict[str, object], display_name: str) -> str:
+    """Look up a room member's userId from a captured room-state payload."""
+    if room_state.get("host", {}).get("displayName") == display_name:
+        return str(room_state["host"]["userId"])
+
+    for member in room_state.get("users", []):
+        if not isinstance(member, dict):
+            continue
+        user = member.get("user")
+        if isinstance(user, dict) and user.get("displayName") == display_name:
+            return str(user["userId"])
+
+    raise AssertionError(f"Display name {display_name!r} not found in room state")
+
+
+def parse_elapsed_seconds(playback_text: str) -> int:
+    """Parse the elapsed playback label shown by PlaybackProgress."""
+    first_line = playback_text.strip().splitlines()[0]
+    minutes, seconds = first_line.split(":")
+    return int(minutes) * 60 + int(seconds)
+
+
+def make_track_payload(
+    title: str,
+    artist: str = "Artist",
+    *,
+    track_id: str | None = None,
+    provider_track_id: str | None = None,
+) -> dict[str, object]:
+    """Build a minimal track payload accepted by the add-to-queue websocket event."""
+    track_id = track_id or f"track-{uuid.uuid4().hex[:8]}"
+    provider_track_id = provider_track_id or f"spotify:track:{track_id[:8]}"
+    return {
+        "trackId": track_id,
+        "providerTrackId": provider_track_id,
+        "title": title,
+        "artist": artist,
+        "album": "",
+        "duration": 180,
+        "coverUrl": "",
+        "deepLink": "",
+    }
+
+
+def add_track_to_room(
+    backend_url: str,
+    room_id: str,
+    user_id: str,
+    title: str,
+    *,
+    artist: str = "Artist",
+) -> tuple[dict[str, object], str]:
+    """Add a track via websocket and return the updated room state plus queueEntryId."""
+    state = send_room_event(
+        backend_url,
+        room_id,
+        {
+            "type": "addqueue",
+            "track": make_track_payload(title, artist),
+            "user_id": user_id,
+        },
+        expected_last_event="queue_updated",
+    )
+    queue = state.get("queue", [])
+    if not isinstance(queue, list):
+        raise AssertionError("Room state queue payload is missing")
+
+    for entry in queue:
+        if isinstance(entry, dict):
+            track = entry.get("track")
+            if isinstance(track, dict) and track.get("title") == title:
+                return state, str(entry["queueEntryId"])
+
+    raise AssertionError(f"Track {title!r} not found in queue state")
 
 
 def run_async_in_thread(coro):
