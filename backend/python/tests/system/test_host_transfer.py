@@ -22,8 +22,8 @@ def member_item(page: Page, name: str):
 
 
 @pytest.mark.system
-def test_sc23_guest_can_accept_host_transfer(browser: Browser, test_environment):
-    """SC-23: Host can transfer ownership and the invitee can accept."""
+def test_sc22_guest_can_accept_host_transfer(browser: Browser, test_environment):
+    """SC-22: Host can transfer ownership and the invitee can accept."""
     context = browser.new_context()
 
     host = context.new_page()
@@ -87,8 +87,8 @@ def test_sc23_guest_can_accept_host_transfer(browser: Browser, test_environment)
 
 
 @pytest.mark.system
-def test_sc24_guest_can_decline_host_transfer(browser: Browser, test_environment):
-    """SC-24: Host can transfer ownership and the invitee can decline."""
+def test_sc23_guest_can_decline_host_transfer(browser: Browser, test_environment):
+    """SC-23: Host can transfer ownership and the invitee can decline."""
     context = browser.new_context()
 
     host = context.new_page()

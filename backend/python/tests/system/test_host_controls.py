@@ -42,8 +42,8 @@ def test_sc15_only_host_can_delete_room(browser: Browser, test_environment):
 
 
 @pytest.mark.system
-def test_sc17_host_can_remove_song_from_queue(browser: Browser, test_environment):
-    """SC-17: Host can remove any song from queue."""
+def test_sc16_host_can_remove_song_from_queue(browser: Browser, test_environment):
+    """SC-16: Host can remove any song from queue."""
     context = browser.new_context()
 
     host = context.new_page()
@@ -77,8 +77,8 @@ def test_sc17_host_can_remove_song_from_queue(browser: Browser, test_environment
 
 
 @pytest.mark.system
-def test_sc18_user_can_remove_own_song(browser: Browser, test_environment):
-    """SC-18: User can remove a song they added to the queue."""
+def test_sc17_user_can_remove_own_song(browser: Browser, test_environment):
+    """SC-17: User can remove a song they added to the queue."""
     context = browser.new_context()
 
     host = context.new_page()

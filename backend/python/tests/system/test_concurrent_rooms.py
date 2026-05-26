@@ -32,8 +32,8 @@ def wait_for_playback_state(page: Page, state: str) -> None:
 
 
 @pytest.mark.system
-def test_sc19_concurrent_rooms_remain_isolated(browser: Browser, test_environment):
-    """SC-19: Queue updates in one room do not appear in another room."""
+def test_sc18_concurrent_rooms_remain_isolated(browser: Browser, test_environment):
+    """SC-18: Queue updates in one room do not appear in another room."""
     context = browser.new_context()
 
     room1_host = context.new_page()
@@ -90,10 +90,10 @@ def test_sc19_concurrent_rooms_remain_isolated(browser: Browser, test_environmen
 
 
 @pytest.mark.system
-def test_sc20_users_in_different_rooms_dont_see_each_other(
+def test_sc19_users_in_different_rooms_dont_see_each_other(
     browser: Browser, test_environment
 ):
-    """SC-20: Users in different rooms don't see each other."""
+    """SC-19: Users in different rooms don't see each other."""
     context = browser.new_context()
 
     room1_host = context.new_page()
@@ -122,10 +122,10 @@ def test_sc20_users_in_different_rooms_dont_see_each_other(
 
 
 @pytest.mark.system
-def test_sc21_playback_in_one_room_doesnt_affect_other(
+def test_sc20_playback_in_one_room_doesnt_affect_other(
     browser: Browser, test_environment
 ):
-    """SC-21: Playback in one room doesn't affect the other room."""
+    """SC-20: Playback in one room doesn't affect the other room."""
     context = browser.new_context()
 
     room1_host = context.new_page()
@@ -182,8 +182,8 @@ def test_sc21_playback_in_one_room_doesnt_affect_other(
 
 
 @pytest.mark.system
-def test_sc22_votes_in_one_room_dont_affect_other(browser: Browser, test_environment):
-    """SC-22: Votes in one room don't affect the queue in another room."""
+def test_sc21_votes_in_one_room_dont_affect_other(browser: Browser, test_environment):
+    """SC-21: Votes in one room don't affect the queue in another room."""
     context = browser.new_context()
 
     room1_host = context.new_page()

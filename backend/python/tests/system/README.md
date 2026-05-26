@@ -102,18 +102,18 @@ docker compose exec api uv run pytest tests/system/ -v --headed
 - Advance to next song
 - Position synchronization
 
-### Host Controls (SC-15, SC-17 to SC-18)
+### Host Controls (SC-15 to SC-17)
 - Delete room (host only)
 - Remove songs from queue
 - User removes own song
 
-### Host Transfer (SC-23)
+### Host Transfer (SC-22 to SC-23)
 - Offer host transfer
 - Accept host transfer after provider linking
 - Decline a pending host transfer
 - Host ownership changes in real time
 
-### Concurrent Rooms (SC-19 to SC-22)
+### Concurrent Rooms (SC-18 to SC-21)
 - Room isolation
 - User isolation
 - Playback isolation
