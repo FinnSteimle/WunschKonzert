@@ -768,7 +768,7 @@ async def test_vote_replay_refreshes_room_state(db_session, init_room):
     )
 
     assert second_state["lastEvent"]["type"] == "vote_updated"  # type: ignore[index]
-    assert second_state["lastActivity"]["type"] == "replay_vote"  # type: ignore[index]
+    assert second_state["lastActivity"]["type"] == "replay_threshold_met"  # type: ignore[index]
     assert second_state["lastActivity"]["userId"] == room.hostedBy  # type: ignore[index]
     queue = cast(list[dict], second_state["queue"])
     assert len(queue) == 2

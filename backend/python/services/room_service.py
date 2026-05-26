@@ -796,14 +796,14 @@ async def _handle_skip_vote(
         await queue_entry_repo.update_queue_entry(
             queue_entry_id, {"status": QueueEntryStatus.REMOVED}, session=session
         )
-        activity = await build_last_activity(
-            "skip_vote", user_id, session, queue_entry_id=queue_entry_id
+        threshold_activity = await build_last_activity(
+            "skip_threshold_met", user_id, session, queue_entry_id=queue_entry_id
         )
         return await refresh_room_state(
             room_id,
             "queue_updated",
             session=session,
-            last_activity=activity,
+            last_activity=threshold_activity,
         )
 
     return await _recalculate_and_refresh(
@@ -874,14 +874,14 @@ async def _handle_replay_vote(
         await song_feedback_repo.delete_song_feedback(
             queue_entry_id, feedback_type=FeedbackType.REPLAY, session=session
         )
-        activity = await build_last_activity(
-            "replay_vote", user_id, session, queue_entry_id=queue_entry_id
+        threshold_activity = await build_last_activity(
+            "replay_threshold_met", user_id, session, queue_entry_id=queue_entry_id
         )
         return await refresh_room_state(
             room_id,
             "vote_updated",
             session=session,
-            last_activity=activity,
+            last_activity=threshold_activity,
         )
 
     return await _recalculate_and_refresh(
@@ -1339,6 +1339,13 @@ async def join_room_service(
 
     try:
         await ensure_active_membership(user_id, room.roomId, session=session)
+        activity = await build_last_activity("user_joined", user_id, session)
+        await refresh_room_state(
+            room.roomId,
+            "participant_joined",
+            session=session,
+            last_activity=activity,
+        )
         return {
             "success": True,
             "message": f"Successfully joined room {room.roomId}",
