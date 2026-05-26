@@ -3,6 +3,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from core.exceptions import ResourceExistsError, ResourceNotFoundError
+from models.domain import MembershipStatus
 from repositories import membership_repo
 
 pytestmark = pytest.mark.unit
@@ -63,7 +64,6 @@ async def test_get_room_active_memberships():
 
 @pytest.mark.asyncio
 async def test_update_room_membership_status_active():
-    from models.domain import MembershipStatus
 
     mock_session = AsyncMock()
     mock_membership = MagicMock()

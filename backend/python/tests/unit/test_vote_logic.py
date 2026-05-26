@@ -4,7 +4,14 @@ import pytest
 from fastapi import HTTPException
 
 from models.domain import FeedbackType, QueueEntryStatus
-from services.vote_service import vote_queue_entry
+from services.vote_service import (
+    _handle_neutral_vote,
+    _handle_replay_vote,
+    _handle_skip_vote,
+    _recalculate_and_refresh,
+    _toggle_feedback,
+    vote_queue_entry,
+)
 
 pytestmark = pytest.mark.unit
 
@@ -35,7 +42,6 @@ async def test_vote_replay_on_non_playing_raises_400():
 @pytest.mark.asyncio
 async def test_skip_threshold_math():
     """Test the 'strictly more than 50%' logic for different room sizes."""
-    from services.vote_service import _handle_skip_vote
 
     async def run_math_test(member_count, skip_votes_count):
         mock_session = AsyncMock()
@@ -120,7 +126,6 @@ async def test_vote_mutual_exclusivity():
 @pytest.mark.asyncio
 async def test_vote_replay_threshold_met():
     """Verify that reaching the replay threshold triggers track requeue."""
-    from services.vote_service import _handle_replay_vote
 
     mock_session = AsyncMock()
     mock_entry = MagicMock(trackId="t1", status=QueueEntryStatus.PLAYING)
@@ -163,7 +168,6 @@ async def test_vote_replay_threshold_met():
 @pytest.mark.asyncio
 async def test_handle_neutral_vote():
     """Verify that neutral vote clears both like and dislike feedback."""
-    from services.vote_service import _handle_neutral_vote
 
     mock_session = AsyncMock()
     with (
@@ -187,7 +191,6 @@ async def test_handle_neutral_vote():
 @pytest.mark.asyncio
 async def test_vote_toggle_logic():
     """Verify that voting for the same thing twice toggles (removes) it."""
-    from services.vote_service import _toggle_feedback
 
     mock_session = AsyncMock()
     # Mocking existing feedback to trigger toggle removal
@@ -212,7 +215,6 @@ async def test_vote_toggle_logic():
 @pytest.mark.asyncio
 async def test_recalculate_and_refresh_no_entry():
     """Verify that recalculate_and_refresh handles missing entry gracefully."""
-    from services.vote_service import _recalculate_and_refresh
 
     mock_session = AsyncMock()
     with (

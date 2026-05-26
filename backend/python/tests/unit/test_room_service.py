@@ -4,14 +4,95 @@ import pytest
 from fastapi import HTTPException
 
 from core.exceptions import ResourceNotFoundError
+from models.domain import MembershipStatus, RoomStatus
 from services.room_service import (
     check_room_availability,
+    create_room,
+    delete_room,
+    handle_disconnect,
     join_room,
+    leave_room,
     register_or_update_user,
+    rename_participant,
 )
 from services.room_state_service import JOIN_CODE_RE
 
 pytestmark = pytest.mark.unit
+
+
+@pytest.mark.asyncio
+async def test_leave_room_host_raises_403():
+    mock_session = AsyncMock()
+    mock_room = MagicMock(hostedBy="u1")
+    with (
+        patch("repositories.user_repo.get_user", return_value=MagicMock()),
+        patch("repositories.room_repo.get_room", return_value=mock_room),
+    ):
+        with pytest.raises(HTTPException) as exc:
+            await leave_room("r1", "u1", session=mock_session)
+        assert exc.value.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_handle_disconnect_not_found():
+    mock_session = AsyncMock()
+    with patch(
+        "repositories.membership_repo.update_room_membership_status",
+        side_effect=ResourceNotFoundError("Membership not found"),
+    ):
+        result = await handle_disconnect("r1", "u1", session=mock_session)
+        assert result["success"] is True
+        assert "No membership to disconnect" in result["message"]
+
+
+@pytest.mark.asyncio
+async def test_create_room_provider_not_linked_raises_403():
+    mock_session = AsyncMock()
+    with (
+        patch("services.room_service.register_or_update_user", new_callable=AsyncMock),
+        patch("services.room_service.ensure_provider_exists", new_callable=AsyncMock),
+        patch(
+            "repositories.music_provider_repo.get_provider_account_by_user",
+            return_value=None,
+        ),
+        patch("services.room_service.is_account_linked", return_value=False),
+    ):
+        with pytest.raises(HTTPException) as exc:
+            await create_room("Room", "u1", "Me", "spotify", session=mock_session)
+        assert exc.value.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_join_room_invalid_code_raises_422():
+    with pytest.raises(HTTPException) as exc:
+        await join_room("invalid", "u1", "Me", session=AsyncMock())
+    assert exc.value.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_delete_room_non_host_raises_403():
+    mock_session = AsyncMock()
+    mock_room = MagicMock(hostedBy="host")
+    with patch("repositories.room_repo.get_room", return_value=mock_room):
+        with pytest.raises(HTTPException) as exc:
+            await delete_room("r1", "not_host", session=mock_session)
+        assert exc.value.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_rename_participant_inactive_raises_403():
+    mock_session = AsyncMock()
+    mock_membership = MagicMock(membershipStatus=MembershipStatus.INACTIVE)
+    with (
+        patch("repositories.room_repo.get_room", return_value=MagicMock()),
+        patch(
+            "repositories.membership_repo.get_room_membership",
+            return_value=mock_membership,
+        ),
+    ):
+        with pytest.raises(HTTPException) as exc:
+            await rename_participant("r1", "u1", "New Name", session=mock_session)
+        assert exc.value.status_code == 403
 
 
 def test_join_code_regex_valid():
@@ -83,7 +164,6 @@ async def test_join_room_logic_normalizes_code():
     assert exc.value.status_code == 422
 
     # 2. Test valid code normalization
-    from models.domain import RoomStatus
 
     mock_room = MagicMock(roomId="r1", joinCode="ABCDE2", status=RoomStatus.ACTIVE)
 

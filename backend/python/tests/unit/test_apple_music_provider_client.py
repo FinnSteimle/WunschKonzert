@@ -3,6 +3,7 @@ from unittest.mock import AsyncMock, patch
 import pytest
 from fastapi import HTTPException
 
+from models.domain import ProviderAccount
 from services.providers.apple_music_client import AppleMusicProviderClient
 
 pytestmark = pytest.mark.unit
@@ -304,8 +305,6 @@ async def test_apple_music_client_is_linked(monkeypatch):
         "-----BEGIN EC PRIVATE KEY-----\nMHcCAQEEIIGlVmKjgvwv5Yd8Yd8Yd8Yd8Yd8Yd8Yd8Yd8Yd8Yd8oAoGCCqGSM49\nAwEHoUQDQgAE1234567890123456789012345678901234567890123456789012\n-----END EC PRIVATE KEY-----",
     )
 
-    from models.domain import ProviderAccount
-
     client = AppleMusicProviderClient()
 
     # Mock account with accessToken
@@ -317,3 +316,38 @@ async def test_apple_music_client_is_linked(monkeypatch):
     account_without_token = AsyncMock(spec=ProviderAccount)
     account_without_token.accessToken = None
     assert client.is_linked(account_without_token) is False
+
+
+@pytest.mark.asyncio
+async def test_apple_music_client_429_pass_through(monkeypatch):
+    """Verify that a 429 from Apple Music is passed through."""
+    monkeypatch.setenv("APPLE_MUSIC_TEAM_ID", "team-id")
+    monkeypatch.setenv("APPLE_MUSIC_KEY_ID", "key-id")
+    monkeypatch.setenv("APPLE_MUSIC_PRIVATE_KEY", "fake-key")
+
+    error_response = _FakeResponse({"error": "Too Many Requests"}, status_code=429)
+
+    async def mock_get(*args, **kwargs):
+        return error_response
+
+    mock_get_account = AsyncMock()
+    mock_get_account.return_value.storefront = "us"
+
+    with (
+        patch(
+            "services.providers.apple_music_client.httpx.AsyncClient.get",
+            side_effect=mock_get,
+        ),
+        patch(
+            "services.providers.apple_music_client.music_provider_repo.get_provider_account_by_user",
+            side_effect=mock_get_account,
+        ),
+        patch(
+            "services.providers.apple_music_client.get_developer_token",
+            return_value="dev-token",
+        ),
+    ):
+        client = AppleMusicProviderClient()
+        with pytest.raises(HTTPException) as exc:
+            await client.search_tracks("fire", user_id="user1")
+        assert exc.value.status_code == 429

@@ -8,6 +8,80 @@ from services.queue_service import add_to_queue, remove_queue_entry
 
 pytestmark = pytest.mark.unit
 
+...
+
+
+@pytest.mark.asyncio
+async def test_add_to_queue_duplicate_raises_409():
+    mock_session = AsyncMock()
+    track_data = {"trackId": "t1"}
+    mock_room = MagicMock(status=RoomStatus.ACTIVE)
+    with (
+        patch("repositories.room_repo.get_room", return_value=mock_room),
+        patch("repositories.user_repo.get_user", return_value=MagicMock()),
+        patch("repositories.track_repo.get_track", return_value=MagicMock()),
+        patch(
+            "repositories.queue_entry_repo.get_queue_entry_by_track",
+            return_value=MagicMock(),
+        ),
+    ):
+        with pytest.raises(HTTPException) as exc:
+            await add_to_queue("r1", track_data, "u1", session=mock_session)
+        assert exc.value.status_code == 409
+
+
+@pytest.mark.asyncio
+async def test_remove_queue_entry_not_found_raises_404():
+    mock_session = AsyncMock()
+    with patch("repositories.queue_entry_repo.get_queue_entry", return_value=None):
+        with pytest.raises(HTTPException) as exc:
+            await remove_queue_entry("r1", "qe1", "u1", session=mock_session)
+        assert exc.value.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_remove_queue_entry_host_can_always_remove():
+    mock_session = AsyncMock()
+    mock_entry = MagicMock(roomId="r1", addedBy="other")
+    mock_room = MagicMock(hostedBy="u1")
+    with (
+        patch("repositories.queue_entry_repo.get_queue_entry", return_value=mock_entry),
+        patch("repositories.room_repo.get_room", return_value=mock_room),
+        patch(
+            "repositories.queue_entry_repo.update_queue_entry", new_callable=AsyncMock
+        ) as mock_update,
+        patch("services.queue_service.build_last_activity", new_callable=AsyncMock),
+        patch("services.queue_service.refresh_room_state", new_callable=AsyncMock),
+    ):
+        await remove_queue_entry("r1", "qe1", "u1", session=mock_session)
+        mock_update.assert_called_once()
+        assert mock_update.call_args[0][1]["status"] == QueueEntryStatus.REMOVED
+
+
+@pytest.mark.asyncio
+async def test_remove_queue_entry_adder_with_upvotes_triggers_vote():
+    """Verify that if an adder tries to remove a song with upvotes, it becomes a skip vote."""
+    mock_session = AsyncMock()
+    mock_entry = MagicMock(roomId="r1", addedBy="u1")
+    mock_room = MagicMock(hostedBy="host")
+    mock_feedback = [MagicMock(type=FeedbackType.LIKE)]
+
+    with (
+        patch("repositories.queue_entry_repo.get_queue_entry", return_value=mock_entry),
+        patch("repositories.room_repo.get_room", return_value=mock_room),
+        patch(
+            "repositories.song_feedback_repo.get_song_feedback_by_queue_entry",
+            return_value=mock_feedback,
+        ),
+        patch(
+            "services.queue_service.vote_queue_entry", new_callable=AsyncMock
+        ) as mock_vote,
+    ):
+        await remove_queue_entry("r1", "qe1", "u1", session=mock_session)
+        mock_vote.assert_called_once_with(
+            "r1", "qe1", "u1", "skip", session=mock_session
+        )
+
 
 @pytest.mark.asyncio
 async def test_add_to_queue_inactive_room_raises_400():

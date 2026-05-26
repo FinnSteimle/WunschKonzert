@@ -4,6 +4,7 @@ import pytest
 from fastapi import HTTPException
 
 from core.exceptions import ResourceNotFoundError
+from models.domain import QueueEntryStatus
 from services import playback_service
 
 pytestmark = pytest.mark.unit
@@ -87,7 +88,6 @@ async def test_advance_to_next_no_current_session():
 @pytest.mark.asyncio
 async def test_advance_to_next_with_next_track():
     """Verify advance_to_next transition to a new track."""
-    from models.domain import QueueEntryStatus
 
     mock_session = AsyncMock()
     mock_next = MagicMock(queueEntryId="qe2")

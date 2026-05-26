@@ -3,6 +3,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from core.exceptions import ResourceNotFoundError
+from models.domain import RoomStatus
 from repositories import room_repo
 
 pytestmark = pytest.mark.unit
@@ -108,7 +109,6 @@ async def test_get_all_active_rooms_by_join_codes():
 
 @pytest.mark.asyncio
 async def test_update_room_status():
-    from models.domain import RoomStatus
 
     mock_session = AsyncMock()
     mock_room = MagicMock()

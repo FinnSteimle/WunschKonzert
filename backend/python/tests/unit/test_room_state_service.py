@@ -1,7 +1,9 @@
 from datetime import UTC, datetime
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from core.exceptions import ResourceNotFoundError
 from models.domain import (
     FeedbackType,
     MembershipStatus,
@@ -18,12 +20,71 @@ from models.domain import (
 from services.room_state_service import (
     _build_playback_state,
     _build_queue_list,
+    _build_room_state,
     _build_user_list,
     _preserve_ephemeral_fields,
+    build_last_activity,
+    refresh_room_state,
     room_state_cache,
 )
 
 pytestmark = pytest.mark.unit
+
+...
+
+
+@pytest.mark.asyncio
+async def test_refresh_room_state_success():
+    room_id = "r1"
+    mock_state = {"room": {"roomId": room_id}}
+    with patch(
+        "services.room_state_service._build_room_state", new_callable=AsyncMock
+    ) as mock_build:
+        mock_build.return_value = mock_state
+
+        result = await refresh_room_state(room_id, event_type="test_event")
+
+        assert result["room"]["roomId"] == room_id
+        assert "lastEvent" in result
+        assert result["lastEvent"]["type"] == "test_event"
+        assert room_state_cache[room_id] == result
+
+
+@pytest.mark.asyncio
+async def test_build_last_activity_success():
+    mock_session = AsyncMock()
+    mock_user = MagicMock(displayName="Display Name")
+
+    with (
+        patch(
+            "repositories.user_repo.get_user", new_callable=AsyncMock
+        ) as mock_get_user,
+        patch(
+            "services.room_state_service._now_iso", return_value="2024-01-01T00:00:00Z"
+        ),
+    ):
+        mock_get_user.return_value = mock_user
+
+        mock_result = MagicMock()
+        mock_result.scalar_one_or_none.return_value = "AccountUser"
+        mock_session.execute.return_value = mock_result
+
+        activity = await build_last_activity("test_act", "u1", session=mock_session)
+
+        assert activity["type"] == "test_act"
+        assert activity["username"] == "AccountUser"
+        assert activity["at"] == "2024-01-01T00:00:00Z"
+
+
+@pytest.mark.asyncio
+async def test_build_room_state_not_found():
+    mock_session = AsyncMock()
+    with patch(
+        "repositories.room_repo.get_room_with_full_state",
+        side_effect=ResourceNotFoundError("No room"),
+    ):
+        result = await _build_room_state("r1", session=mock_session)
+        assert result is None
 
 
 def test_build_user_list_removes_duplicates_and_inactive():

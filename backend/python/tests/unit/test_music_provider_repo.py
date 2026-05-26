@@ -1,3 +1,4 @@
+from datetime import UTC, datetime
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -63,8 +64,6 @@ async def test_create_provider_account_already_linked():
 async def test_update_provider_account_tokens_not_found():
     mock_session = AsyncMock()
     mock_session.get.return_value = None
-
-    from datetime import UTC, datetime
 
     with pytest.raises(ValueError, match="Provider account not found"):
         await music_provider_repo.update_provider_account_tokens(
