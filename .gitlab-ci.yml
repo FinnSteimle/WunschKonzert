@@ -557,6 +557,16 @@ deploy:production:
       # Final up with force-recreate
       echo "Restarting services with new images..."
       docker compose --env-file .env -f compose.prod.yaml up -d --force-recreate --remove-orphans
+
+      # Remove dangling images and keep only the 3 newest SHA-tagged images per repo
+      docker image prune -f
+      for REPO in "$CI_REGISTRY_IMAGE/backend" "$CI_REGISTRY_IMAGE/frontend"; do
+        docker images --format "{{.Repository}}:{{.Tag}} {{.ID}}" \
+          | grep "^${REPO}:" \
+          | grep -vE ":(main|dev)$" \
+          | awk 'NR>3 {print $2}' | sort -u \
+          | xargs -r docker rmi || true
+      done
       echo "PRODUCTION DEPLOYMENT COMPLETE"
       REMOTE
 
@@ -595,5 +605,15 @@ deploy:staging:
       # Final up with force-recreate
       echo "Restarting services with new images..."
       docker compose --env-file .env.staging -f compose.staging.yaml up -d --force-recreate --remove-orphans
+
+      # Remove dangling images and keep only the 3 newest SHA-tagged images per repo
+      docker image prune -f
+      for REPO in "$CI_REGISTRY_IMAGE/backend" "$CI_REGISTRY_IMAGE/frontend"; do
+        docker images --format "{{.Repository}}:{{.Tag}} {{.ID}}" \
+          | grep "^${REPO}:" \
+          | grep -vE ":(main|dev)$" \
+          | awk 'NR>3 {print $2}' | sort -u \
+          | xargs -r docker rmi || true
+      done
       echo "STAGING DEPLOYMENT COMPLETE"
       REMOTE
