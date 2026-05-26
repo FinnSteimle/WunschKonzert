@@ -184,13 +184,9 @@ async def get_user_access_token(user_id: str) -> str:
                 },
             )
     except httpx.HTTPError:
-        raise HTTPException(
-            status_code=502, detail="Failed to refresh Spotify token"
-        )
+        raise HTTPException(status_code=502, detail="Failed to refresh Spotify token")
     if resp.status_code != 200:
-        raise HTTPException(
-            status_code=502, detail="Failed to refresh Spotify token"
-        )
+        raise HTTPException(status_code=502, detail="Failed to refresh Spotify token")
     token_data = resp.json()
 
     new_access = token_data["access_token"]
