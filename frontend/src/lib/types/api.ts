@@ -118,6 +118,14 @@ export interface SystemMessageDto {
 	at: string;
 }
 
+export interface LastActivityDto {
+	type: string;
+	userId: string;
+	username: string;
+	at: string;
+	queueEntryId?: string;
+}
+
 /** One finished play from server `history` (playback_history). */
 export interface PlaybackHistoryEntryDto {
 	historyId: number;
@@ -167,6 +175,7 @@ export interface RoomStateDto {
 		type: string;
 		at: string;
 	};
+	lastActivity?: LastActivityDto;
 }
 
 export interface VoteRequest {

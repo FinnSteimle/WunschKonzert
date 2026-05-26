@@ -26,7 +26,7 @@
 		recordRecentRoom,
 		removeRecentRoom
 	} from '$lib/session/recentRooms';
-	import type { TrackDto, VoteRequest } from '$lib/types/api';
+	import type { LastActivityDto, RoomStateDto, TrackDto, VoteRequest } from '$lib/types/api';
 	import type { MusicPlayer, MusicPlayerState } from '$lib/playback/types';
 	import { isAutoplayBlockedError } from '$lib/playback/autoplayPolicy';
 	import { createMusicPlayer } from '$lib/playback/createMusicPlayer';
@@ -50,6 +50,7 @@
 	import UserList from '$lib/components/room/participants/UserList.svelte';
 	import HostTransferPanel from '$lib/components/room/host-transfer/HostTransferPanel.svelte';
 	import SystemMessagesList from '$lib/components/room/host-transfer/SystemMessagesList.svelte';
+	import LastActivityLog from '$lib/components/room/activity/LastActivityLog.svelte';
 	import LeaveRoomButton from '$lib/components/room/actions/LeaveRoomButton.svelte';
 	import DeleteRoomButton from '$lib/components/room/actions/DeleteRoomButton.svelte';
 	import InvitePanelDialog from '$lib/components/room/invite/InvitePanelDialog.svelte';
@@ -86,6 +87,9 @@
 	let hostTransferActionBusy = $state(false);
 	let hostTransferLinkBusy = $state(false);
 	let providerLinkedForTransfer = $state(false);
+	let activityLog = $state<LastActivityDto[]>([]);
+	let activityLogRoomId = $state<string | null>(null);
+	let lastActivitySignature = $state<string | undefined>(undefined);
 
 	// Host music SDK playback
 	let musicPlayer = $state<MusicPlayer | null>(null);
@@ -538,6 +542,8 @@
 		'host_transfer_rejected',
 		'host_transfer_completed'
 	]);
+	const HIDDEN_ACTIVITY_TYPES = new Set(['playback_paused', 'playback_resumed']);
+	const MAX_ACTIVITY_LOG_ITEMS = 100;
 	let lastReplayEventSignature = $state<string | undefined>(undefined);
 	let lastHostTransferEventSignature = $state<string | undefined>(undefined);
 	let lastKnownHostUserId = $state<string | undefined>(undefined);
@@ -545,6 +551,36 @@
 
 	function reloadWithoutSpotifyQueryParams() {
 		window.location.replace(buildPathWithoutSpotifyOAuthParams(window.location.href));
+	}
+
+	function signatureForActivity(activity: LastActivityDto): string {
+		return `${activity.type}:${activity.userId}:${activity.queueEntryId ?? ''}:${activity.at}`;
+	}
+
+	function markActivityRead(): void {
+		activityLog = [];
+	}
+
+	function appendLastActivityFromRoomState(rs: RoomStateDto | null): void {
+		const roomId = rs?.room.roomId ?? null;
+		if (activityLogRoomId !== roomId) {
+			activityLogRoomId = roomId;
+			activityLog = [];
+			lastActivitySignature = undefined;
+		}
+
+		const activity = rs?.lastActivity;
+		if (!activity) return;
+		if (HIDDEN_ACTIVITY_TYPES.has(activity.type)) return;
+
+		const signature = signatureForActivity(activity);
+		if (signature === lastActivitySignature) return;
+
+		lastActivitySignature = signature;
+		activityLog = [
+			{ ...activity },
+			...activityLog.filter((item) => signatureForActivity(item) !== signature)
+		].slice(0, MAX_ACTIVITY_LOG_ITEMS);
 	}
 
 	$effect(() => {
@@ -868,6 +904,7 @@
 
 		let roomDeletedRedirectDone = false;
 		const unsubDeleted = roomStore.subscribe((ui) => {
+			appendLastActivityFromRoomState(ui.roomState);
 			if (roomDeletedRedirectDone) return;
 			if (ui.roomState?.room.status === 'deleted') {
 				roomDeletedRedirectDone = true;
@@ -1149,6 +1186,11 @@
 				</div>
 				<div class="flex flex-wrap items-center gap-2">
 					<InvitePanelDialog joinCode={rs.room?.joinCode || ''} {inviteUrl} class="shrink-0" />
+					<LastActivityLog
+						activities={activityLog}
+						roomState={rs}
+						onMarkRead={markActivityRead}
+					/>
 					{#if $roomStore.connected}
 						<Badge variant="success">Live</Badge>
 					{:else}
