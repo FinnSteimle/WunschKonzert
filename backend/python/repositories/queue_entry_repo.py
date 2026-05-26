@@ -2,6 +2,7 @@ from collections.abc import Sequence
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import joinedload, selectinload
 
 from core.database import get_session_factory
 from core.exceptions import ResourceNotFoundError
@@ -19,6 +20,11 @@ async def get_queue_entries(
 
     result = await session.execute(
         select(QueueEntry)
+        .options(
+            joinedload(QueueEntry.track),
+            joinedload(QueueEntry.added_by),
+            selectinload(QueueEntry.song_feedback),
+        )
         .where(
             QueueEntry.roomId == room_id,
             QueueEntry.status != QueueEntryStatus.REMOVED,
@@ -37,7 +43,16 @@ async def get_queue_entry(
         async with session_factory() as new_session:
             return await get_queue_entry(queue_entry_id, session=new_session)
 
-    return await session.get(QueueEntry, queue_entry_id)
+    result = await session.execute(
+        select(QueueEntry)
+        .options(
+            joinedload(QueueEntry.track),
+            joinedload(QueueEntry.added_by),
+            selectinload(QueueEntry.song_feedback),
+        )
+        .where(QueueEntry.queueEntryId == queue_entry_id)
+    )
+    return result.scalar_one_or_none()
 
 
 async def create_queue_entry(

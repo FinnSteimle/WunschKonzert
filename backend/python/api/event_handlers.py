@@ -52,7 +52,11 @@ from collections.abc import Awaitable
 from typing import Callable
 
 import services.host_transfer_service as host_transfer_service
+import services.playback_service as playback_service
+import services.queue_service as queue_service
 import services.room_service as room_service
+import services.room_state_service as room_state_service
+import services.vote_service as vote_service
 
 # Type alias: every handler takes (room_id, event_dict) and returns nothing (async)
 EventHandler = Callable[[str, dict[str, object]], Awaitable[None]]
@@ -76,12 +80,12 @@ async def _handle_addqueue(room_id: str, event: dict[str, object]) -> None:
     user_id = str(event.get("user_id", ""))
     if not isinstance(track, dict):
         return
-    await room_service.add_to_queue(room_id, track, user_id)
+    await queue_service.add_to_queue(room_id, track, user_id)
 
 
 @register("remove_queue_entry")
 async def _handle_remove_queue_entry(room_id: str, event: dict[str, object]) -> None:
-    await room_service.remove_queue_entry(
+    await queue_service.remove_queue_entry(
         room_id=room_id,
         queue_entry_id=str(event.get("queue_entry_id", "")),
         user_id=str(event.get("user_id", "")),
@@ -90,7 +94,7 @@ async def _handle_remove_queue_entry(room_id: str, event: dict[str, object]) -> 
 
 @register("vote")
 async def _handle_vote(room_id: str, event: dict[str, object]) -> None:
-    await room_service.vote_queue_entry(
+    await vote_service.vote_queue_entry(
         room_id=room_id,
         queue_entry_id=str(event.get("queue_entry_id", "")),
         user_id=str(event.get("user_id", "")),
@@ -101,7 +105,7 @@ async def _handle_vote(room_id: str, event: dict[str, object]) -> None:
 @register("playback")
 async def _handle_playback(room_id: str, event: dict[str, object]) -> None:
     position_ms = event.get("position_ms")
-    await room_service.set_playback_state(
+    await playback_service.set_playback_state(
         room_id=room_id,
         user_id=str(event.get("user_id", "")),
         action=str(event.get("action", "")),
@@ -115,7 +119,7 @@ async def _handle_position_sync(room_id: str, event: dict[str, object]) -> None:
     pos = event.get("position_ms")
     entry_id = event.get("queue_entry_id")
     if isinstance(pos, (int, float)):
-        await room_service.sync_playback_position(
+        await playback_service.sync_playback_position(
             room_id,
             str(event.get("user_id", "")),
             int(pos),
@@ -125,7 +129,7 @@ async def _handle_position_sync(room_id: str, event: dict[str, object]) -> None:
 
 @register("history")
 async def _handle_get_history(room_id: str, event: dict[str, object]) -> None:
-    await room_service.get_song_history(room_id)
+    await room_state_service.get_song_history(room_id)
 
 
 @register("rename")
@@ -139,7 +143,7 @@ async def _handle_rename(room_id: str, event: dict[str, object]) -> None:
 
 @register("leave")
 async def _handle_leave(room_id: str, event: dict[str, object]) -> None:
-    await room_service.leave_room_service(room_id, str(event.get("user_id", "")))
+    await room_service.leave_room(room_id, str(event.get("user_id", "")))
 
 
 @register("host_transfer_initiate")

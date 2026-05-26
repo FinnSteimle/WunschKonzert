@@ -24,7 +24,10 @@ from repositories import (
     track_repo,
     user_repo,
 )
-from services import host_transfer_service, room_service
+from services import (
+    host_transfer_service,
+    room_state_service,
+)
 from services.providers.base import ProviderTrack
 
 pytestmark = pytest.mark.integration
@@ -391,7 +394,7 @@ async def test_accept_transfer_without_linked_provider_400(db_session, init_room
         )
     assert exc.value.status_code == 400
     # transfer is still pending after a failed accept
-    assert room_service.room_state_cache[room.roomId].get("transfer") is not None
+    assert room_state_service.room_state_cache[room.roomId].get("transfer") is not None
 
 
 @pytest.mark.asyncio
