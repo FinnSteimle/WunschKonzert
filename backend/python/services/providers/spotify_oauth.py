@@ -117,19 +117,22 @@ async def exchange_authorization_code(code: str) -> SpotifyOAuthTokens:
     redirect_uri = spotify_redirect_uri()
     auth_value = base64.b64encode(f"{client_id}:{client_secret}".encode()).decode()
 
-    async with httpx.AsyncClient(timeout=15) as http:
-        resp = await http.post(
-            "https://accounts.spotify.com/api/token",
-            headers={"Authorization": f"Basic {auth_value}"},
-            data={
-                "grant_type": "authorization_code",
-                "code": code,
-                "redirect_uri": redirect_uri,
-            },
-        )
-        if resp.status_code != 200:
-            raise SpotifyOAuthError("token_exchange_failed")
-        token_data = resp.json()
+    try:
+        async with httpx.AsyncClient(timeout=15) as http:
+            resp = await http.post(
+                "https://accounts.spotify.com/api/token",
+                headers={"Authorization": f"Basic {auth_value}"},
+                data={
+                    "grant_type": "authorization_code",
+                    "code": code,
+                    "redirect_uri": redirect_uri,
+                },
+            )
+    except httpx.HTTPError:
+        raise SpotifyOAuthError("token_exchange_failed")
+    if resp.status_code != 200:
+        raise SpotifyOAuthError("token_exchange_failed")
+    token_data = resp.json()
 
     access_token = token_data.get("access_token")
     if not isinstance(access_token, str) or not access_token:
@@ -170,20 +173,25 @@ async def get_user_access_token(user_id: str) -> str:
     client_id, client_secret = spotify_credentials()
     auth_value = base64.b64encode(f"{client_id}:{client_secret}".encode()).decode()
 
-    async with httpx.AsyncClient(timeout=15) as http:
-        resp = await http.post(
-            "https://accounts.spotify.com/api/token",
-            headers={"Authorization": f"Basic {auth_value}"},
-            data={
-                "grant_type": "refresh_token",
-                "refresh_token": pa.refreshToken,
-            },
-        )
-        if resp.status_code != 200:
-            raise HTTPException(
-                status_code=502, detail="Failed to refresh Spotify token"
+    try:
+        async with httpx.AsyncClient(timeout=15) as http:
+            resp = await http.post(
+                "https://accounts.spotify.com/api/token",
+                headers={"Authorization": f"Basic {auth_value}"},
+                data={
+                    "grant_type": "refresh_token",
+                    "refresh_token": pa.refreshToken,
+                },
             )
-        token_data = resp.json()
+    except httpx.HTTPError:
+        raise HTTPException(
+            status_code=502, detail="Failed to refresh Spotify token"
+        )
+    if resp.status_code != 200:
+        raise HTTPException(
+            status_code=502, detail="Failed to refresh Spotify token"
+        )
+    token_data = resp.json()
 
     new_access = token_data["access_token"]
     if not isinstance(new_access, str) or not new_access:
@@ -209,14 +217,17 @@ class SpotifyProfile:
 
 
 async def fetch_spotify_profile(access_token: str, token_type: str) -> SpotifyProfile:
-    async with httpx.AsyncClient(timeout=10) as http:
-        profile_resp = await http.get(
-            "https://api.spotify.com/v1/me",
-            headers={"Authorization": f"{token_type} {access_token}"},
-        )
-        if profile_resp.status_code != 200:
-            raise SpotifyOAuthError("profile_fetch_failed")
-        profile = profile_resp.json()
+    try:
+        async with httpx.AsyncClient(timeout=10) as http:
+            profile_resp = await http.get(
+                "https://api.spotify.com/v1/me",
+                headers={"Authorization": f"{token_type} {access_token}"},
+            )
+    except httpx.HTTPError:
+        raise SpotifyOAuthError("profile_fetch_failed")
+    if profile_resp.status_code != 200:
+        raise SpotifyOAuthError("profile_fetch_failed")
+    profile = profile_resp.json()
 
     external_user_id = profile.get("id")
     user_id = (

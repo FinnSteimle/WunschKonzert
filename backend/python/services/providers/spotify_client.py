@@ -37,14 +37,19 @@ class SpotifyProviderClient:
             "SPOTIFY_TOKEN_URL", "https://accounts.spotify.com/api/token"
         )
 
-        async with httpx.AsyncClient(timeout=15) as client:
-            response = await client.post(
-                token_url,
-                headers={"Authorization": f"Basic {auth_value}"},
-                data={"grant_type": "client_credentials"},
-            )
-            response.raise_for_status()
-            payload = response.json()
+        try:
+            async with httpx.AsyncClient(timeout=15) as client:
+                response = await client.post(
+                    token_url,
+                    headers={"Authorization": f"Basic {auth_value}"},
+                    data={"grant_type": "client_credentials"},
+                )
+                response.raise_for_status()
+                payload = response.json()
+        except httpx.HTTPError as exc:
+            raise HTTPException(
+                status_code=502, detail="Spotify is currently unavailable"
+            ) from exc
 
         token = payload.get("access_token")
         expires_in = int(payload.get("expires_in", 3600))
@@ -119,22 +124,22 @@ class SpotifyProviderClient:
         )
 
         query = f'track:"{title}" artist:"{artist}"'
-        async with httpx.AsyncClient(timeout=15) as client:
-            response = await client.get(
-                search_url,
-                params={
-                    "q": query,
-                    "type": "track",
-                    "limit": 5,
-                    "market": market,
-                },
-                headers={"Authorization": f"Bearer {token}"},
-            )
-            try:
+        try:
+            async with httpx.AsyncClient(timeout=15) as client:
+                response = await client.get(
+                    search_url,
+                    params={
+                        "q": query,
+                        "type": "track",
+                        "limit": 5,
+                        "market": market,
+                    },
+                    headers={"Authorization": f"Bearer {token}"},
+                )
                 response.raise_for_status()
-            except httpx.HTTPStatusError:
-                return None
-            payload = response.json()
+        except httpx.HTTPError:
+            return None
+        payload = response.json()
 
         items = payload.get("tracks", {}).get("items", [])
         if not items:

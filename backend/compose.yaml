@@ -19,6 +19,8 @@ services:
       - ./.env:/.env # mount .env file
       - /var/run/docker.sock:/var/run/docker.sock # allow DooD for testcontainers
     command: uv run --env-file /.env uvicorn main:app --reload --host 0.0.0.0 --port 8000
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     depends_on:
       db:
         condition: service_healthy
