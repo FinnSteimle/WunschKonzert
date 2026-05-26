@@ -10,6 +10,7 @@ pytestmark = pytest.mark.unit
 @pytest.mark.asyncio
 async def test_get_track_auto_session():
     mock_session = AsyncMock()
+    mock_session.add = MagicMock()
     mock_track = MagicMock()
     mock_session.get.return_value = mock_track
     mock_session_factory = MagicMock(return_value=mock_session)
@@ -25,6 +26,7 @@ async def test_get_track_auto_session():
 @pytest.mark.asyncio
 async def test_create_track():
     mock_session = AsyncMock()
+    mock_session.add = MagicMock()
     track_data = {"trackId": "t1", "title": "Song", "artist": "Artist"}
 
     await track_repo.create_track(track_data, session=mock_session)

@@ -45,6 +45,7 @@ async def test_skip_threshold_math():
 
     async def run_math_test(member_count, skip_votes_count):
         mock_session = AsyncMock()
+        mock_session.add = MagicMock()
         mock_entry = MagicMock(status=QueueEntryStatus.PLAYING)
 
         with patch(
@@ -95,6 +96,7 @@ async def test_skip_threshold_math():
 async def test_vote_mutual_exclusivity():
     """Verify that an upvote removes a prior downvote."""
     mock_session = AsyncMock()
+    mock_session.add = MagicMock()
     mock_entry = MagicMock(roomId="r1", status=QueueEntryStatus.QUEUED)
 
     with patch(
@@ -128,6 +130,7 @@ async def test_vote_replay_threshold_met():
     """Verify that reaching the replay threshold triggers track requeue."""
 
     mock_session = AsyncMock()
+    mock_session.add = MagicMock()
     mock_entry = MagicMock(trackId="t1", status=QueueEntryStatus.PLAYING)
 
     with (
@@ -170,6 +173,7 @@ async def test_handle_neutral_vote():
     """Verify that neutral vote clears both like and dislike feedback."""
 
     mock_session = AsyncMock()
+    mock_session.add = MagicMock()
     with (
         patch(
             "repositories.song_feedback_repo.delete_song_feedback",
@@ -193,6 +197,7 @@ async def test_vote_toggle_logic():
     """Verify that voting for the same thing twice toggles (removes) it."""
 
     mock_session = AsyncMock()
+    mock_session.add = MagicMock()
     # Mocking existing feedback to trigger toggle removal
     with (
         patch(
@@ -217,6 +222,7 @@ async def test_recalculate_and_refresh_no_entry():
     """Verify that recalculate_and_refresh handles missing entry gracefully."""
 
     mock_session = AsyncMock()
+    mock_session.add = MagicMock()
     with (
         patch("repositories.queue_entry_repo.get_queue_entry", return_value=None),
         patch(

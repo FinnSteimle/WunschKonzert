@@ -82,6 +82,7 @@ async def test_websocket_identify(app):
         patch(
             "services.room_service.ensure_active_membership", new_callable=AsyncMock
         ) as mock_ensure,
+        patch("services.room_service.handle_disconnect", new_callable=AsyncMock),
         patch("api.websockets.heartbeat_loop", new_callable=AsyncMock),
     ):
         client = TestClient(app)
