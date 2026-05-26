@@ -1,15 +1,25 @@
 from datetime import UTC, datetime
 
 from models.domain import (
+    FeedbackType,
     MembershipStatus,
+    PlaybackSession,
+    PlaybackState,
     QueueEntry,
     QueueEntryStatus,
     Room,
     RoomMembership,
+    SongFeedback,
     Track,
     User,
 )
-from services.room_state_service import _build_queue_list, _build_user_list
+from services.room_state_service import (
+    _build_playback_state,
+    _build_queue_list,
+    _build_user_list,
+    _preserve_ephemeral_fields,
+    room_state_cache,
+)
 
 
 def test_build_user_list_removes_duplicates_and_inactive():
@@ -61,19 +71,15 @@ def test_build_user_list_removes_duplicates_and_inactive():
     assert "left" not in user_ids
 
 
-def test_build_queue_list_sorting():
-    # Setup room and users
+def test_build_queue_list_complex_sorting():
+    """Verify: 1. Playing is first. 2. Higher voteScore next. 3. Lower position tie-break."""
     host = User(userId="host", displayName="Host")
     room = Room(host=host)
 
-    track_a = Track(trackId="a", title="A", artist="A")
-    track_b = Track(trackId="b", title="B", artist="B")
-
-    # Create queue entries with different scores and positions
-    # Position 1, Score 0
-    entry1 = QueueEntry(
-        queueEntryId="1",
-        track=track_a,
+    # Song A: Position 1, Score 0 (QUEUED)
+    entry_a = QueueEntry(
+        queueEntryId="a",
+        track=Track(title="A", artist="A"),
         added_by=host,
         position=1,
         status=QueueEntryStatus.QUEUED,
@@ -81,26 +87,84 @@ def test_build_queue_list_sorting():
         orderRank=1.0,
         queuedAt=datetime.now(UTC),
     )
-    # Position 2, Score 5 (Should jump ahead of entry1)
-    entry2 = QueueEntry(
-        queueEntryId="2",
-        track=track_b,
+    # Song B: Position 2, Score 10 (QUEUED) - Should jump to 2nd place
+    entry_b = QueueEntry(
+        queueEntryId="b",
+        track=Track(title="B", artist="B"),
         added_by=host,
         position=2,
         status=QueueEntryStatus.QUEUED,
-        song_feedback=[],
+        song_feedback=[
+            SongFeedback(type=FeedbackType.LIKE, votedAt=datetime.now(UTC))
+            for _ in range(10)
+        ],
         orderRank=2.0,
         queuedAt=datetime.now(UTC),
     )
-    # We "cheat" the build logic by manually setting what the builder usually calculates
-    # (In a real run, _build_queue_list calculates voteScore from feedback)
+    # Song C: Position 3, Score 0 (PLAYING) - Should jump to 1st place
+    entry_c = QueueEntry(
+        queueEntryId="c",
+        track=Track(title="C", artist="C"),
+        added_by=host,
+        position=3,
+        status=QueueEntryStatus.PLAYING,
+        song_feedback=[],
+        orderRank=3.0,
+        queuedAt=datetime.now(UTC),
+    )
 
-    room.queue_entries = [entry1, entry2]
+    room.queue_entries = [entry_a, entry_b, entry_c]
 
-    # We need to mock the feedback tallying or just provide feedback objects
-    # For simplicity, let's just test that it returns a list
     result = _build_queue_list(room)
 
-    assert len(result) == 2
-    # Verify the dictionary structure
-    assert result[0]["track"]["title"] in ["A", "B"]
+    titles = [item["track"]["title"] for item in result]
+    # Expected order: C (playing), B (score 10), A (score 0)
+    assert titles == ["C", "B", "A"]
+
+
+def test_preserve_ephemeral_fields():
+    """Verify that in-memory fields (transfers/messages) are kept during a refresh."""
+    room_id = "test_room"
+    # 1. Setup a "previous" state in the cache
+    room_state_cache[room_id] = {
+        "transfer": {"transferId": "t123", "toUserId": "u2"},
+        "systemMessages": [{"id": "m1", "text": "Hello"}],
+    }
+
+    # 2. A "new" fresh state from the DB (which doesn't know about memory-only fields)
+    new_state = {"room": {"roomId": room_id}, "users": []}
+
+    _preserve_ephemeral_fields(room_id, new_state)
+
+    # 3. Verify fields were carried over
+    assert new_state["transfer"]["transferId"] == "t123"
+    assert new_state["systemMessages"][0]["text"] == "Hello"
+
+
+def test_build_playback_state_stopped():
+    """Verify state when no playback session exists."""
+    room = Room(playback_sessions=[])
+
+    state = _build_playback_state(room)
+
+    assert state["state"] == "stopped"
+    assert state["currentQueueEntryId"] is None
+    assert state["positionMs"] == 0
+
+
+def test_build_playback_state_playing():
+    """Verify state when a session is active."""
+    session = PlaybackSession(
+        playbackSessionId="ps1",
+        queueEntryId="qe1",
+        state=PlaybackState.PLAYING,
+        elapsedTime=45,  # 45 seconds
+        startedAt=datetime.now(UTC),
+    )
+    room = Room(playback_sessions=[session])
+
+    state = _build_playback_state(room)
+
+    assert state["state"] == "playing"
+    assert state["currentQueueEntryId"] == "qe1"
+    assert state["positionMs"] == 45000
