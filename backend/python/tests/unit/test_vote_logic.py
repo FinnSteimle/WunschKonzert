@@ -2,6 +2,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from fastapi import HTTPException
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from models.domain import FeedbackType, QueueEntryStatus
 from services.vote_service import (
@@ -19,7 +20,9 @@ pytestmark = pytest.mark.unit
 @pytest.mark.asyncio
 async def test_vote_invalid_type_raises_400():
     with pytest.raises(HTTPException) as exc:
-        await vote_queue_entry("r1", "qe1", "u1", "sideways", session=AsyncMock())
+        await vote_queue_entry(
+            "r1", "qe1", "u1", "sideways", session=AsyncMock(spec=AsyncSession)
+        )
     assert exc.value.status_code == 400
     assert "Invalid vote type" in exc.value.detail
 
@@ -34,7 +37,9 @@ async def test_vote_replay_on_non_playing_raises_400():
         "repositories.queue_entry_repo.get_queue_entry", return_value=mock_entry
     ):
         with pytest.raises(HTTPException) as exc:
-            await vote_queue_entry("r1", "qe1", "u1", "replay", session=AsyncMock())
+            await vote_queue_entry(
+                "r1", "qe1", "u1", "replay", session=AsyncMock(spec=AsyncSession)
+            )
         assert exc.value.status_code == 400
         assert "only be cast on the currently playing song" in exc.value.detail
 
@@ -44,8 +49,7 @@ async def test_skip_threshold_math():
     """Test the 'strictly more than 50%' logic for different room sizes."""
 
     async def run_math_test(member_count, skip_votes_count):
-        mock_session = AsyncMock()
-        mock_session.add = MagicMock()
+        mock_session = AsyncMock(spec=AsyncSession)
         mock_entry = MagicMock(status=QueueEntryStatus.PLAYING)
 
         with patch(
@@ -95,8 +99,7 @@ async def test_skip_threshold_math():
 @pytest.mark.asyncio
 async def test_vote_mutual_exclusivity():
     """Verify that an upvote removes a prior downvote."""
-    mock_session = AsyncMock()
-    mock_session.add = MagicMock()
+    mock_session = AsyncMock(spec=AsyncSession)
     mock_entry = MagicMock(roomId="r1", status=QueueEntryStatus.QUEUED)
 
     with patch(
@@ -129,8 +132,7 @@ async def test_vote_mutual_exclusivity():
 async def test_vote_replay_threshold_met():
     """Verify that reaching the replay threshold triggers track requeue."""
 
-    mock_session = AsyncMock()
-    mock_session.add = MagicMock()
+    mock_session = AsyncMock(spec=AsyncSession)
     mock_entry = MagicMock(trackId="t1", status=QueueEntryStatus.PLAYING)
 
     with (
@@ -172,8 +174,7 @@ async def test_vote_replay_threshold_met():
 async def test_handle_neutral_vote():
     """Verify that neutral vote clears both like and dislike feedback."""
 
-    mock_session = AsyncMock()
-    mock_session.add = MagicMock()
+    mock_session = AsyncMock(spec=AsyncSession)
     with (
         patch(
             "repositories.song_feedback_repo.delete_song_feedback",
@@ -196,8 +197,7 @@ async def test_handle_neutral_vote():
 async def test_vote_toggle_logic():
     """Verify that voting for the same thing twice toggles (removes) it."""
 
-    mock_session = AsyncMock()
-    mock_session.add = MagicMock()
+    mock_session = AsyncMock(spec=AsyncSession)
     # Mocking existing feedback to trigger toggle removal
     with (
         patch(
@@ -221,8 +221,7 @@ async def test_vote_toggle_logic():
 async def test_recalculate_and_refresh_no_entry():
     """Verify that recalculate_and_refresh handles missing entry gracefully."""
 
-    mock_session = AsyncMock()
-    mock_session.add = MagicMock()
+    mock_session = AsyncMock(spec=AsyncSession)
     with (
         patch("repositories.queue_entry_repo.get_queue_entry", return_value=None),
         patch(
