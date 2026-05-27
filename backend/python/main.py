@@ -14,7 +14,6 @@ import repositories.music_provider_repo as music_provider_repo
 from api import websockets
 from api.routers import (
     apple_music_auth,
-    auth,
     debug,
     playback,
     provider_search,
@@ -79,7 +78,6 @@ app.add_middleware(
 )
 
 app.include_router(rooms.router)
-app.include_router(auth.router)
 app.include_router(provider_search.router)
 app.include_router(playback.router)
 app.include_router(spotify_auth.router)

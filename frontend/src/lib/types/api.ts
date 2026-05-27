@@ -13,12 +13,6 @@ export interface AppleMusicLinkRequest {
 	display_name: string;
 }
 
-export interface AuthResponse {
-	success: boolean;
-	message: string;
-	token?: string | null;
-}
-
 export interface RoomResponse {
 	success: boolean;
 	message: string;

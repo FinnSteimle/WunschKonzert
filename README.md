@@ -114,7 +114,7 @@ The backend was extended minimally to support required frontend MVP flows while 
   - `GET /rooms/{room_id}/search?q=` (Spotify track search)
 - Extended `/ws/{room_id}` handling for MVP events (`addqueue`, `vote`, `playback`, `leave`) and broadcasts updated room state.
 - Added DB-backed room-state rehydration logic so rooms/queue/votes/playback state can be rebuilt from PostgreSQL after restart.
-- Kept existing endpoints (`/create_room`, `/join_room`, `/leave_room`, `/add_music_provider`, `/ws/{room_id}`) intact and backward-compatible.
+- Kept existing endpoints (`/create_room`, `/join_room`, `/leave_room`, `/ws/{room_id}`) intact and backward-compatible.
 
 ## Testing
 

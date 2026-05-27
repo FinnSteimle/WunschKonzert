@@ -1,13 +1,6 @@
 from pydantic import BaseModel
 
 
-class AuthRequest(BaseModel):
-    """Request model for authentication endpoints"""
-
-    username: str
-    password: str
-
-
 class RoomRequest(BaseModel):
     """Request model for joining a room via its 6-character join code."""
 
@@ -23,14 +16,6 @@ class CreateRoomRequest(BaseModel):
     user_id: str
     display_name: str
     supported_provider_id: str
-
-
-class AuthResponse(BaseModel):
-    """Response model for authentication endpoints"""
-
-    success: bool
-    message: str
-    token: str | None = None
 
 
 class RoomResponse(BaseModel):
@@ -143,22 +128,6 @@ class AddQueueRequest(BaseModel):
     room_id: str
     track: Track
     user_id: str
-
-
-class AddMusicProviderRequest(BaseModel):
-    """Request model for adding a music provider to a user"""
-
-    user_id: str
-    provider_id: str
-    external_user_id: str
-
-
-class AddMusicProviderResponse(BaseModel):
-    """Response model for adding a music provider"""
-
-    success: bool
-    message: str
-    provider_account_id: str | None = None
 
 
 class LeaveRoomRequest(BaseModel):
