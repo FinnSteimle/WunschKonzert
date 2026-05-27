@@ -104,17 +104,6 @@ def join_room_helper(page: Page, frontend_url: str, join_code: str, display_name
     restore_session_identity(page, previous_identity)
 
 
-def add_song_helper(page: Page, song_name: str):
-    """Helper to search and add a song to queue"""
-    page.wait_for_selector("#wk-search", state="visible")
-    page.locator("#wk-search").fill(song_name)
-    page.get_by_role("button", name="Search").click()
-    page.get_by_role("list", name="Search results").wait_for(state="visible")
-    page.get_by_role("list", name="Search results").get_by_role(
-        "button", name="Add to queue"
-    ).first.click()
-
-
 def backend_ws_url(backend_url: str) -> str:
     """Translate an HTTP backend URL into the matching WebSocket URL."""
     if backend_url.startswith("https://"):
@@ -168,7 +157,7 @@ def receive_room_state(ws, timeout: float = 5.0) -> dict[str, object]:
     """Receive the next JSON room-state payload from a room websocket."""
     deadline = time.monotonic() + timeout
     while True:
-        remaining = max(0.1, deadline - time.monotonic())
+        remaining = deadline - time.monotonic()
         if remaining <= 0:
             raise TimeoutError("Timed out waiting for room state")
         message = ws.recv(timeout=remaining)
@@ -210,9 +199,8 @@ def send_room_event(
         ws.send(json.dumps(event))
 
         deadline = time.monotonic() + timeout
-        last_state: dict[str, object] | None = None
         while True:
-            remaining = max(0.1, deadline - time.monotonic())
+            remaining = deadline - time.monotonic()
             if remaining <= 0:
                 raise TimeoutError(
                     f"Timed out waiting for room event {expected_last_event or event.get('type')}"
@@ -229,8 +217,6 @@ def send_room_event(
                 and last_event.get("type") == expected_last_event
             ):
                 return last_state
-
-        raise TimeoutError("Timed out waiting for room event state")
 
 
 def user_id_for_display_name(room_state: dict[str, object], display_name: str) -> str:

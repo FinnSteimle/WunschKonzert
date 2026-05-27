@@ -128,7 +128,6 @@ docker compose exec api uv run pytest tests/system/ -v --headed
 2. Use helper functions from `conftest.py`:
    - `create_room_helper()` - Create room and return join code
    - `join_room_helper()` - Join existing room
-   - `add_song_helper()` - Search and add song to queue
 
 3. Mark test with `@pytest.mark.system`
 

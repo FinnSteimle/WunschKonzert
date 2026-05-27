@@ -19,18 +19,6 @@ def queue_item(page: Page, song_name: str):
     )
 
 
-def wait_for_playback_state(page: Page, state: str) -> None:
-    page.wait_for_function(
-        """
-        ([selector, expected]) => {
-            const el = document.querySelector(selector);
-            return !!el && el.innerText.includes(expected);
-        }
-        """,
-        arg=["[aria-label='Playback progress']", state],
-    )
-
-
 @pytest.mark.system
 def test_sc18_concurrent_rooms_remain_isolated(browser: Browser, test_environment):
     """SC-18: Queue updates in one room do not appear in another room."""

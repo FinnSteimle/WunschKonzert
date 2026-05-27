@@ -16,18 +16,6 @@ def playback_progress(page: Page):
     return page.get_by_label("Playback progress")
 
 
-def wait_for_playback_state(page: Page, state: str) -> None:
-    page.wait_for_function(
-        """
-        ([selector, expected]) => {
-            const el = document.querySelector(selector);
-            return !!el && el.innerText.includes(expected);
-        }
-        """,
-        arg=["[aria-label='Playback progress']", state],
-    )
-
-
 @pytest.mark.system
 def test_sc10_host_starts_playback_syncs_to_all(browser: Browser, test_environment):
     """SC-10: Host starts playback and all participants see playing state."""
