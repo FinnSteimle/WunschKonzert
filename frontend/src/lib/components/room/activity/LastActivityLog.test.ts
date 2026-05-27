@@ -82,6 +82,25 @@ describe('LastActivityLog', () => {
 		expect(screen.getByText('5m ago')).toBeTruthy();
 	});
 
+	it('renders user joined activity', async () => {
+		const activities: LastActivityDto[] = [
+			{
+				type: 'user_joined',
+				userId: 'U_BOB',
+				username: 'Bob',
+				at: '2025-06-15T11:59:00.000Z'
+			}
+		];
+
+		render(LastActivityLog, { activities, roomState });
+		expect(screen.getByRole('button', { name: 'Unread room activity: 1' })).toBeTruthy();
+		await fireEvent.click(screen.getByRole('button', { name: 'Unread room activity: 1' }));
+
+		expect(screen.getByRole('list', { name: 'Unread room activity' })).toBeTruthy();
+		expect(screen.getByText('Bob joined the room')).toBeTruthy();
+		expect(screen.getByText('1m ago')).toBeTruthy();
+	});
+
 	it('highlights important host transfer activity', async () => {
 		render(LastActivityLog, {
 			activities: [

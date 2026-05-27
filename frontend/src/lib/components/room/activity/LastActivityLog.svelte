@@ -116,6 +116,11 @@
 			tone: 'default',
 			label: (activity) => `${activity.username} left the room`
 		},
+		user_joined: {
+			icon: 'add',
+			tone: 'positive',
+			label: (activity) => `${activity.username} joined the room`
+		},
 		user_renamed: {
 			icon: 'rename',
 			tone: 'default',
