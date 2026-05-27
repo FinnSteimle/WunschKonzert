@@ -1,6 +1,7 @@
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.exceptions import ResourceNotFoundError
 from models.domain import RoomStatus
@@ -13,7 +14,7 @@ pytestmark = pytest.mark.unit
 async def test_get_room_auto_session():
     """Verify that get_room handles session=None by creating a new session."""
     mock_room = MagicMock()
-    mock_session = AsyncMock()
+    mock_session = AsyncMock(spec=AsyncSession)
     mock_session.get.return_value = mock_room
     mock_session_factory = MagicMock(return_value=mock_session)
 
@@ -31,7 +32,7 @@ async def test_get_room_auto_session():
 
 @pytest.mark.asyncio
 async def test_get_room_not_found_raises():
-    mock_session = AsyncMock()
+    mock_session = AsyncMock(spec=AsyncSession)
     mock_session.get.return_value = None
 
     with pytest.raises(ResourceNotFoundError):
@@ -41,7 +42,7 @@ async def test_get_room_not_found_raises():
 @pytest.mark.asyncio
 async def test_create_room_collision_handling():
     """Verify that create_room retries on roomId or joinCode collisions."""
-    mock_session = AsyncMock()
+    mock_session = AsyncMock(spec=AsyncSession)
 
     # We want to test that it retries if a roomId collision occurs.
     # Logic:
@@ -90,7 +91,7 @@ async def test_create_room_collision_handling():
 
 @pytest.mark.asyncio
 async def test_get_all_active_rooms_by_join_codes():
-    mock_session = AsyncMock()
+    mock_session = AsyncMock(spec=AsyncSession)
     mock_result = MagicMock()
     mock_result.scalars.return_value.all.return_value = ["CODE1", "CODE2"]
     mock_session.execute.return_value = mock_result
@@ -110,7 +111,7 @@ async def test_get_all_active_rooms_by_join_codes():
 @pytest.mark.asyncio
 async def test_update_room_status():
 
-    mock_session = AsyncMock()
+    mock_session = AsyncMock(spec=AsyncSession)
     mock_room = MagicMock()
     mock_session.get.return_value = mock_room
 
@@ -122,7 +123,7 @@ async def test_update_room_status():
 
 @pytest.mark.asyncio
 async def test_get_room_with_full_state_not_found():
-    mock_session = AsyncMock()
+    mock_session = AsyncMock(spec=AsyncSession)
     mock_result = MagicMock()
     mock_result.unique.return_value.scalar_one_or_none.return_value = None
     mock_session.execute.return_value = mock_result

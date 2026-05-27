@@ -1,6 +1,7 @@
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.exceptions import ResourceNotFoundError
 from repositories import playback_history_repo, playback_session_repo
@@ -10,7 +11,7 @@ pytestmark = pytest.mark.unit
 
 @pytest.mark.asyncio
 async def test_get_current_playback_session_auto_session():
-    mock_session = AsyncMock()
+    mock_session = AsyncMock(spec=AsyncSession)
     mock_result = MagicMock()
     mock_session.execute.return_value = mock_result
     mock_session_factory = MagicMock(return_value=mock_session)
@@ -26,7 +27,7 @@ async def test_get_current_playback_session_auto_session():
 
 @pytest.mark.asyncio
 async def test_update_playback_session_not_found():
-    mock_session = AsyncMock()
+    mock_session = AsyncMock(spec=AsyncSession)
     mock_session.get.return_value = None
 
     with pytest.raises(ResourceNotFoundError):
@@ -37,7 +38,7 @@ async def test_update_playback_session_not_found():
 
 @pytest.mark.asyncio
 async def test_add_history_entry_auto_session():
-    mock_session = AsyncMock()
+    mock_session = AsyncMock(spec=AsyncSession)
     mock_session_factory = MagicMock(return_value=mock_session)
 
     with patch(
@@ -51,7 +52,7 @@ async def test_add_history_entry_auto_session():
 
 @pytest.mark.asyncio
 async def test_get_history_auto_session():
-    mock_session = AsyncMock()
+    mock_session = AsyncMock(spec=AsyncSession)
     mock_result = MagicMock()
     mock_session.execute.return_value = mock_result
     mock_session_factory = MagicMock(return_value=mock_session)
