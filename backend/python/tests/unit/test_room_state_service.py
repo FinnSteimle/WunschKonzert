@@ -188,10 +188,11 @@ def test_build_queue_list_complex_sorting():
 
 
 def test_preserve_ephemeral_fields():
-    """Verify that in-memory fields (transfers/messages) are kept during a refresh."""
+    """Verify that in-memory fields are kept during a refresh."""
     room_id = "test_room"
     # 1. Setup a "previous" state in the cache
     room_state_cache[room_id] = {
+        "lastActivity": {"type": "user_joined", "userId": "u1"},
         "transfer": {"transferId": "t123", "toUserId": "u2"},
         "systemMessages": [{"id": "m1", "text": "Hello"}],
     }
@@ -202,6 +203,7 @@ def test_preserve_ephemeral_fields():
     _preserve_ephemeral_fields(room_id, new_state)
 
     # 3. Verify fields were carried over
+    assert new_state["lastActivity"]["type"] == "user_joined"
     assert new_state["transfer"]["transferId"] == "t123"
     assert new_state["systemMessages"][0]["text"] == "Hello"
 

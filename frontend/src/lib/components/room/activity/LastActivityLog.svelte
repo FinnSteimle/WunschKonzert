@@ -13,6 +13,7 @@
 	import ThumbsDownIcon from '@lucide/svelte/icons/thumbs-down';
 	import ThumbsUpIcon from '@lucide/svelte/icons/thumbs-up';
 	import UserMinusIcon from '@lucide/svelte/icons/user-minus';
+	import UserPlusIcon from '@lucide/svelte/icons/user-plus';
 	import { buttonVariants } from '$lib/components/ui/button';
 	import * as Popover from '$lib/components/ui/popover';
 	import type { LastActivityDto, RoomStateDto } from '$lib/types/api';
@@ -53,6 +54,7 @@
 		| 'stop'
 		| 'advance'
 		| 'leave'
+		| 'userJoin'
 		| 'rename'
 		| 'host'
 		| 'hostReject'
@@ -117,7 +119,7 @@
 			label: (activity) => `${activity.username} left the room`
 		},
 		user_joined: {
-			icon: 'add',
+			icon: 'userJoin',
 			tone: 'positive',
 			label: (activity) => `${activity.username} joined the room`
 		},
@@ -267,6 +269,8 @@
 								<StepForwardIcon class="size-4" />
 							{:else if icon === 'leave'}
 								<UserMinusIcon class="size-4" />
+							{:else if icon === 'userJoin'}
+								<UserPlusIcon class="size-4" />
 							{:else if icon === 'rename'}
 								<PencilIcon class="size-4" />
 							{:else if icon === 'host'}

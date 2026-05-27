@@ -270,10 +270,13 @@ async def _build_room_state(
 
 
 def _preserve_ephemeral_fields(room_id: str, state: dict[str, object]) -> None:
-    """Carry in-memory-only fields (host transfer invite + system messages) across rebuilds."""
+    """Carry in-memory-only fields across rebuilds."""
     previous = room_state_cache.get(room_id)
     if not isinstance(previous, dict):
         return
+    last_activity = previous.get("lastActivity")
+    if isinstance(last_activity, dict):
+        state["lastActivity"] = last_activity
     transfer = previous.get("transfer")
     if isinstance(transfer, dict):
         state["transfer"] = transfer

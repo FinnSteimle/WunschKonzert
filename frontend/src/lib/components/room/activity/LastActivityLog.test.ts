@@ -99,6 +99,9 @@ describe('LastActivityLog', () => {
 		expect(screen.getByRole('list', { name: 'Unread room activity' })).toBeTruthy();
 		expect(screen.getByText('Bob joined the room')).toBeTruthy();
 		expect(screen.getByText('1m ago')).toBeTruthy();
+		expect(screen.getByText('Bob joined the room').closest('li')?.className).toContain(
+			'border-emerald-500/30'
+		);
 	});
 
 	it('highlights important host transfer activity', async () => {
