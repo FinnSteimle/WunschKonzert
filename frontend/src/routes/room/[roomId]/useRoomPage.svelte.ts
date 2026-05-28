@@ -297,7 +297,12 @@ export function useRoomPage() {
 		try {
 			if (providerId === 'spotify') {
 				const returnTo = `${window.location.origin}${window.location.pathname}`;
-				const { auth_url } = await apiClient.getSpotifyLoginUrl(uid, returnTo, {
+				const displayName = sessionUser?.displayName?.trim() || '';
+				if (!displayName) {
+					toast.error('Set your display name before linking Spotify.');
+					return;
+				}
+				const { auth_url } = await apiClient.getSpotifyLoginUrl(uid, displayName, returnTo, {
 					forceConsent: true
 				});
 				window.location.href = auth_url;

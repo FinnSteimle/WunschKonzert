@@ -252,11 +252,15 @@ describe('apiClient', () => {
 			);
 		vi.stubGlobal('fetch', fetchMock);
 
-		const result = await apiClient.getSpotifyLoginUrl('U_1', 'https://app.example/room');
+		const result = await apiClient.getSpotifyLoginUrl(
+			'U_1',
+			'Alice Example',
+			'https://app.example/room'
+		);
 
 		expect(result.auth_url).toBe('https://accounts.spotify.com/authorize');
 		expect(fetchMock).toHaveBeenCalledWith(
-			'http://localhost:8000/auth/spotify/login?user_id=U_1&return_to=https%3A%2F%2Fapp.example%2Froom'
+			'http://localhost:8000/auth/spotify/login?user_id=U_1&display_name=Alice+Example&return_to=https%3A%2F%2Fapp.example%2Froom'
 		);
 	});
 

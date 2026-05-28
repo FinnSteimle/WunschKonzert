@@ -66,11 +66,18 @@ def _extract_state_from_auth_url(auth_url: str) -> str:
 
 
 async def _login_and_get_state(
-    client, user_id: str, return_to: str = "http://localhost/create"
+    client,
+    user_id: str,
+    display_name: str = "Host User",
+    return_to: str = "http://localhost/create",
 ) -> str:
     response = await client.get(
         "/auth/spotify/login",
-        params={"user_id": user_id, "return_to": return_to},
+        params={
+            "user_id": user_id,
+            "display_name": display_name,
+            "return_to": return_to,
+        },
     )
     assert response.status_code == 200
     return _extract_state_from_auth_url(response.json()["auth_url"])
@@ -83,7 +90,11 @@ async def test_spotify_login_returns_auth_url_with_signed_state(client):
 
     response = await client.get(
         "/auth/spotify/login",
-        params={"user_id": user_id, "return_to": return_to},
+        params={
+            "user_id": user_id,
+            "display_name": "Host User",
+            "return_to": return_to,
+        },
     )
 
     assert response.status_code == 200
@@ -105,7 +116,11 @@ async def test_spotify_login_missing_credentials_returns_503(client, monkeypatch
 
     response = await client.get(
         "/auth/spotify/login",
-        params={"user_id": str(uuid.uuid4()), "return_to": "http://localhost/create"},
+        params={
+            "user_id": str(uuid.uuid4()),
+            "display_name": "Host User",
+            "return_to": "http://localhost/create",
+        },
     )
 
     assert response.status_code == 503
@@ -118,7 +133,11 @@ async def test_spotify_login_missing_redirect_uri_returns_503(client, monkeypatc
 
     response = await client.get(
         "/auth/spotify/login",
-        params={"user_id": str(uuid.uuid4()), "return_to": "http://localhost/create"},
+        params={
+            "user_id": str(uuid.uuid4()),
+            "display_name": "Host User",
+            "return_to": "http://localhost/create",
+        },
     )
 
     assert response.status_code == 503
@@ -264,6 +283,53 @@ async def test_spotify_callback_success_stores_tokens_and_redirects(
     assert provider_account.accessToken == "access-token"
     assert provider_account.refreshToken == "refresh-token"
     assert provider_account.storefront == "CH"
+
+
+@pytest.mark.asyncio
+async def test_spotify_login_creates_user_and_callback_stores_tokens(
+    client, db_session, monkeypatch
+):
+    user_id = str(uuid.uuid4())
+    await music_provider_repo.create_music_provider("spotify", "Spotify", db_session)
+    await db_session.commit()
+
+    state = await _login_and_get_state(client, user_id)
+
+    created_user = await user_repo.get_user(user_id, db_session)
+    assert created_user.displayName == "Host User"
+
+    _SequencedAsyncClient.post_responses = [
+        _FakeResponse(
+            {
+                "access_token": "access-token",
+                "refresh_token": "refresh-token",
+                "expires_in": 3600,
+            }
+        )
+    ]
+    _SequencedAsyncClient.get_responses = [
+        _FakeResponse({"id": "spotify-external-id", "country": "CH"})
+    ]
+    monkeypatch.setattr(
+        "services.providers.spotify_oauth.httpx.AsyncClient", _SequencedAsyncClient
+    )
+
+    response = await client.get(
+        "/auth/spotify/callback",
+        params={"state": state, "code": "ok-code"},
+        follow_redirects=False,
+    )
+
+    assert response.status_code == 307
+    assert response.headers["location"] == "http://localhost/create?spotify_linked=true"
+
+    provider_account = await music_provider_repo.get_provider_account_by_user(
+        user_id, "spotify"
+    )
+    assert provider_account is not None
+    assert provider_account.externalUserId == "spotify-external-id"
+    assert provider_account.accessToken == "access-token"
+    assert provider_account.refreshToken == "refresh-token"
 
 
 @pytest.mark.asyncio

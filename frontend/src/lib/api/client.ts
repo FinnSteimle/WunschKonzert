@@ -178,10 +178,15 @@ export const apiClient = {
 
 	async getSpotifyLoginUrl(
 		userId: string,
+		displayName: string,
 		returnTo: string,
 		options?: { forceConsent?: boolean }
 	): Promise<{ auth_url: string }> {
-		const params = new URLSearchParams({ user_id: userId, return_to: returnTo });
+		const params = new URLSearchParams({
+			user_id: userId,
+			display_name: displayName,
+			return_to: returnTo
+		});
 		if (options?.forceConsent) {
 			params.set('force_consent', 'true');
 		}

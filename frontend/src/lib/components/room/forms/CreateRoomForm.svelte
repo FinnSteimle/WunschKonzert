@@ -71,7 +71,7 @@
 			}
 			const { userId } = getOrCreateSessionUser();
 			const returnTo = window.location.origin + '/create';
-			const { auth_url } = await apiClient.getSpotifyLoginUrl(userId, returnTo);
+			const { auth_url } = await apiClient.getSpotifyLoginUrl(userId, trimmedDisplay, returnTo);
 			window.location.href = auth_url;
 		} catch (err) {
 			toast.error(err instanceof Error ? err.message : 'Could not start Spotify login');
