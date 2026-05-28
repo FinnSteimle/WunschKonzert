@@ -28,7 +28,6 @@ def _apple_api_url() -> str:
 
 @router.get("/auth/apple-music/developer-token")
 async def apple_music_developer_token(user_id: str) -> dict[str, str]:
-    await room_service.register_or_update_user(user_id, user_id)
     token = await get_developer_token()
     return {"developer_token": token}
 

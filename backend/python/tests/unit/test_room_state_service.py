@@ -65,14 +65,10 @@ async def test_build_last_activity_success():
     ):
         mock_get_user.return_value = mock_user
 
-        mock_result = MagicMock()
-        mock_result.scalar_one_or_none.return_value = "AccountUser"
-        mock_session.execute.return_value = mock_result
-
         activity = await build_last_activity("test_act", "u1", session=mock_session)
 
         assert activity["type"] == "test_act"
-        assert activity["username"] == "AccountUser"
+        assert activity["username"] == "Display Name"
         assert activity["at"] == "2024-01-01T00:00:00Z"
 
 

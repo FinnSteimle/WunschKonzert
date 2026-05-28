@@ -18,12 +18,9 @@ def app():
 
 @pytest.mark.asyncio
 async def test_apple_music_developer_token_endpoint(app):
-    with (
-        patch("services.room_service.register_or_update_user", new_callable=AsyncMock),
-        patch(
-            "api.routers.apple_music_auth.get_developer_token", new_callable=AsyncMock
-        ) as mock_dev,
-    ):
+    with patch(
+        "api.routers.apple_music_auth.get_developer_token", new_callable=AsyncMock
+    ) as mock_dev:
         mock_dev.return_value = "dev-token-123"
 
         async with AsyncClient(
@@ -33,6 +30,7 @@ async def test_apple_music_developer_token_endpoint(app):
 
         assert response.status_code == 200
         assert response.json()["developer_token"] == "dev-token-123"
+        mock_dev.assert_awaited_once()
 
 
 @pytest.mark.asyncio
