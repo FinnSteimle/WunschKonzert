@@ -15,7 +15,6 @@ from api import websockets
 from api.routers import (
     apple_music_auth,
     debug,
-    playback,
     provider_search,
     rooms,
     spotify_auth,
@@ -79,7 +78,6 @@ app.add_middleware(
 
 app.include_router(rooms.router)
 app.include_router(provider_search.router)
-app.include_router(playback.router)
 app.include_router(spotify_auth.router)
 app.include_router(apple_music_auth.router)
 app.include_router(websockets.router)
