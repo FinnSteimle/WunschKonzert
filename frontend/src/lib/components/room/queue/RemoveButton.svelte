@@ -6,9 +6,9 @@
 	/**
 	 * Three visual states:
 	 *
-	 * canRemoveDirectly = true  → "Remove" button (host or adder)
+	 * canRemoveDirectly = true  → "Remove" button (host, or adder with no upvotes)
 	 *                             Instantly removes the track, no vote needed.
-	 *                             If others have voted, shows x/n counter as a warning.
+	 *                             If skip votes exist, shows x/n counter as a warning.
 	 *
 	 * canRemoveDirectly = false, skipCount === 0
 	 *                           → "Neutral" button (no vote started yet)
