@@ -61,16 +61,21 @@ async def test_get_user_access_token_refresh_failure_suspends_account(monkeypatc
     monkeypatch.setenv("SPOTIFY_CLIENT_ID", "client-id")
     monkeypatch.setenv("SPOTIFY_CLIENT_SECRET", "client-secret")
     monkeypatch.setenv("SPOTIFY_REDIRECT_URI", "http://localhost/auth/spotify/callback")
-    monkeypatch.setattr("services.providers.spotify_oauth.httpx.AsyncClient", _FakeClient)
+    monkeypatch.setattr(
+        "services.providers.spotify_oauth.httpx.AsyncClient", _FakeClient
+    )
 
     suspend_mock = AsyncMock()
-    with patch(
-        "services.providers.spotify_oauth.music_provider_repo.get_provider_account_by_user",
-        new_callable=AsyncMock,
-        return_value=pa,
-    ), patch(
-        "services.providers.spotify_oauth.music_provider_repo.suspend_provider_account",
-        suspend_mock,
+    with (
+        patch(
+            "services.providers.spotify_oauth.music_provider_repo.get_provider_account_by_user",
+            new_callable=AsyncMock,
+            return_value=pa,
+        ),
+        patch(
+            "services.providers.spotify_oauth.music_provider_repo.suspend_provider_account",
+            suspend_mock,
+        ),
     ):
         with pytest.raises(HTTPException) as exc_info:
             await spotify_oauth.get_user_access_token("user-1")
