@@ -409,9 +409,13 @@ async def test_spotify_token_suspended_returns_409(client, db_session):
         refresh_token="refresh-token",
         token_expires_at=datetime.now(UTC) + timedelta(hours=1),
     )
-    pa = await music_provider_repo.get_provider_account_by_user(user_id, "spotify")
+    pa = await music_provider_repo.get_provider_account_by_user(
+        user_id, "spotify", session=db_session
+    )
     assert pa is not None
-    pa.status = AccountStatus.SUSPENDED
+    await music_provider_repo.suspend_provider_account(
+        pa.providerAccountId, session=db_session
+    )
     await db_session.commit()
 
     response = await client.get("/auth/spotify/token", params={"user_id": user_id})
