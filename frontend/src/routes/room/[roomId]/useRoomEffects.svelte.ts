@@ -8,6 +8,7 @@ import {
 	HOST_TRANSFER_EVENTS,
 	REPLAY_SUCCESS_EVENTS
 } from './roomPageActivity';
+import { writeHostPromotionToast } from '$lib/room/hostHandoffReload';
 import type { useHostPlayback } from './useHostPlayback.svelte';
 
 export type UseRoomEffectsDeps = {
@@ -31,6 +32,7 @@ export function useRoomEffects(deps: UseRoomEffectsDeps) {
 	let recordedRecentThisMount = false;
 	let lastReplayEventSignature = $state<string | undefined>(undefined);
 	let lastHostTransferEventSignature = $state<string | undefined>(undefined);
+	let hostPromotionReloadTriggered = false;
 
 	$effect(() => {
 		if (!browser) return;
@@ -74,7 +76,17 @@ export function useRoomEffects(deps: UseRoomEffectsDeps) {
 		if (ev && HOST_TRANSFER_EVENTS.has(ev.type) && prev !== undefined && sig !== prev && su && rs) {
 			if (ev.type === 'host_transfer_completed') {
 				if (rs.host.userId === su.userId && prevHostId !== su.userId) {
-					toast.success('You are now the room host.');
+					// Reload so the new host's music-provider SDK initializes from a
+					// clean slate. The SDK globals (Spotify Web Playback / MusicKit)
+					// retain the previous host's device/auth state across an in-page
+					// handoff, which breaks playback on a re-host. The toast is shown
+					// after the reload via pending-toast storage.
+					if (!hostPromotionReloadTriggered) {
+						hostPromotionReloadTriggered = true;
+						writeHostPromotionToast('You are now the room host.');
+						window.location.reload();
+					}
+					return;
 				} else if (prevHostId === su.userId && rs.host.userId !== su.userId) {
 					toast.message(
 						'Host role transferred to ' + displayNameForUser(rs, rs.host.userId) + '.'

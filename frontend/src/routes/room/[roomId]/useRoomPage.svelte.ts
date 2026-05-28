@@ -14,6 +14,7 @@ import {
 import type { LastActivityDto, TrackDto, VoteRequest } from '$lib/types/api';
 import type { ProviderId } from '$lib/types/api';
 import { linkAppleMusicAccount } from '$lib/providers/appleMusicAuth';
+import { readAndClearHostPromotionToast } from '$lib/room/hostHandoffReload';
 import { providerLabel } from '$lib/providers/constants';
 import { isProviderLinkedForUser } from '$lib/providers/linkStatus';
 import { toast } from 'svelte-sonner';
@@ -380,6 +381,8 @@ export function useRoomPage() {
 		sessionUser = getOrCreateSessionUser();
 		renameDisplayName = sessionUser.displayName;
 		showPendingSpotifyLinkToast();
+		const hostPromotionToast = readAndClearHostPromotionToast();
+		if (hostPromotionToast) toast.success(hostPromotionToast);
 
 		if (parsed.kind === 'invalid') {
 			roomStore.reset();
