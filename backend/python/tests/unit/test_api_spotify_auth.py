@@ -18,13 +18,10 @@ def app():
 
 @pytest.mark.asyncio
 async def test_spotify_login_endpoint(app):
-    with (
-        patch("services.room_service.register_or_update_user", new_callable=AsyncMock),
-        patch(
-            "services.providers.spotify_oauth.create_authorize_url",
-            new_callable=AsyncMock,
-        ) as mock_auth,
-    ):
+    with patch(
+        "services.providers.spotify_oauth.create_authorize_url",
+        new_callable=AsyncMock,
+    ) as mock_auth:
         mock_auth.return_value = "http://spotify.auth"
 
         async with AsyncClient(
@@ -34,6 +31,7 @@ async def test_spotify_login_endpoint(app):
 
         assert response.status_code == 200
         assert response.json()["auth_url"] == "http://spotify.auth"
+        mock_auth.assert_awaited_once_with("u1", "/here", prompt_consent=False)
 
 
 @pytest.mark.asyncio

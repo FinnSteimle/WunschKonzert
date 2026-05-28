@@ -221,33 +221,6 @@ describe('apiClient', () => {
 		);
 	});
 
-	it('sends queue entry with expected JSON shape', async () => {
-		const fetchMock = vi.fn().mockResolvedValue(mockJsonResponse(true, { success: true }));
-		vi.stubGlobal('fetch', fetchMock);
-
-		const track = {
-			trackId: 't1',
-			providerTrackId: 'spotify:t1',
-			title: 'Song',
-			artist: 'Artist',
-			album: 'Album',
-			duration: 100,
-			coverUrl: 'https://example.com/cover.jpg',
-			deepLink: 'https://example.com/track/t1'
-		};
-		await apiClient.addQueueEntry('room-1', 'U_123', track);
-
-		expect(fetchMock).toHaveBeenCalledWith('http://localhost:8000/rooms/room-1/queue', {
-			method: 'POST',
-			headers: { 'Content-Type': 'application/json' },
-			body: JSON.stringify({
-				type: 'addqueue',
-				user_id: 'U_123',
-				track
-			})
-		});
-	});
-
 	it('posts rooms availability', async () => {
 		const fetchMock = vi.fn().mockResolvedValue(
 			mockJsonResponse(true, {

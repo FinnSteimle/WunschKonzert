@@ -9,8 +9,7 @@ import {
 	type RoomRequest,
 	type RoomResponse,
 	type RoomStateDto,
-	type SearchResponseDto,
-	type TrackDto
+	type SearchResponseDto
 } from '$lib/types/api';
 
 /**
@@ -144,18 +143,6 @@ export const apiClient = {
 			`${getApiBaseUrl()}/rooms/${encodeURIComponent(roomId)}/search?q=${encodeURIComponent(query)}`
 		);
 		return parseResponse<SearchResponseDto>(response);
-	},
-
-	async addQueueEntry(
-		roomId: string,
-		userId: string,
-		track: TrackDto
-	): Promise<{ success: boolean }> {
-		return postJson<{ success: boolean }>(`/rooms/${encodeURIComponent(roomId)}/queue`, {
-			type: 'addqueue',
-			user_id: userId,
-			track
-		});
 	},
 
 	async getSpotifyLoginUrl(
