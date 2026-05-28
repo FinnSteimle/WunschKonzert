@@ -270,6 +270,20 @@ describe('apiClient', () => {
 		expect(fetchMock).toHaveBeenCalledWith('http://localhost:8000/auth/spotify/token?user_id=U_1');
 	});
 
+	it('maps Spotify needs_relink to ApiRequestError', async () => {
+		const fetchMock = vi.fn().mockResolvedValue(
+			mockJsonResponse(false, { detail: { code: 'needs_relink' } }, 409)
+		);
+		vi.stubGlobal('fetch', fetchMock);
+
+		await expect(apiClient.getSpotifyToken('U_1')).rejects.toMatchObject({
+			name: 'ApiRequestError',
+			code: 'needs_relink',
+			status: 409,
+			message: 'Your music account link expired. Please link again.'
+		});
+	});
+
 	it('fetches Apple Music developer token', async () => {
 		const fetchMock = vi
 			.fn()

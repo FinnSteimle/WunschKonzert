@@ -220,3 +220,26 @@ async def update_provider_account_tokens(
     await session.flush()
     await session.refresh(pa)
     return pa
+
+
+async def suspend_provider_account(
+    provider_account_id: str,
+    session: AsyncSession | None = None,
+) -> ProviderAccount:
+    """Mark a provider account as suspended (revoked/expired credentials)."""
+    if session is None:
+        session_factory = get_session_factory()
+        async with session_factory() as new_session:
+            account = await suspend_provider_account(
+                provider_account_id, session=new_session
+            )
+            await new_session.commit()
+            return account
+
+    pa = await session.get(ProviderAccount, provider_account_id)
+    if not pa:
+        raise ValueError("Provider account not found")
+    pa.status = AccountStatus.SUSPENDED
+    await session.flush()
+    await session.refresh(pa)
+    return pa

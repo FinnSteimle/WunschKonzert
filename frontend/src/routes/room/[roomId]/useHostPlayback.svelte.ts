@@ -6,10 +6,12 @@ import { isAutoplayBlockedError } from '$lib/playback/autoplayPolicy';
 import { createMusicPlayer } from '$lib/playback/createMusicPlayer';
 import type { ProviderId, QueueEntryDto } from '$lib/types/api';
 import { get } from 'svelte/store';
+import { isNeedsRelinkError } from '$lib/api/client';
 import { toast } from 'svelte-sonner';
 
 export type HostPlaybackDeps = {
 	getSocketClient: () => RoomSocketClient | null;
+	onSpotifyNeedsRelink?: () => void;
 };
 
 export function useHostPlayback(deps: HostPlaybackDeps) {
@@ -226,7 +228,9 @@ export function useHostPlayback(deps: HostPlaybackDeps) {
 				throw new Error('Playback command failed');
 			}
 		} catch (err) {
-			toast.error(err instanceof Error ? err.message : 'Playback command failed');
+			if (!isNeedsRelinkError(err)) {
+				toast.error(err instanceof Error ? err.message : 'Playback command failed');
+			}
 		} finally {
 			playbackBusy = false;
 			setTimeout(() => {
@@ -238,7 +242,9 @@ export function useHostPlayback(deps: HostPlaybackDeps) {
 	function initMusicPlayer(userId: string, providerId: ProviderId): void {
 		appleMusicDeferInitialPlay = providerId === 'apple-music';
 		hostPlaybackGestureUnlocked = providerId !== 'apple-music';
-		const player = createMusicPlayer(providerId, userId);
+		const player = createMusicPlayer(providerId, userId, {
+			onNeedsRelink: providerId === 'spotify' ? deps.onSpotifyNeedsRelink : undefined
+		});
 		player.onStateChange((s) => {
 			sdkPlayerState = s;
 
@@ -377,7 +383,7 @@ export function useHostPlayback(deps: HostPlaybackDeps) {
 
 		const resumePos = rs.playback?.positionMs ?? 0;
 		void runHostPlay(player, queueEntryId, entry.track.providerTrackId, resumePos).catch((err) => {
-			if (isAutoplayBlockedError(err)) return;
+			if (isAutoplayBlockedError(err) || isNeedsRelinkError(err)) return;
 			console.error('[HostPlayer] play failed:', err);
 			lastPlayedQueueEntryId = null;
 			playInitiatedEntryId = null;

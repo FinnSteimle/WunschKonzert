@@ -58,8 +58,17 @@ export function useRoomPage() {
 		endSession: undefined as (() => void) | undefined
 	};
 
+	const spotifyRelinkAction = {
+		run: undefined as (() => void) | undefined
+	};
+
 	const hostPlayback = useHostPlayback({
-		getSocketClient: () => socketClient
+		getSocketClient: () => socketClient,
+		onSpotifyNeedsRelink: () => {
+			toast.error('Your Spotify link expired. Please link again.');
+			providerLinkedForTransfer = false;
+			spotifyRelinkAction.run?.();
+		}
 	});
 
 	const { syncActivityFromRoomState } = useRoomEffects({
@@ -308,6 +317,10 @@ export function useRoomPage() {
 			hostTransferLinkBusy = false;
 		}
 	}
+
+	spotifyRelinkAction.run = () => {
+		void linkProviderForHostTransfer();
+	};
 
 	async function handleAddTrack(track: TrackDto) {
 		const socket = requireConnectedSocket();

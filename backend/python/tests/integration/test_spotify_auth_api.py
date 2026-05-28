@@ -4,6 +4,7 @@ from urllib.parse import parse_qs, urlparse
 
 import pytest
 
+from models.domain import AccountStatus
 from repositories import music_provider_repo, user_repo
 
 pytestmark = pytest.mark.integration
@@ -361,7 +362,7 @@ async def test_spotify_token_refresh_success_updates_tokens(
 
 
 @pytest.mark.asyncio
-async def test_spotify_token_refresh_failure_returns_502(
+async def test_spotify_token_refresh_failure_suspends_account_and_returns_409(
     client, db_session, monkeypatch
 ):
     user_id = str(uuid.uuid4())
@@ -384,5 +385,36 @@ async def test_spotify_token_refresh_failure_returns_502(
 
     response = await client.get("/auth/spotify/token", params={"user_id": user_id})
 
-    assert response.status_code == 502
-    assert "Failed to refresh Spotify token" in response.json()["detail"]
+    assert response.status_code == 409
+    assert response.json()["detail"]["code"] == "needs_relink"
+
+    provider_account = await music_provider_repo.get_provider_account_by_user(
+        user_id, "spotify"
+    )
+    assert provider_account is not None
+    assert provider_account.status == AccountStatus.SUSPENDED
+
+
+@pytest.mark.asyncio
+async def test_spotify_token_suspended_returns_409(client, db_session):
+    user_id = str(uuid.uuid4())
+    await user_repo.create_user(user_id, "Host User", db_session)
+    await music_provider_repo.create_music_provider("spotify", "Spotify", db_session)
+    await db_session.commit()
+    await music_provider_repo.create_or_update_provider_account_tokens(
+        user_id=user_id,
+        provider_id="spotify",
+        external_user_id="spotify-external-id",
+        access_token="access-token",
+        refresh_token="refresh-token",
+        token_expires_at=datetime.now(UTC) + timedelta(hours=1),
+    )
+    pa = await music_provider_repo.get_provider_account_by_user(user_id, "spotify")
+    assert pa is not None
+    pa.status = AccountStatus.SUSPENDED
+    await db_session.commit()
+
+    response = await client.get("/auth/spotify/token", params={"user_id": user_id})
+
+    assert response.status_code == 409
+    assert response.json()["detail"]["code"] == "needs_relink"
