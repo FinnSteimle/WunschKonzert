@@ -21,6 +21,7 @@ let lastSocket: {
 } | null = null;
 
 const locationReplace = vi.fn();
+const locationReload = vi.fn();
 
 vi.mock('$app/environment', () => ({ browser: true }));
 
@@ -202,7 +203,8 @@ describe('room/[roomId]/+page.svelte', () => {
 			href: 'http://localhost:5173/room/AB2CD3',
 			origin: 'http://localhost:5173',
 			pathname: '/room/AB2CD3',
-			replace: locationReplace
+			replace: locationReplace,
+			reload: locationReload
 		});
 		vi.mocked(getOrCreateSessionUser).mockReturnValue({
 			userId: 'U_USER1',
@@ -836,7 +838,7 @@ describe('room/[roomId]/+page.svelte', () => {
 			expect(screen.queryByText(/resumed/)).toBeNull();
 		});
 
-		it('shows success toast when host transfer completes for the new host', async () => {
+		it('reloads and stores a toast when host transfer completes for the new host', async () => {
 			await renderJoinedRoom();
 			roomStore.setRoomState(
 				spotifyRoomState({
@@ -854,9 +856,19 @@ describe('room/[roomId]/+page.svelte', () => {
 				})
 			);
 
+			await waitFor(() => expect(locationReload).toHaveBeenCalled());
+			expect(sessionStorage.getItem('wk_host_promotion_toast')).toBe('You are now the room host.');
+		});
+
+		it('shows the pending host-promotion toast after reload', async () => {
+			sessionStorage.setItem('wk_host_promotion_toast', 'You are now the room host.');
+
+			await renderJoinedRoom();
+
 			await waitFor(() =>
 				expect(toast.success).toHaveBeenCalledWith('You are now the room host.')
 			);
+			expect(sessionStorage.getItem('wk_host_promotion_toast')).toBeNull();
 		});
 	});
 

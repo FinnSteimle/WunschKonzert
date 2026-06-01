@@ -9,8 +9,7 @@ import {
 	type RoomRequest,
 	type RoomResponse,
 	type RoomStateDto,
-	type SearchResponseDto,
-	type TrackDto
+	type SearchResponseDto
 } from '$lib/types/api';
 
 /**
@@ -60,14 +59,34 @@ function shouldUseDirectLocalApiFromBrowser(): boolean {
 	return port === '3000' || port === '5173' || port === '4173';
 }
 
-const APPLE_MUSIC_ERROR_MESSAGES: Record<string, string> = {
+const PROVIDER_ERROR_MESSAGES: Record<string, string> = {
 	subscription_error: 'An active Apple Music subscription is required.',
 	invalid_music_user_token: 'Apple Music authorization failed. Please try linking again.',
 	invalid_request: 'Apple Music link request was invalid.',
 	apple_music_not_configured: 'Apple Music is not configured on this server.',
 	not_linked: 'Apple Music account is not linked.',
-	needs_relink: 'Your Apple Music link expired. Please link again.'
+	needs_relink: 'Your music account link expired. Please link again.'
 };
+
+export class ApiRequestError extends Error {
+	readonly status: number;
+	readonly code?: string;
+
+	constructor(message: string, status: number, code?: string) {
+		super(message);
+		this.name = 'ApiRequestError';
+		this.status = status;
+		this.code = code;
+	}
+
+	get needsRelink(): boolean {
+		return this.code === 'needs_relink';
+	}
+}
+
+export function isNeedsRelinkError(err: unknown): err is ApiRequestError {
+	return err instanceof ApiRequestError && err.needsRelink;
+}
 
 function formatApiErrorMessage(status: number, payload: unknown): string {
 	if (payload && typeof payload === 'object') {
@@ -75,8 +94,8 @@ function formatApiErrorMessage(status: number, payload: unknown): string {
 		const detail = record.detail;
 		if (detail && typeof detail === 'object' && detail !== null && 'code' in detail) {
 			const code = String((detail as { code: unknown }).code);
-			if (code in APPLE_MUSIC_ERROR_MESSAGES) {
-				return APPLE_MUSIC_ERROR_MESSAGES[code];
+			if (code in PROVIDER_ERROR_MESSAGES) {
+				return PROVIDER_ERROR_MESSAGES[code];
 			}
 			return code;
 		}
@@ -90,16 +109,27 @@ function formatApiErrorMessage(status: number, payload: unknown): string {
 	return `Request failed: ${status}`;
 }
 
+function extractErrorCode(payload: unknown): string | undefined {
+	if (!payload || typeof payload !== 'object') return undefined;
+	const detail = (payload as Record<string, unknown>).detail;
+	if (detail && typeof detail === 'object' && detail !== null && 'code' in detail) {
+		return String((detail as { code: unknown }).code);
+	}
+	return undefined;
+}
+
 async function parseResponse<T>(response: Response): Promise<T> {
 	if (!response.ok) {
 		let message = `Request failed: ${response.status}`;
+		let code: string | undefined;
 		try {
 			const payload = await response.json();
+			code = extractErrorCode(payload);
 			message = formatApiErrorMessage(response.status, payload);
 		} catch {
 			// Ignore parse failures and keep the fallback message.
 		}
-		throw new Error(message);
+		throw new ApiRequestError(message, response.status, code);
 	}
 	return (await response.json()) as T;
 }
@@ -146,24 +176,17 @@ export const apiClient = {
 		return parseResponse<SearchResponseDto>(response);
 	},
 
-	async addQueueEntry(
-		roomId: string,
-		userId: string,
-		track: TrackDto
-	): Promise<{ success: boolean }> {
-		return postJson<{ success: boolean }>(`/rooms/${encodeURIComponent(roomId)}/queue`, {
-			type: 'addqueue',
-			user_id: userId,
-			track
-		});
-	},
-
 	async getSpotifyLoginUrl(
 		userId: string,
+		displayName: string,
 		returnTo: string,
 		options?: { forceConsent?: boolean }
 	): Promise<{ auth_url: string }> {
-		const params = new URLSearchParams({ user_id: userId, return_to: returnTo });
+		const params = new URLSearchParams({
+			user_id: userId,
+			display_name: displayName,
+			return_to: returnTo
+		});
 		if (options?.forceConsent) {
 			params.set('force_consent', 'true');
 		}

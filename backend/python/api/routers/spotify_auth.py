@@ -12,10 +12,10 @@ router = APIRouter()
 
 @router.get("/auth/spotify/login")
 async def spotify_login(
-    user_id: str, return_to: str, force_consent: bool = False
+    user_id: str, display_name: str, return_to: str, force_consent: bool = False
 ) -> dict[str, str]:
     """Return the Spotify authorize URL the frontend should redirect to."""
-    await room_service.register_or_update_user(user_id, user_id)
+    await room_service.register_or_update_user(user_id, display_name)
     auth_url = await spotify_oauth.create_authorize_url(
         user_id, return_to, prompt_consent=force_consent
     )

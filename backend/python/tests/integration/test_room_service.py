@@ -10,7 +10,7 @@ from repositories import (
     room_repo,
     user_repo,
 )
-from services import room_service
+from services import room_service, room_state_service
 
 pytestmark = pytest.mark.integration
 
@@ -159,6 +159,10 @@ async def test_join_room_success(db_session, init_room):
     assert result["room_id"] == room.roomId
     membership = await membership_repo.get_room_membership(guest_id, room.roomId)
     assert membership.membershipStatus == domain.MembershipStatus.ACTIVE
+
+    refreshed = await room_state_service.refresh_room_state(room.roomId)
+    assert refreshed["lastActivity"]["type"] == "user_joined"
+    assert refreshed["lastActivity"]["userId"] == guest_id
 
 
 @pytest.mark.asyncio

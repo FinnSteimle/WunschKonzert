@@ -70,10 +70,6 @@ def test_sc22_guest_can_accept_host_transfer(browser: Browser, test_environment)
         }
         """
     )
-    guest.wait_for_function(
-        "needle => document.body.innerText.includes(needle)",
-        arg="Delete room",
-    )
 
     updated_state = get_room_state_snapshot(test_environment["backend_url"], join_code)
     assert updated_state["host"]["userId"] == guest_id
@@ -81,7 +77,7 @@ def test_sc22_guest_can_accept_host_transfer(browser: Browser, test_environment)
     assert updated_state.get("transfer") is None
 
     assert host.get_by_role("button", name="Delete room").count() == 0
-    assert guest.get_by_role("button", name="Delete room").is_visible()
+    assert host.get_by_role("button", name="Leave room").is_visible()
 
     context.close()
 

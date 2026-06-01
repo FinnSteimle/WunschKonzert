@@ -10,6 +10,7 @@ import httpx
 from fastapi import HTTPException
 
 import repositories.music_provider_repo as music_provider_repo
+from models.domain import AccountStatus
 from services.providers import oauth_state
 
 SPOTIFY_SCOPES = " ".join(
@@ -166,6 +167,8 @@ async def get_user_access_token(user_id: str) -> str:
             status_code=404,
             detail="No linked Spotify account found for this user",
         )
+    if pa.status == AccountStatus.SUSPENDED:
+        raise HTTPException(status_code=409, detail={"code": "needs_relink"})
 
     if pa.accessToken and pa.tokenExpiresAt and datetime.now(UTC) < pa.tokenExpiresAt:
         return pa.accessToken
@@ -186,12 +189,14 @@ async def get_user_access_token(user_id: str) -> str:
     except httpx.HTTPError:
         raise HTTPException(status_code=502, detail="Failed to refresh Spotify token")
     if resp.status_code != 200:
-        raise HTTPException(status_code=502, detail="Failed to refresh Spotify token")
+        await music_provider_repo.suspend_provider_account(pa.providerAccountId)
+        raise HTTPException(status_code=409, detail={"code": "needs_relink"})
     token_data = resp.json()
 
     new_access = token_data["access_token"]
     if not isinstance(new_access, str) or not new_access:
-        raise HTTPException(status_code=502, detail="Failed to refresh Spotify token")
+        await music_provider_repo.suspend_provider_account(pa.providerAccountId)
+        raise HTTPException(status_code=409, detail={"code": "needs_relink"})
     new_refresh = token_data.get("refresh_token", pa.refreshToken)
     expires_in = int(token_data.get("expires_in", 3600))
     new_expires = datetime.now(UTC) + timedelta(seconds=max(60, expires_in - 60))

@@ -159,7 +159,10 @@ async def _remap_queue_for_user(
     removed_titles: list[str] = []
     playing_was_removed = False
 
+    active_statuses = (QueueEntryStatus.QUEUED, QueueEntryStatus.PLAYING)
     for entry in entries:
+        if entry.status not in active_statuses:
+            continue
         track = await track_repo.get_track(entry.trackId)
         was_playing = entry.status == QueueEntryStatus.PLAYING
 

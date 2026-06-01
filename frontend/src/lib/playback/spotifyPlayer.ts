@@ -1,4 +1,4 @@
-import { apiClient } from '$lib/api/client';
+import { apiClient, isNeedsRelinkError } from '$lib/api/client';
 import type { MusicPlayer, MusicPlayerState } from './types';
 
 const SDK_SCRIPT_URL = 'https://sdk.scdn.co/spotify-player.js';
@@ -34,35 +34,52 @@ function toSpotifyTrackUri(providerTrackId: string): string {
 	return `spotify:track:${providerTrackId}`;
 }
 
+export type SpotifyPlayerOptions = {
+	onNeedsRelink?: () => void;
+};
+
 export class SpotifyPlayer implements MusicPlayer {
 	private player: Spotify.Player | null = null;
 	private deviceId: string | null = null;
 	private userId: string;
+	private onNeedsRelink?: () => void;
 	private currentToken: string | null = null;
 	private stateCallback: ((state: MusicPlayerState) => void) | null = null;
 	private disposed = false;
+	private authFailed = false;
 	private lastTrackId: string | null = null;
 	private wasPlaying = false;
 	private hasPlayedPastStart = false;
 	private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
 	private reconnectAttempts = 0;
 	private connectionPromise: Promise<boolean> | null = null;
-	private readyWaiters = new Set<() => void>();
+	private readyWaiters = new Set<{
+		resolve: () => void;
+		reject: (err: Error) => void;
+	}>();
 
-	constructor(userId: string) {
+	constructor(userId: string, options?: SpotifyPlayerOptions) {
 		this.userId = userId;
+		this.onNeedsRelink = options?.onNeedsRelink;
 	}
 
 	async connect(): Promise<void> {
+		if (this.authFailed) return;
 		ensureSdkScript();
 		if (!sdkReady) await sdkReadyPromise;
-		if (this.disposed) return;
+		if (this.disposed || this.authFailed) return;
 
 		if (!this.player) {
 			this.player = new Spotify.Player({
 				name: 'WunschKonzert',
 				getOAuthToken: (cb) => {
-					this.fetchToken().then((token) => cb(token));
+					void this.fetchToken()
+						.then((token) => {
+							if (!this.authFailed) cb(token);
+						})
+						.catch((err) => {
+							console.error('[SpotifyPlayer] getOAuthToken failed:', err);
+						});
 				},
 				volume: 0.5
 			});
@@ -88,7 +105,7 @@ export class SpotifyPlayer implements MusicPlayer {
 			this.player.addListener('not_ready', () => {
 				this.deviceId = null;
 				this.emitState({ isReady: false });
-				this.scheduleReconnect();
+				if (!this.authFailed) this.scheduleReconnect();
 			});
 
 			this.player.addListener('player_state_changed', (state) => {
@@ -130,9 +147,13 @@ export class SpotifyPlayer implements MusicPlayer {
 				});
 			});
 
+			this.player.addListener('authentication_error', (err) => {
+				console.error('[SpotifyPlayer] authentication_error:', err.message);
+				this.handleNeedsRelink();
+			});
+
 			const errorEvents = [
 				'initialization_error',
-				'authentication_error',
 				'account_error',
 				'playback_error'
 			] as const;
@@ -147,19 +168,19 @@ export class SpotifyPlayer implements MusicPlayer {
 	}
 
 	private async connectInternal(): Promise<boolean> {
-		if (!this.player || this.disposed) return false;
+		if (!this.player || this.disposed || this.authFailed) return false;
 		if (this.connectionPromise) return this.connectionPromise;
 
 		this.connectionPromise = this.player
 			.connect()
 			.then((connected) => {
-				if (!connected && !this.disposed) {
+				if (!connected && !this.disposed && !this.authFailed) {
 					this.scheduleReconnect();
 				}
 				return connected;
 			})
 			.catch((err) => {
-				if (!this.disposed) {
+				if (!this.disposed && !this.authFailed) {
 					console.error('[SpotifyPlayer] connect failed:', err);
 					this.scheduleReconnect();
 				}
@@ -173,13 +194,26 @@ export class SpotifyPlayer implements MusicPlayer {
 	}
 
 	private scheduleReconnect(): void {
-		if (this.disposed || !this.player || this.reconnectTimer) return;
+		if (this.disposed || this.authFailed || !this.player || this.reconnectTimer) return;
 		const delay = Math.min(1000 * 2 ** this.reconnectAttempts, 10000);
 		this.reconnectAttempts += 1;
 		this.reconnectTimer = setTimeout(() => {
 			this.reconnectTimer = null;
 			void this.connectInternal();
 		}, delay);
+	}
+
+	private handleNeedsRelink(): void {
+		if (this.authFailed || this.disposed) return;
+		this.authFailed = true;
+		if (this.reconnectTimer) {
+			clearTimeout(this.reconnectTimer);
+			this.reconnectTimer = null;
+		}
+		this.deviceId = null;
+		this.emitState({ isReady: false });
+		this.rejectReadyWaiters(new Error('Spotify link expired'));
+		this.onNeedsRelink?.();
 	}
 
 	disconnect(): void {
@@ -195,6 +229,9 @@ export class SpotifyPlayer implements MusicPlayer {
 	}
 
 	async play(providerTrackId: string, positionMs?: number): Promise<void> {
+		if (this.authFailed) {
+			throw new Error('Spotify link expired');
+		}
 		const token = await this.fetchToken();
 		await this.waitForReady();
 		if (!this.deviceId) throw new Error('Spotify player not ready');
@@ -249,9 +286,19 @@ export class SpotifyPlayer implements MusicPlayer {
 	}
 
 	private async fetchToken(): Promise<string> {
-		const { access_token } = await apiClient.getSpotifyToken(this.userId);
-		this.currentToken = access_token;
-		return access_token;
+		if (this.authFailed) {
+			throw new Error('Spotify link expired');
+		}
+		try {
+			const { access_token } = await apiClient.getSpotifyToken(this.userId);
+			this.currentToken = access_token;
+			return access_token;
+		} catch (err) {
+			if (isNeedsRelinkError(err)) {
+				this.handleNeedsRelink();
+			}
+			throw err;
+		}
 	}
 
 	private emitState(partial: Partial<MusicPlayerState>): void {
@@ -267,30 +314,48 @@ export class SpotifyPlayer implements MusicPlayer {
 	}
 
 	private async waitForReady(timeoutMs = 10000): Promise<void> {
+		if (this.authFailed) {
+			throw new Error('Spotify link expired');
+		}
 		if (this.deviceId) return;
 
 		await this.connectInternal();
 		if (this.deviceId) return;
+		if (this.authFailed) {
+			throw new Error('Spotify link expired');
+		}
 
 		await new Promise<void>((resolve, reject) => {
 			let timeout: ReturnType<typeof setTimeout> | null = null;
-			const onReady = () => {
-				if (timeout) clearTimeout(timeout);
-				this.readyWaiters.delete(onReady);
-				resolve();
+			const waiter = {
+				resolve: () => {
+					if (timeout) clearTimeout(timeout);
+					this.readyWaiters.delete(waiter);
+					resolve();
+				},
+				reject: (err: Error) => {
+					if (timeout) clearTimeout(timeout);
+					this.readyWaiters.delete(waiter);
+					reject(err);
+				}
 			};
 			timeout = setTimeout(() => {
-				this.readyWaiters.delete(onReady);
-				reject(new Error('Spotify player not ready'));
+				waiter.reject(new Error('Spotify player not ready'));
 			}, timeoutMs);
 
-			this.readyWaiters.add(onReady);
-			if (this.deviceId) onReady();
+			this.readyWaiters.add(waiter);
+			if (this.deviceId) waiter.resolve();
+			else if (this.authFailed) waiter.reject(new Error('Spotify link expired'));
 		});
 	}
 
 	private flushReadyWaiters(): void {
-		for (const resolve of this.readyWaiters) resolve();
+		for (const waiter of this.readyWaiters) waiter.resolve();
+		this.readyWaiters.clear();
+	}
+
+	private rejectReadyWaiters(err: Error): void {
+		for (const waiter of this.readyWaiters) waiter.reject(err);
 		this.readyWaiters.clear();
 	}
 }

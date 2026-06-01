@@ -3,7 +3,6 @@ from datetime import UTC, datetime
 from typing import Sequence
 
 from fastapi import HTTPException
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 import repositories.playback_history_repo as playback_history_repo
@@ -12,7 +11,6 @@ import repositories.user_repo as user_repo
 from core.database import get_session_factory
 from core.exceptions import ResourceNotFoundError
 from models.domain import (
-    Account,
     FeedbackType,
     MembershipStatus,
     PlaybackHistoryEntry,
@@ -270,10 +268,13 @@ async def _build_room_state(
 
 
 def _preserve_ephemeral_fields(room_id: str, state: dict[str, object]) -> None:
-    """Carry in-memory-only fields (host transfer invite + system messages) across rebuilds."""
+    """Carry in-memory-only fields across rebuilds."""
     previous = room_state_cache.get(room_id)
     if not isinstance(previous, dict):
         return
+    last_activity = previous.get("lastActivity")
+    if isinstance(last_activity, dict):
+        state["lastActivity"] = last_activity
     transfer = previous.get("transfer")
     if isinstance(transfer, dict):
         state["transfer"] = transfer
@@ -301,16 +302,6 @@ async def build_last_activity(
 
     user = await user_repo.get_user(user_id, session=session)
     username = user.displayName
-
-    # Prefer the stored account username when available, but keep the visible
-    # display name as a safe fallback for rooms without a linked account.
-    account_username = None
-    result = await session.execute(
-        select(Account.username).where(Account.userId == user_id)
-    )
-    account_username = result.scalar_one_or_none()
-    if account_username:
-        username = account_username
 
     activity: dict[str, object] = {
         "type": activity_type,

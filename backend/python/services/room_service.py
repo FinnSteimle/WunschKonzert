@@ -81,12 +81,10 @@ async def handle_disconnect(
         await membership_repo.update_room_membership_status(
             user_id, room_id, MembershipStatus.INACTIVE, session=session
         )
-        activity = await build_last_activity("user_left", user_id, session)
         return await refresh_room_state(
             room_id,
             "participant_disconnected",
             session=session,
-            last_activity=activity,
         )
     except ResourceNotFoundError:
         # If no membership was found, nothing to do.

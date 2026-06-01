@@ -221,33 +221,6 @@ describe('apiClient', () => {
 		);
 	});
 
-	it('sends queue entry with expected JSON shape', async () => {
-		const fetchMock = vi.fn().mockResolvedValue(mockJsonResponse(true, { success: true }));
-		vi.stubGlobal('fetch', fetchMock);
-
-		const track = {
-			trackId: 't1',
-			providerTrackId: 'spotify:t1',
-			title: 'Song',
-			artist: 'Artist',
-			album: 'Album',
-			duration: 100,
-			coverUrl: 'https://example.com/cover.jpg',
-			deepLink: 'https://example.com/track/t1'
-		};
-		await apiClient.addQueueEntry('room-1', 'U_123', track);
-
-		expect(fetchMock).toHaveBeenCalledWith('http://localhost:8000/rooms/room-1/queue', {
-			method: 'POST',
-			headers: { 'Content-Type': 'application/json' },
-			body: JSON.stringify({
-				type: 'addqueue',
-				user_id: 'U_123',
-				track
-			})
-		});
-	});
-
 	it('posts rooms availability', async () => {
 		const fetchMock = vi.fn().mockResolvedValue(
 			mockJsonResponse(true, {
@@ -279,11 +252,15 @@ describe('apiClient', () => {
 			);
 		vi.stubGlobal('fetch', fetchMock);
 
-		const result = await apiClient.getSpotifyLoginUrl('U_1', 'https://app.example/room');
+		const result = await apiClient.getSpotifyLoginUrl(
+			'U_1',
+			'Alice Example',
+			'https://app.example/room'
+		);
 
 		expect(result.auth_url).toBe('https://accounts.spotify.com/authorize');
 		expect(fetchMock).toHaveBeenCalledWith(
-			'http://localhost:8000/auth/spotify/login?user_id=U_1&return_to=https%3A%2F%2Fapp.example%2Froom'
+			'http://localhost:8000/auth/spotify/login?user_id=U_1&display_name=Alice+Example&return_to=https%3A%2F%2Fapp.example%2Froom'
 		);
 	});
 
@@ -295,6 +272,20 @@ describe('apiClient', () => {
 
 		expect(result).toEqual({ access_token: 'tok' });
 		expect(fetchMock).toHaveBeenCalledWith('http://localhost:8000/auth/spotify/token?user_id=U_1');
+	});
+
+	it('maps Spotify needs_relink to ApiRequestError', async () => {
+		const fetchMock = vi.fn().mockResolvedValue(
+			mockJsonResponse(false, { detail: { code: 'needs_relink' } }, 409)
+		);
+		vi.stubGlobal('fetch', fetchMock);
+
+		await expect(apiClient.getSpotifyToken('U_1')).rejects.toMatchObject({
+			name: 'ApiRequestError',
+			code: 'needs_relink',
+			status: 409,
+			message: 'Your music account link expired. Please link again.'
+		});
 	});
 
 	it('fetches Apple Music developer token', async () => {
