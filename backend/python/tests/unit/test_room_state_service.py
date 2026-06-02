@@ -148,7 +148,7 @@ def test_build_queue_list_complex_sorting():
         orderRank=1.0,
         queuedAt=datetime.now(UTC),
     )
-    # Song B: Position 2, Score 10 (QUEUED) - Should jump to 2nd place
+    # Song B: Position 2, Score 10 (QUEUED); should jump to 2nd place
     entry_b = QueueEntry(
         queueEntryId="b",
         track=Track(title="B", artist="B"),
@@ -162,7 +162,7 @@ def test_build_queue_list_complex_sorting():
         orderRank=2.0,
         queuedAt=datetime.now(UTC),
     )
-    # Song C: Position 3, Score 0 (PLAYING) - Should jump to 1st place
+    # Song C: Position 3, Score 0 (PLAYING); should jump to 1st place
     entry_c = QueueEntry(
         queueEntryId="c",
         track=Track(title="C", artist="C"),

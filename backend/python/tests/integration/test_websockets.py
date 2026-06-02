@@ -335,7 +335,7 @@ async def test_websocket_invalid_event(db_session, init_room, websocket_client):
         state = websocket.receive_json()
         assert "room" in state
 
-        # Send invalid event - should still get a response without crashing
+        # Send invalid event; should still get a response without crashing
         websocket.send_json({"type": "invalid_event_type"})
 
         # Connection should remain open and we should get a state update or error

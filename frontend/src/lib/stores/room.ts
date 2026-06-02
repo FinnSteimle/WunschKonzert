@@ -37,7 +37,7 @@ export function getPersonalVoteState(
 ): 'upvote' | 'downvote' | 'neutral' {
 	const vote = queueEntry.feedback.find((feedback) => feedback.userId === userId);
 	if (!vote) return 'neutral';
-	// skip / replay — treat as neutral for the upvote/downvote UI
+	// skip and replay count as neutral for the upvote/downvote UI
 	if (vote.type === 'skip' || vote.type === 'replay') return 'neutral';
 	return vote.type;
 }

@@ -14,10 +14,10 @@ import {
 
 /**
  * Base URL for REST calls. Order:
- * 1. PUBLIC_API_URL when set — local dev (`http://localhost:8000`) and CI-built images with an explicit API host.
- * 2. In the browser on localhost frontends (ports 3000 / 5173 / 4173), call the API directly on port 8000 — there is no
+ * 1. PUBLIC_API_URL when set: local dev (`http://localhost:8000`) and CI-built images with an explicit API host.
+ * 2. In the browser on localhost frontends (ports 3000 / 5173 / 4173), call the API directly on port 8000; there is no
  *    `/api` reverse proxy like in production Caddy, so same-origin `/api` would 404.
- * 3. Otherwise same-origin `/api` — matches Caddy (`https://host/api` → backend) and avoids mixed-content on HTTPS.
+ * 3. Otherwise same-origin `/api` (matches Caddy `https://host/api` → backend) and avoids mixed-content on HTTPS.
  * 4. SSR / tests: localhost default (tests should set PUBLIC_API_URL via `.env` or Vitest env).
  */
 export function getApiBaseUrl(): string {

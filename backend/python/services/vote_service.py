@@ -228,7 +228,7 @@ async def _handle_skip_vote(
         room_id, session=session
     )
 
-    # All active members are eligible — strictly more than 50% triggers skip/remove.
+    # All active members are eligible; strictly more than 50% triggers skip/remove.
     eligible = max(1, len(active_members))
     required = math.floor(eligible / 2) + 1
 

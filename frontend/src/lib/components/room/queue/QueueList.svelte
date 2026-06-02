@@ -36,7 +36,10 @@
 {#if sortedEntries.length === 0}
 	<EmptyState title="Queue is empty" description="Search for a song and add it to the queue." />
 {:else}
-	<ul class="flex flex-col gap-2" aria-label="Playback queue">
+	<ul
+		class="flex max-h-[min(24rem,55vh)] flex-col gap-2 overflow-y-auto pr-1"
+		aria-label="Playback queue"
+	>
 		{#each sortedEntries as entry (entry.queueEntryId)}
 			<li
 				animate:flip={{ duration: 300 }}

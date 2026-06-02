@@ -190,15 +190,14 @@ backend:unit:
   script:
     # Use --allow-hosts to whitelist docker and localhost while blocking the internet
     - uv run --with pytest pytest --allow-hosts=docker,localhost,127.0.0.1 --allow-unix-socket -m "not integration and not system" -q --junit-xml=junit-all.xml
-  coverage: '/TOTAL.*\s+(\d+\%)/'
+  # Coverage (incl. the cobertura report for MR annotations) is reported on
+  # backend:integration, which runs unit + integration together for the combined
+  # figure tracked in GitLab's coverage statistics.
   artifacts:
     when: always
     expire_in: 7 days
     reports:
       junit: backend/python/junit-all.xml
-      coverage_report:
-        coverage_format: cobertura
-        path: backend/python/cobertura.xml
 
 backend:integration:
   stage: integration_test
@@ -211,9 +210,16 @@ backend:integration:
     - apk add --no-cache docker-compose
   script:
     - cd backend
-    - docker compose -f compose.test.yaml run --rm api-test uv run pytest -m "not system" -q --cov-fail-under=80
+    # Named container (no --rm) so the cobertura file can be copied out of it below.
+    - docker compose -f compose.test.yaml run --name api-test-run api-test uv run pytest -m "not system" -q --cov-fail-under=80
+  # Runs unit + integration together, so this is the combined coverage figure
+  # plotted in GitLab (Analytics > Repository > Code coverage).
+  coverage: '/TOTAL.*\s+(\d+\%)/'
   after_script:
     - cd backend
+    # Extract the combined cobertura report even when pytest failed, then clean up.
+    - docker cp api-test-run:/app/cobertura.xml python/cobertura.xml || true
+    - docker rm -f api-test-run || true
     - docker compose -f compose.test.yaml down -v
   artifacts:
     when: always

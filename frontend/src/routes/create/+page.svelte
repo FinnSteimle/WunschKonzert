@@ -19,7 +19,7 @@
 </script>
 
 <svelte:head>
-	<title>Create room — WunschKonzert</title>
+	<title>Create room | WunschKonzert</title>
 </svelte:head>
 
 <div class="bg-background min-h-[100dvh]">

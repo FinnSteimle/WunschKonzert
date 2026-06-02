@@ -25,7 +25,7 @@ def test_sc1_host_creates_room_guest_joins(browser: Browser, test_environment):
     guest = context.new_page()
     join_room_helper(guest, test_environment["frontend_url"], join_code, "Bob")
 
-    # Verify WebSocket sync - both see each other
+    # Verify WebSocket sync: both see each other
     assert host.locator("text=Bob").is_visible(timeout=5000)
     assert guest.locator("text=Alice").is_visible(timeout=5000)
 

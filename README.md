@@ -120,7 +120,7 @@ Debug endpoints (e.g. `POST /seed_user`) are only registered when `ENVIRONMENT` 
 
 ### WebSocket
 
-`ws://<api>/ws/{room_id}` — all real-time interactions flow through here. Event types are registered in `backend/python/api/event_handlers.py`:
+`ws://<api>/ws/{room_id}` carries all real-time interactions. Event types are registered in `backend/python/api/event_handlers.py`:
 
 | Event | Description |
 |---|---|
@@ -141,10 +141,10 @@ Authoritative room state is rebuilt from PostgreSQL on reconnect, so a member wh
 
 The test pyramid is split across three pytest markers and one E2E suite:
 
-- **Unit tests** (`tests/unit/`) — fast, no I/O. Run with `make test`.
-- **Integration tests** (`tests/integration/`) — spin up Postgres via testcontainers (Docker required).
-- **System tests** (`tests/system/`) — Playwright-driven E2E. See `backend/python/tests/system/README.md`. Run with `make test-system`.
-- **Load tests** (`load-tests/`) — k6 capacity & scalability suites.
+- **Unit tests** (`tests/unit/`): fast, no I/O. Run with `make test`.
+- **Integration tests** (`tests/integration/`): spin up Postgres via testcontainers (Docker required).
+- **System tests** (`tests/system/`): Playwright-driven E2E. See `backend/python/tests/system/README.md`. Run with `make test-system`.
+- **Load tests** (`load-tests/`): k6 capacity and scalability suites.
 
 CI runs all suites on every push (see `.gitlab-ci.yml`).
 
@@ -162,10 +162,10 @@ CI runs all suites on every push (see `.gitlab-ci.yml`).
 
 The system stores no internal passwords; authentication is delegated entirely to Spotify (OAuth 2.0) and Apple Music (MusicKit). The relevant code paths are:
 
-- `backend/python/api/routers/spotify_auth.py` — full OAuth code-flow with signed-state replay protection.
-- `backend/python/api/routers/apple_music_auth.py` — MusicKit user-token linking.
-- `backend/python/core/security.py` — bcrypt helpers used for transient-token hashing.
-- `Caddyfile` — TLS termination with modern cipher suites.
+- `backend/python/api/routers/spotify_auth.py`: full OAuth code-flow with signed-state replay protection.
+- `backend/python/api/routers/apple_music_auth.py`: MusicKit user-token linking.
+- `backend/python/core/security.py`: bcrypt helpers used for transient-token hashing.
+- `Caddyfile`: TLS termination with modern cipher suites.
 
 ## Deployment
 
@@ -178,4 +178,4 @@ Each deploy job runs `alembic upgrade head` before swapping containers. See `DEP
 
 ## License
 
-Prosperity Public License 3.0.0 — free for personal and non-commercial use. See `LICENSE.md` or <https://prosperitylicense.com>.
+Prosperity Public License 3.0.0, free for personal and non-commercial use. See `LICENSE.md` or <https://prosperitylicense.com>.
