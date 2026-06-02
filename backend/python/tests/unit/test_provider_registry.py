@@ -13,7 +13,9 @@ pytestmark = pytest.mark.unit
         ("apple-music", "apple-music"),
     ],
 )
-def test_get_provider_client_registered_provider_exists(provider_id, expected_provider_id):
+def test_get_provider_client_registered_provider_exists(
+    provider_id, expected_provider_id
+):
     client = get_provider_client(provider_id)
     assert client.provider_id == expected_provider_id
 
