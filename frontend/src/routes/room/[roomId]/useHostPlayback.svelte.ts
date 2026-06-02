@@ -71,6 +71,8 @@ export function useHostPlayback(deps: HostPlaybackDeps) {
 		}
 		playbackNeedsGesture = false;
 		await player.prepare(providerTrackId, positionMs);
+		lastPlayedQueueEntryId = queueEntryId;
+		playInitiatedEntryId = queueEntryId;
 		pendingHostPlay = null;
 	}
 
@@ -141,6 +143,8 @@ export function useHostPlayback(deps: HostPlaybackDeps) {
 		playbackNeedsGesture = false;
 		try {
 			await player.play(providerTrackId, positionMs);
+			lastPlayedQueueEntryId = queueEntryId;
+			playInitiatedEntryId = queueEntryId;
 			pendingHostPlay = null;
 		} catch (err) {
 			if (isAutoplayBlockedError(err)) {
