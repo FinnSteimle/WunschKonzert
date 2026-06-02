@@ -218,6 +218,14 @@ async def accept_transfer(
 
     if playing_was_removed:
         await playback_service.advance_to_next(room_id)
+    else:
+        cached = room_state_service.room_state_cache.get(room_id)
+        if cached:
+            playback = cached.get("playback")
+            if isinstance(playback, dict) and playback.get("state") == "playing":
+                await playback_service.set_playback_state(
+                    room_id, room.hostedBy, "pause"
+                )
 
     await room_repo.update_host(room_id, user_id)
     activity = await room_state_service.build_last_activity(

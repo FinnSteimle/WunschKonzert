@@ -58,7 +58,7 @@ async def test_accept_transfer_success_with_remap():
     transfer_id = "t1"
     user_id = "u2"
 
-    mock_room = MagicMock(supportedProviderId="spotify")
+    mock_room = MagicMock(supportedProviderId="spotify", hostedBy="u1")
     mock_transfer = {"transferId": transfer_id, "toUserId": user_id}
 
     # Mocking queue entries
@@ -99,15 +99,23 @@ async def test_accept_transfer_success_with_remap():
         ) as mock_update_qe,
         patch("repositories.room_repo.update_host", new_callable=AsyncMock),
         patch(
+            "services.playback_service.set_playback_state",
+            new_callable=AsyncMock,
+        ) as mock_set_state,
+        patch(
             "services.room_state_service.build_last_activity", new_callable=AsyncMock
         ),
         patch("services.room_state_service.refresh_room_state", new_callable=AsyncMock),
-        patch("services.room_state_service.room_state_cache", {room_id: {}}),
+        patch(
+            "services.room_state_service.room_state_cache",
+            {room_id: {"playback": {"state": "playing"}}},
+        ),
     ):
         await host_transfer_service.accept_transfer(room_id, transfer_id, user_id)
 
         # Verify entry remapped to track2
         mock_update_qe.assert_called_with("qe1", {"trackId": "track2"})
+        mock_set_state.assert_called_once_with(room_id, "u1", "pause")
 
 
 @pytest.mark.asyncio
@@ -149,6 +157,10 @@ async def test_accept_transfer_song_removed():
         patch(
             "services.playback_service.advance_to_next", new_callable=AsyncMock
         ) as mock_advance,
+        patch(
+            "services.playback_service.set_playback_state",
+            new_callable=AsyncMock,
+        ) as mock_set_state,
         patch("repositories.room_repo.update_host", new_callable=AsyncMock),
         patch(
             "services.room_state_service.build_last_activity", new_callable=AsyncMock
@@ -162,6 +174,7 @@ async def test_accept_transfer_song_removed():
         mock_update_qe.assert_called_with("qe1", {"status": QueueEntryStatus.REMOVED})
         # Verify playback advanced because playing track was removed
         mock_advance.assert_called_once_with(room_id)
+        mock_set_state.assert_not_called()
 
 
 @pytest.mark.asyncio
