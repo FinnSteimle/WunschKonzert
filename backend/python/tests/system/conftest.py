@@ -27,7 +27,7 @@ DISPLAY_NAME_KEY = "wk_display_name"
 
 @pytest.fixture(scope="session")
 def test_environment():
-    """Test environment URLs - assumes services are running via docker compose"""
+    """Test environment URLs; assumes services are running via docker compose."""
     return {
         "backend_url": os.getenv("BACKEND_URL", "http://localhost:8000"),
         "frontend_url": os.getenv("FRONTEND_URL", "http://localhost:3000"),

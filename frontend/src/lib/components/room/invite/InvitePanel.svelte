@@ -41,7 +41,7 @@
 	<Card class="min-w-0">
 		<CardHeader class="pb-2">
 			<CardTitle class="text-base">Invite link</CardTitle>
-			<CardDescription>Send this link — guests join in one tap.</CardDescription>
+			<CardDescription>Guests can join the room from this link.</CardDescription>
 		</CardHeader>
 		<CardContent class="flex flex-col gap-2">
 			<div class="flex min-w-0 flex-col gap-2 sm:flex-row sm:items-stretch">

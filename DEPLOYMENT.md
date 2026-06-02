@@ -5,11 +5,11 @@ This document describes how **Wunschkonzert** runs on a Linux server with Docker
 ## Architecture
 
 - **Production** (`/opt/wunschkonzert`): **Caddy** (ports **80** / **443**), **API**, **frontend** container (pre-built images), **PostgreSQL**.
-- **Staging** (`/opt/wunschkonzert-staging`): **API**, **frontend**, **PostgreSQL** only — **no** second Caddy.
+- **Staging** (`/opt/wunschkonzert-staging`): **API**, **frontend**, **PostgreSQL** only (no second Caddy).
 - **`wunschkonzert_edge`**: shared Docker network so **production Caddy** can reverse-proxy to **staging** containers by hostname.
 - Public URLs:
-  - Production: `https://wunschkonzert.jj11.ch` — API under `https://wunschkonzert.jj11.ch/api/...`
-  - Staging: `https://staging-wunschkonzert.jj11.ch` — same `/api` prefix pattern.
+  - Production: `https://wunschkonzert.jj11.ch`, API under `https://wunschkonzert.jj11.ch/api/...`
+  - Staging: `https://staging-wunschkonzert.jj11.ch`, same `/api` prefix pattern.
 
 Repo files:
 
@@ -32,7 +32,7 @@ Repo files:
 
 ### 1. Deploy user and directories
 
-Use a dedicated user (e.g. `deploy`) in the `docker` group, or your own user — the same account must own the app directories and match **GitLab `DEPLOY_USER`**.
+Use a dedicated user (e.g. `deploy`) in the `docker` group, or your own user. The same account must own the app directories and match **GitLab `DEPLOY_USER`**.
 
 ```bash
 sudo mkdir -p /opt/wunschkonzert /opt/wunschkonzert-staging
@@ -50,13 +50,13 @@ Copy into **`/opt/wunschkonzert-staging`**:
 
 ### 2. Environment files (never commit real secrets)
 
-**`/opt/wunschkonzert/.env`** — see `compose.prod.env.example`:
+**`/opt/wunschkonzert/.env`**: see `compose.prod.env.example`:
 
 - `POSTGRES_PASSWORD`, `POSTGRES_DB`
 - `SPOTIFY_*` if you use Spotify (see below)
 - **Recommended** for manual `docker compose` on the server: set `BACKEND_IMAGE` and `FRONTEND_IMAGE` to your registry URLs with tag **`main`**.
 
-**`/opt/wunschkonzert-staging/.env.staging`** — see `compose.staging.env.example`:
+**`/opt/wunschkonzert-staging/.env.staging`**: see `compose.staging.env.example`:
 
 - Different `POSTGRES_PASSWORD` than production
 - **`BACKEND_IMAGE`** / **`FRONTEND_IMAGE`** with tag **`dev`** (required for local compose if CI env vars are not exported)
@@ -95,12 +95,12 @@ docker login registry.example.com:port
 |----------|-------------|
 | `DEPLOY_USER` | SSH account on the server |
 | `DEPLOY_HOST` | SSH hostname or IP |
-| `DEPLOY_SSH_PRIVATE_KEY` | SSH private key — PEM or File-type|
+| `DEPLOY_SSH_PRIVATE_KEY` | SSH private key (PEM or File type) |
 | `DEPLOY_PATH` | Default `/opt/wunschkonzert` |
 | `DEPLOY_PATH_STAGING` | Default `/opt/wunschkonzert-staging` |
 | `DEPLOY_SSH_KNOWN_HOSTS` | Optional: output of `ssh-keyscan -H -p …` if runners cannot run keyscan |
 
-Protected variables only apply on **protected branches** — protect **`main`** and **`dev`** if deploy vars are protected.
+Protected variables only apply on **protected branches**. Protect **`main`** and **`dev`** if deploy vars are protected.
 
 ### Pipelines
 

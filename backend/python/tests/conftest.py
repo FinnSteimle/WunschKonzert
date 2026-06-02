@@ -60,7 +60,7 @@ async def db_engine(postgres_connection_url):
 
     os.environ["DATABASE_URL"] = url
 
-    # NullPool: no connection pooling — prevents deadlocks when db_session
+    # NullPool: no connection pooling, to avoid deadlocks when db_session
     # holds a connection while CRUD functions check out additional ones.
     engine = create_async_engine(
         url,

@@ -36,7 +36,7 @@ async def test_adding_user_to_room(db_session, init_room):
 @pytest.mark.asyncio
 async def test_adding_multiple_users_to_room(db_session, init_room):
     """Verify several users can join a room. Keep count low (5) to avoid
-    opening dozens of DB sessions — capacity testing belongs in integration tests."""
+    opening dozens of DB sessions; capacity testing belongs in integration tests."""
     total_users = 5
     members = []
     host_id = str(uuid.uuid4())
