@@ -31,7 +31,7 @@ class AppleMusicProviderClient:
         )
 
     async def _catalog_search(self, query: str, storefront: str) -> list[ProviderTrack]:
-        # Catalog search uses the developer token only — MUT is not required.
+        # Catalog search uses the developer token only (MUT not required).
         token = await get_developer_token()
         url = f"{self._api_url()}/v1/catalog/{storefront}/search"
         async with httpx.AsyncClient(timeout=15) as client:

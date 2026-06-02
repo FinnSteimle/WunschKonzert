@@ -39,7 +39,7 @@ export default defineConfig({
 			include: ['src/**/*.ts', 'src/**/*.svelte'],
 			exclude: [
 				'src/lib/components/ui/*',
-				// Spotify Web Playback SDK glue — DOM script injection + globals; smoke-tested manually.
+				// Spotify Web Playback SDK glue: DOM script injection and globals; smoke-tested manually.
 				'src/lib/playback/**',
 				// Interfaces only; no runnable lines.
 				'src/lib/types/**',

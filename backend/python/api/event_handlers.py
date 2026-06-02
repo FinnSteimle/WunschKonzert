@@ -22,7 +22,7 @@ HOW IT WORKS
    the time `dispatch()` is first called the table is already fully built.
 
 3. `dispatch()` parses the raw JSON string, looks up the handler in O(1), and
-   calls it. It never needs to know about individual event types — adding a new
+   calls it. It never needs to know about individual event types; adding a new
    event is just adding a new @register function here, nothing else changes.
 
 WHY A DECORATOR FACTORY

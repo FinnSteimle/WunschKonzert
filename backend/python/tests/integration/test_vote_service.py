@@ -131,7 +131,7 @@ async def test_vote_invalid_type_raises_400(db_session, init_room):
 
 @pytest.mark.asyncio
 async def test_vote_entry_from_different_room_raises_404(db_session, init_room):
-    """Queue entry exists but room_id doesn't match — treated as not found."""
+    """Queue entry exists but room_id doesn't match; treated as not found."""
     room = await init_room()
     queue_entry_id = await _add_track_to_queue(room.roomId, room.hostedBy)
 

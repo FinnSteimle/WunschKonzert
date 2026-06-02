@@ -1,6 +1,6 @@
 # System Tests
 
-End-to-end tests for WunschKonzert driven by Playwright. They exercise the full stack — SvelteKit frontend, FastAPI backend, PostgreSQL, and the room WebSocket — through a real browser.
+End-to-end tests for WunschKonzert driven by Playwright. They exercise the full stack (SvelteKit frontend, FastAPI backend, PostgreSQL, and the room WebSocket) through a real browser.
 
 ## Layout
 
@@ -60,4 +60,4 @@ docker compose exec api uv run pytest tests/system/ -v --headed
 - `page.pause()` drops into the Playwright inspector.
 - Failure screenshots and traces land in `test-results/`.
 - `page.screenshot(path="debug.png")` for ad-hoc captures.
-- The frontend exposes `data-testid` attributes on every element the suite interacts with — keep these stable when refactoring components.
+- The frontend exposes `data-testid` attributes on every element the suite interacts with. Keep these stable when refactoring components.

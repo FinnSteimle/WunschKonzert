@@ -72,7 +72,7 @@
 			<CardContent class="flex flex-col gap-3 pt-0">
 				{#if needsProviderLink}
 					<p class="text-muted-foreground text-sm">
-						Link {roomProviderLabel} before accepting — playback runs on the new host's account.
+						Link {roomProviderLabel} before accepting. Playback runs on the new host's account.
 					</p>
 					<Button
 						type="button"

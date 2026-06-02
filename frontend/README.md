@@ -1,4 +1,4 @@
-# WunschKonzert — Frontend
+# WunschKonzert frontend
 
 SvelteKit 2 + Svelte 5 app for collaborative music rooms (Spotify / Apple Music). Real-time state over WebSockets; queue actions use the socket, not REST.
 
@@ -43,7 +43,7 @@ In production (Docker/Caddy), these are baked in at build time. Locally, when Vi
 | `/` | Landing, join by code, recent rooms |
 | `/create` | Create room (Spotify / Apple Music) |
 | `/join/{code}` | Redirects to `/room/{code}` |
-| `/room/{code}` | Room UI — URL uses 6-character **join code** only |
+| `/room/{code}` | Room UI; URL uses 6-character **join code** only |
 
 ## Architecture (high level)
 
@@ -60,11 +60,11 @@ src/lib/components/  Feature UI + shadcn/ui primitives
 
 Room page orchestration is split across:
 
-- `useRoomPage.svelte.ts` — handlers, mount, link-join UI
-- `useRoomSession.svelte.ts` — WebSocket session lifecycle
-- `useRoomEffects.svelte.ts` — toasts, recent rooms, activity log sync
-- `useRoomSpotifyOAuth.svelte.ts` — Spotify OAuth return query handling
-- `useHostPlayback.svelte.ts` — host playback sync
+- `useRoomPage.svelte.ts`: handlers, mount, link-join UI
+- `useRoomSession.svelte.ts`: WebSocket session lifecycle
+- `useRoomEffects.svelte.ts`: toasts, recent rooms, activity log sync
+- `useRoomSpotifyOAuth.svelte.ts`: Spotify OAuth return query handling
+- `useHostPlayback.svelte.ts`: host playback sync
 
 ## Security model (browser)
 
@@ -89,4 +89,4 @@ Runtime image listens on port 3000.
 npm test
 ```
 
-Coverage thresholds (80% lines/statements) exclude `components/ui`, `playback`, and `types` — see `vite.config.ts`.
+Coverage thresholds (80% lines/statements) exclude `components/ui`, `playback`, and `types`; see `vite.config.ts`.
