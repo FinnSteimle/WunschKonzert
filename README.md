@@ -164,7 +164,6 @@ The system stores no internal passwords; authentication is delegated entirely to
 
 - `backend/python/api/routers/spotify_auth.py`: full OAuth code-flow with signed-state replay protection.
 - `backend/python/api/routers/apple_music_auth.py`: MusicKit user-token linking.
-- `backend/python/core/security.py`: bcrypt helpers used for transient-token hashing.
 - `Caddyfile`: TLS termination with modern cipher suites.
 
 ## Deployment
