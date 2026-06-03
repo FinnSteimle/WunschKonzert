@@ -13,25 +13,24 @@ To perform these manual QA tests, you will need:
 - Staging environment (or local environment) running with configured:
   - Spotify Client ID and Client Secret.
   - MusicKit Developer Token.
-- A track title/artist to search, or a valid Spotify track link (e.g., `https://open.spotify.com/track/4PTG3Z6ehGkBF3zI7YkRj3`).
-- A track title/artist to search, or a valid Apple Music track link (e.g., `https://music.apple.com/us/album/crm/1440862493`).
+- A track title/artist to search.
 
 ---
 
 ## Core Manual Test Protocols
 
-### MT-1: Spotify Link Resolution and Playback Integration
+### MT-1: Spotify Search and Playback Integration
 
-* **Objective:** Verify that searching for a Spotify track (or pasting a real Spotify track link) correctly resolves metadata, loads the artwork, adds the track to the queue, and plays back active DRM-protected audio with functioning UI controls.
+* **Objective:** Verify that searching for a Spotify track correctly resolves metadata, loads the artwork, adds the track to the queue, and plays back active DRM-protected audio with functioning UI controls.
 * **Prerequisites:**
   - 1x Desktop browser with working audio output.
   - 1x Spotify Premium account logged in.
-  - Track title/artist or valid Spotify track link.
+  - Track title/artist to search.
   - Application deployed on the Staging environment.
 * **Execution Steps:**
   1. Log in as Host via Spotify OAuth and create a room.
-  2. Search for a track by its title/artist or paste the Spotify track link into the search input field.
-  3. Verify that the search results or preview card displays the correct title, artist, and cover art.
+  2. Search for a track by its title/artist in the search input field.
+  3. Verify that the search results display the correct title, artist, and cover art.
   4. Add the song to the room queue.
   5. Click the **Play** button in the room control bar.
   6. Verify that real audio is playing from the audio output device.
@@ -42,18 +41,18 @@ To perform these manual QA tests, you will need:
   - **Step 6:** Audible sound plays with zero stuttering or DRM decode errors.
   - **Step 7 & 8:** Player state updates seamlessly and controls are fully synchronized.
 
-### MT-2: Apple Music Link Resolution and Playback Integration
+### MT-2: Apple Music Search and Playback Integration
 
-* **Objective:** Verify Apple Music integration via MusicKit JS, including user authorization, track search/URL resolution, queue addition, and real audio stream playback.
+* **Objective:** Verify Apple Music integration via MusicKit JS, including user authorization, track search resolution, queue addition, and real audio stream playback.
 * **Prerequisites:**
   - 1x Desktop browser with working audio output.
   - 1x Valid Apple Music subscription.
-  - Track title/artist or valid Apple Music track link.
+  - Track title/artist to search.
   - Staging environment with configured MusicKit Developer Token.
 * **Execution Steps:**
   1. Log in as Host and authenticate Apple Music in the app via the MusicKit OAuth popup.
-  2. Search for a track by its title/artist or paste the Apple Music link into the search input field.
-  3. Verify that track details (title, artist, album art) resolve correctly in the search results or preview card.
+  2. Search for a track by its title/artist in the search input field.
+  3. Verify that track details (title, artist, album art) resolve correctly in the search results.
   4. Add the track to the queue.
   5. Play the track from the queue.
   6. Verify audible playback of the stream from the browser.
