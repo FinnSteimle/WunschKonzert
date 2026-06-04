@@ -20,7 +20,7 @@ async def search_tracks(
 
     provider_id = str(room.supportedProviderId)
     provider = get_provider_client(provider_id)
-    tracks = await provider.search_tracks(q)
+    tracks = await provider.search_tracks(q, user_id=str(room.hostedBy))
 
     return {
         "provider": provider.provider_id,

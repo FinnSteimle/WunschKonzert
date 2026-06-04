@@ -58,7 +58,7 @@ export function toastPayloadAfterSpotifyLink(
 			return {
 				type: 'message',
 				message:
-					'Spotify linked for playback. Profile lookup failed — add your Spotify account under Users in the Spotify Developer Dashboard if playback fails.'
+					'Spotify linked for playback. Profile lookup failed. Add your Spotify account under Users in the Spotify Developer Dashboard if playback fails.'
 			};
 		}
 		return { type: 'success', message: 'Spotify account linked' };

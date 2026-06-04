@@ -1,4 +1,5 @@
-from unittest.mock import patch
+from datetime import UTC, datetime, timedelta
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from fastapi import HTTPException
@@ -65,6 +66,10 @@ async def test_spotify_client_maps_tracks_and_reuses_cached_token(monkeypatch):
     async def mock_get(*args, **kwargs):
         return track_response
 
+    # Mock the provider account lookup to return a storefront
+    mock_get_account = AsyncMock()
+    mock_get_account.return_value.storefront = "US"
+
     with (
         patch(
             "services.providers.spotify_client.httpx.AsyncClient.post",
@@ -74,10 +79,14 @@ async def test_spotify_client_maps_tracks_and_reuses_cached_token(monkeypatch):
             "services.providers.spotify_client.httpx.AsyncClient.get",
             side_effect=mock_get,
         ),
+        patch(
+            "services.providers.spotify_client.music_provider_repo.get_provider_account_by_user",
+            side_effect=mock_get_account,
+        ),
     ):
         client = SpotifyProviderClient()
-        first = await client.search_tracks("fire")
-        second = await client.search_tracks("fire again")
+        first = await client.search_tracks("fire", user_id="user1")
+        second = await client.search_tracks("fire again", user_id="user1")
 
         assert len(first) == 1
         assert first[0].title == "Fire"
@@ -91,11 +100,19 @@ async def test_spotify_client_missing_credentials_raises_503(monkeypatch):
     monkeypatch.delenv("SPOTIFY_CLIENT_ID", raising=False)
     monkeypatch.delenv("SPOTIFY_CLIENT_SECRET", raising=False)
 
-    client = SpotifyProviderClient()
-    with pytest.raises(HTTPException) as exc_info:
-        await client.search_tracks("anything")
-    assert exc_info.value.status_code == 503
-    assert "Spotify credentials are not configured" in exc_info.value.detail
+    # Mock the provider account lookup
+    mock_get_account = AsyncMock()
+    mock_get_account.return_value.storefront = "US"
+
+    with patch(
+        "services.providers.spotify_client.music_provider_repo.get_provider_account_by_user",
+        side_effect=mock_get_account,
+    ):
+        client = SpotifyProviderClient()
+        with pytest.raises(HTTPException) as exc_info:
+            await client.search_tracks("anything", user_id="user1")
+        assert exc_info.value.status_code == 503
+        assert "Spotify credentials are not configured" in exc_info.value.detail
 
 
 @pytest.mark.asyncio
@@ -118,6 +135,10 @@ async def test_spotify_client_uses_configurable_urls(monkeypatch):
         assert url == "http://spotify-mock:9090/v1/search"
         return track_response
 
+    # Mock the provider account lookup
+    mock_get_account = AsyncMock()
+    mock_get_account.return_value.storefront = "US"
+
     with (
         patch(
             "services.providers.spotify_client.httpx.AsyncClient.post",
@@ -127,8 +148,71 @@ async def test_spotify_client_uses_configurable_urls(monkeypatch):
             "services.providers.spotify_client.httpx.AsyncClient.get",
             side_effect=mock_get,
         ),
+        patch(
+            "services.providers.spotify_client.music_provider_repo.get_provider_account_by_user",
+            side_effect=mock_get_account,
+        ),
     ):
         client = SpotifyProviderClient()
-        tracks = await client.search_tracks("fire")
+        tracks = await client.search_tracks("fire", user_id="user1")
 
     assert tracks == []
+
+
+@pytest.mark.asyncio
+async def test_spotify_client_token_refresh_on_expiry(monkeypatch):
+    """Verify that a new token is fetched if the old one is expired."""
+    from datetime import UTC, datetime, timedelta
+
+    monkeypatch.setenv("SPOTIFY_CLIENT_ID", "client-id")
+    monkeypatch.setenv("SPOTIFY_CLIENT_SECRET", "client-secret")
+
+    client = SpotifyProviderClient()
+    # Manually set an expired token
+    client._token = "old-token"
+    client._expires_at = datetime.now(UTC) - timedelta(seconds=10)
+
+    token_response = _FakeResponse(
+        {"access_token": "refreshed-token", "expires_in": 3600, "token_type": "Bearer"}
+    )
+
+    async def mock_post(*args, **kwargs):
+        return token_response
+
+    with patch(
+        "services.providers.spotify_client.httpx.AsyncClient.post",
+        side_effect=mock_post,
+    ):
+        token = await client._get_access_token()
+        assert token == "refreshed-token"
+        assert client._token == "refreshed-token"
+
+
+@pytest.mark.asyncio
+async def test_spotify_client_429_pass_through(monkeypatch):
+    """Verify that a 429 from Spotify is passed through as a 429."""
+    monkeypatch.setenv("SPOTIFY_CLIENT_ID", "client-id")
+    monkeypatch.setenv("SPOTIFY_CLIENT_SECRET", "client-secret")
+
+    client = SpotifyProviderClient()
+    client._token = "valid-token"
+    client._expires_at = datetime.now(UTC) + timedelta(hours=1)
+
+    error_response = _FakeResponse({"error": "Rate limit exceeded"}, status_code=429)
+
+    async def mock_get(*args, **kwargs):
+        return error_response
+
+    with (
+        patch(
+            "services.providers.spotify_client.httpx.AsyncClient.get",
+            side_effect=mock_get,
+        ),
+        patch(
+            "services.providers.spotify_client.music_provider_repo.get_provider_account_by_user",
+            return_value=MagicMock(storefront="US"),
+        ),
+    ):
+        with pytest.raises(HTTPException) as exc:
+            await client.search_tracks("query", user_id="u1")
+        assert exc.value.status_code == 429

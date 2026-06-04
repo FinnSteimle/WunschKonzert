@@ -28,10 +28,11 @@
 	const downvotes = $derived(entry.feedback.filter((f) => f.type === 'downvote').length);
 	const busy = $derived(voteBusyId === entry.queueEntryId);
 
-	// Remove button derived state
-	const canRemoveDirectly = $derived(
-		currentUserId === entry.addedBy.userId || currentUserId === hostId
-	);
+	// Remove button derived state (matches backend queue_service.remove_queue_entry)
+	const hasUpvotes = $derived(upvotes > 0);
+	const isHost = $derived(currentUserId === hostId);
+	const isAdder = $derived(currentUserId === entry.addedBy.userId);
+	const canRemoveDirectly = $derived(isHost || (isAdder && !hasUpvotes));
 	const skipVotes = $derived(entry.feedback.filter((f) => f.type === 'skip'));
 	const skipCount = $derived(skipVotes.length);
 	const requiredVotes = $derived(Math.floor(Math.max(1, totalMembers) / 2) + 1);

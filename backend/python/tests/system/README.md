@@ -1,167 +1,63 @@
 # System Tests
 
-End-to-end system tests for WunschKonzert using Playwright to verify full-stack functionality.
+End-to-end tests for WunschKonzert driven by Playwright. They exercise the full stack (SvelteKit frontend, FastAPI backend, PostgreSQL, and the room WebSocket) through a real browser.
 
-## Overview
+## Layout
 
-System tests verify complete user workflows across the entire stack:
-- Frontend (SvelteKit)
-- Backend (FastAPI + WebSocket)
-- Database (PostgreSQL)
-- Real-time synchronization
-
-## Test Structure
-
-```
+```text
 tests/system/
-├── conftest.py              # Fixtures and helper functions
-├── test_room_lifecycle.py   # Room creation, joining, leaving
-├── test_queue_voting.py     # Queue management and voting
-├── test_playback_sync.py    # Playback synchronization
-├── test_host_controls.py    # Host-only operations
-└── test_concurrent_rooms.py # Multi-room isolation
+├── conftest.py                 # Fixtures, helpers, page objects
+├── test_room_lifecycle.py      # Create / join / leave / refresh (SC-1…SC-4)
+├── test_queue_voting.py        # Add tracks, vote, reordering (SC-5…SC-9)
+├── test_playback_sync.py       # Play / pause / position sync (SC-10…SC-14)
+├── test_host_controls.py       # Host-only operations (SC-15…SC-17)
+├── test_host_transfer.py       # Host-transfer handshake (SC-22…SC-23)
+├── test_concurrent_rooms.py    # Multi-room isolation (SC-18…SC-21)
+├── test_responsive_design.py   # Cross-browser layout (WUN-91)
+└── test_stack_mapping.py       # Maps verified scenarios to the trace matrix
 ```
 
-## Prerequisites
+## Running
 
-1. Install Playwright:
-```bash
-cd backend
-uv add --dev playwright pytest-playwright
-uv run playwright install chromium
-```
+The standard entry point is the Makefile target, which orchestrates `compose.yaml` + `compose.system.yaml`, waits for backend + frontend health, and runs the suite inside the API container:
 
-2. Ensure services are running:
-```bash
-make run
-```
-
-## Running Tests
-
-Run all system tests:
 ```bash
 make test-system
 ```
 
-`make test-system` uses `compose.system.yaml` so the frontend always targets the backend
-through Docker service DNS during system tests:
+`make test-system` leaves the stack running on success. Use `make clean` to tear it down.
+
+### Test environment
+
+`compose.system.yaml` overrides the URLs so the browser and backend talk to each other through Docker service DNS:
 
 - `PUBLIC_API_URL=http://api:8000`
 - `PUBLIC_WS_URL=ws://api:8000`
-- Playwright test fixture URLs:
-  - `FRONTEND_URL=http://frontend:3000`
-  - `BACKEND_URL=http://api:8000`
+- Playwright fixtures expect `FRONTEND_URL=http://frontend:3000`, `BACKEND_URL=http://api:8000`
 
-The frontend URLs are injected as Docker **build args** (not only runtime env), so
-the bundled client code uses the same mapping during tests.
+These URLs are also injected as **build args** so the bundled client uses the same mapping inside the test image.
 
-System-test Docker runs route Spotify search/token calls to a dedicated local
-mock service, so song search uses deterministic stub results instead of live
-Spotify HTTP calls.
+Spotify search and token calls are redirected to a local mock service, so tests don't hit the real Spotify API and stay deterministic. Queue / vote / playback / multi-room tests seed tracks directly through the room WebSocket for the same reason.
 
-`make test-system` executes the full `tests/system/` suite under Docker.
-Some scenarios may be marked as skipped when the current frontend does not yet
-expose the corresponding behavior or when deterministic playback assertions are
-not available in the system-test environment.
+### Targeted runs
 
-Run specific test file:
+Run a single file or test inside the running stack:
+
 ```bash
 docker compose exec api uv run pytest tests/system/test_room_lifecycle.py -v
-```
-
-Run specific test:
-```bash
 docker compose exec api uv run pytest tests/system/test_room_lifecycle.py::test_sc1_host_creates_room_guest_joins -v
 ```
 
-Run with headed browser (for debugging):
+Run with a headed browser for debugging (requires a display forwarded to the container):
+
 ```bash
 docker compose exec api uv run pytest tests/system/ -v --headed
 ```
 
-## Test Scenarios
+## Debugging Infos
 
-### Room Lifecycle (SC-1 to SC-4)
-- Host creates room, guest joins
-- Guest leaves, host sees update
-- Invalid join code handling
-- Room state persistence after refresh
-
-### Queue & Voting (SC-5 to SC-9)
-- Add songs to queue
-- Upvote/downvote songs
-- Vote aggregation
-- Queue reordering by score
-
-### Playback Sync (SC-10 to SC-14)
-- Start/pause playback
-- Playback state synchronization
-- Host-only controls
-- Advance to next song
-- Position synchronization
-
-### Host Controls (SC-15 to SC-18)
-- Delete room (host only)
-- Kick users
-- Remove songs from queue
-- User removes own song
-
-### Concurrent Rooms (SC-19 to SC-22)
-- Room isolation
-- User isolation
-- Playback isolation
-- Vote isolation
-
-## Writing New Tests
-
-1. Add test to appropriate file or create new file
-2. Use helper functions from `conftest.py`:
-   - `create_room_helper()` - Create room and return join code
-   - `join_room_helper()` - Join existing room
-   - `add_song_helper()` - Search and add song to queue
-
-3. Mark test with `@pytest.mark.system`
-
-Example:
-```python
-@pytest.mark.system
-def test_my_feature(browser: Browser, test_environment):
-    context = browser.new_context()
-    
-    host = context.new_page()
-    join_code = create_room_helper(host, test_environment["frontend_url"], "Host")
-    
-    # Your test logic here
-    
-    context.close()
-```
-
-## CI/CD Integration
-
-System tests can be added to GitLab CI:
-
-```yaml
-system_test:
-  stage: e2e
-  script:
-    - make test-system
-  artifacts:
-    when: on_failure
-    paths:
-      - test-results/
-      - playwright-report/
-```
-
-## Debugging
-
-- Use `--headed` flag to see browser
-- Add `page.pause()` to pause execution
-- Check screenshots in `test-results/` on failure
-- Use `page.screenshot(path="debug.png")` for manual screenshots
-
-## Notes
-
-- Tests assume frontend uses specific `data-testid` attributes
-- Frontend components must be updated to include these test IDs
-- Tests run in isolated browser contexts
-- Each test creates fresh browser context for isolation
+- `--headed` shows the browser.
+- `page.pause()` drops into the Playwright inspector.
+- Failure screenshots and traces land in `test-results/`.
+- `page.screenshot(path="debug.png")` for ad-hoc captures.
+- The frontend exposes `data-testid` attributes on every element the suite interacts with. Keep these stable when refactoring components.

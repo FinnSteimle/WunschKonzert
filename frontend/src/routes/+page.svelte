@@ -64,7 +64,7 @@
 		{
 			icon: Share2Icon,
 			title: 'Easy invites',
-			body: 'Share the code or link—no accounts needed for guests to join the room.'
+			body: 'Share the code or link. Guests can join without creating an account.'
 		},
 		{
 			icon: UsersIcon,
@@ -75,7 +75,7 @@
 </script>
 
 <svelte:head>
-	<title>WunschKonzert — Collaborative listening rooms</title>
+	<title>WunschKonzert | Collaborative listening rooms</title>
 	<meta
 		name="description"
 		content="WunschKonzert is a collaborative music room: join with a code, suggest songs from Spotify and Apple Music, vote on the queue, and listen in sync."

@@ -7,12 +7,14 @@ from datetime import UTC, datetime, timedelta
 import httpx
 from fastapi import HTTPException
 
+import repositories.music_provider_repo as music_provider_repo
+from models.domain import ProviderAccount
 from services.providers import spotify_oauth
 from services.providers.base import ProviderTrack
 
 
 class SpotifyProviderClient:
-    provider_id = "spotify"
+    provider_id: str = "spotify"
 
     def __init__(self) -> None:
         self._token: str | None = None
@@ -35,14 +37,19 @@ class SpotifyProviderClient:
             "SPOTIFY_TOKEN_URL", "https://accounts.spotify.com/api/token"
         )
 
-        async with httpx.AsyncClient(timeout=15) as client:
-            response = await client.post(
-                token_url,
-                headers={"Authorization": f"Basic {auth_value}"},
-                data={"grant_type": "client_credentials"},
-            )
-            response.raise_for_status()
-            payload = response.json()
+        try:
+            async with httpx.AsyncClient(timeout=15) as client:
+                response = await client.post(
+                    token_url,
+                    headers={"Authorization": f"Basic {auth_value}"},
+                    data={"grant_type": "client_credentials"},
+                )
+                response.raise_for_status()
+                payload = response.json()
+        except httpx.HTTPError as exc:
+            raise HTTPException(
+                status_code=502, detail="Spotify is currently unavailable"
+            ) from exc
 
         token = payload.get("access_token")
         expires_in = int(payload.get("expires_in", 3600))
@@ -57,9 +64,27 @@ class SpotifyProviderClient:
         )
         return token
 
-    async def search_tracks(self, query: str) -> list[ProviderTrack]:
+    def is_linked(self, account: ProviderAccount) -> bool:
+        return bool(account.refreshToken)
+
+    async def _resolve_market(self, user_id: str) -> str:
+        pa = await music_provider_repo.get_provider_account_by_user(user_id, "spotify")
+        if pa and pa.storefront:
+            return pa.storefront
+        raise HTTPException(
+            status_code=400,
+            detail="User's Spotify account storefront not found. Please re-link your account.",
+        )
+
+    async def search_tracks(
+        self, query: str, user_id: str | None = None
+    ) -> list[ProviderTrack]:
+        if user_id is None:
+            raise HTTPException(
+                status_code=400, detail="user_id is required for Spotify search"
+            )
         token = await self._get_access_token()
-        spotify_market = os.getenv("SPOTIFY_MARKET", "CH")
+        market = await self._resolve_market(user_id)
         search_url = os.getenv(
             "SPOTIFY_SEARCH_URL", "https://api.spotify.com/v1/search"
         )
@@ -71,7 +96,7 @@ class SpotifyProviderClient:
                     "q": query,
                     "type": "track",
                     "limit": 10,
-                    "market": spotify_market,
+                    "market": market,
                 },
                 headers={"Authorization": f"Bearer {token}"},
             )
@@ -93,27 +118,28 @@ class SpotifyProviderClient:
     ) -> ProviderTrack | None:
         """Search Spotify on behalf of the user and return the best Title+Artist match."""
         token = await spotify_oauth.get_user_access_token(user_id)
+        market = await self._resolve_market(user_id)
         search_url = os.getenv(
             "SPOTIFY_SEARCH_URL", "https://api.spotify.com/v1/search"
         )
 
         query = f'track:"{title}" artist:"{artist}"'
-        async with httpx.AsyncClient(timeout=15) as client:
-            response = await client.get(
-                search_url,
-                params={
-                    "q": query,
-                    "type": "track",
-                    "limit": 5,
-                    "market": "from_token",
-                },
-                headers={"Authorization": f"Bearer {token}"},
-            )
-            try:
+        try:
+            async with httpx.AsyncClient(timeout=15) as client:
+                response = await client.get(
+                    search_url,
+                    params={
+                        "q": query,
+                        "type": "track",
+                        "limit": 5,
+                        "market": market,
+                    },
+                    headers={"Authorization": f"Bearer {token}"},
+                )
                 response.raise_for_status()
-            except httpx.HTTPStatusError:
-                return None
-            payload = response.json()
+        except httpx.HTTPError:
+            return None
+        payload = response.json()
 
         items = payload.get("tracks", {}).get("items", [])
         if not items:

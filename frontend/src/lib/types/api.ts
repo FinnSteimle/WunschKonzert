@@ -1,9 +1,16 @@
-export type ProviderId = 'spotify';
+export type ProviderId = 'spotify' | 'apple-music';
 
-export interface AuthResponse {
-	success: boolean;
-	message: string;
-	token?: string | null;
+export interface AppleMusicProfileDto {
+	linked: boolean;
+	storefront: string | null;
+	display_name: string | null;
+	needs_relink: boolean;
+}
+
+export interface AppleMusicLinkRequest {
+	user_id: string;
+	music_user_token: string;
+	display_name: string;
 }
 
 export interface RoomResponse {
@@ -105,6 +112,14 @@ export interface SystemMessageDto {
 	at: string;
 }
 
+export interface LastActivityDto {
+	type: string;
+	userId: string;
+	username: string;
+	at: string;
+	queueEntryId?: string;
+}
+
 /** One finished play from server `history` (playback_history). */
 export interface PlaybackHistoryEntryDto {
 	historyId: number;
@@ -154,6 +169,7 @@ export interface RoomStateDto {
 		type: string;
 		at: string;
 	};
+	lastActivity?: LastActivityDto;
 }
 
 export interface VoteRequest {

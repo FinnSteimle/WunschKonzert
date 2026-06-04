@@ -6,6 +6,7 @@ from fastapi import APIRouter, WebSocket
 from starlette.websockets import WebSocketDisconnect
 
 import services.room_service as room_service
+import services.room_state_service as room_state_service
 from api.event_handlers import dispatch
 
 router = APIRouter()
@@ -20,18 +21,18 @@ async def send_room_state(room_id: str, force_refresh: bool = False) -> None:
     # We just clear the cache so it's fresh when someone eventually connects.
     if room_id not in active_room_connections:
         if force_refresh:
-            room_service.room_state_cache.pop(room_id, None)
+            room_state_service.room_state_cache.pop(room_id, None)
         return
 
     # If it's not in cache or we want to force a refresh, we rebuild it.
-    if force_refresh or room_id not in room_service.room_state_cache:
+    if force_refresh or room_id not in room_state_service.room_state_cache:
         try:
-            await room_service.refresh_room_state(room_id)
+            await room_state_service.refresh_room_state(room_id)
         except Exception as e:
             print(f"Error refreshing room state for {room_id}: {e}")
             return
 
-    state = room_service.room_state_cache.get(room_id, None)
+    state = room_state_service.room_state_cache.get(room_id, None)
     if state is None:
         return
 

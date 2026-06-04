@@ -10,7 +10,11 @@ from api.websockets import (
     send_room_state,
 )
 from repositories import membership_repo, user_repo
-from services import room_service
+from services import (
+    queue_service,
+    room_service,
+    room_state_service,
+)
 
 pytestmark = pytest.mark.integration
 
@@ -59,6 +63,9 @@ async def test_websocket_rename_event(db_session, init_room, websocket_client):
             u["user"]["displayName"] == "New Name" for u in updated_data["users"]
         )
         assert updated_data["lastEvent"]["type"] == "participant_renamed"
+        assert updated_data["lastActivity"]["type"] == "user_renamed"
+        assert updated_data["lastActivity"]["userId"] == host_id
+        assert updated_data["lastActivity"]["username"] == "New Name"
 
 
 @pytest.mark.asyncio
@@ -86,7 +93,7 @@ async def test_websocket_non_host_playback_rejected_no_state_change(
         "deepLink": "",
     }
 
-    await room_service.add_to_queue(room.roomId, track, guest_id)
+    await queue_service.add_to_queue(room.roomId, track, guest_id)
 
     with websocket_client.websocket_connect(f"/ws/{room.roomId}") as websocket:
         start_state = websocket.receive_json()
@@ -133,7 +140,7 @@ async def test_websocket_vote_updates_vote_score_and_feedback(
             "coverUrl": "",
             "deepLink": "",
         }
-        await room_service.add_to_queue(room.roomId, track, guest_id)
+        await queue_service.add_to_queue(room.roomId, track, guest_id)
         i += 1
 
     with websocket_client.websocket_connect(f"/ws/{room.roomId}") as ws:
@@ -156,6 +163,12 @@ async def test_websocket_vote_updates_vote_score_and_feedback(
         assert feedback[0]["userId"] == guest_id
         assert feedback[0]["type"] == "upvote"
         assert after_state.get("lastEvent", {}).get("type") == "vote_updated"
+        assert after_state["lastActivity"]["type"] == "up_vote"
+        assert after_state["lastActivity"]["userId"] == guest_id
+        assert (
+            after_state["lastActivity"]["queueEntryId"]
+            == start_state["queue"][0]["queueEntryId"]
+        )
 
 
 @pytest.mark.asyncio
@@ -227,6 +240,9 @@ async def test_websocket_addqueue_updates_state_for_all_clients(
         )
         assert after_state_1.get("lastEvent", {}).get("type") == "queue_updated"
         assert after_state_2.get("lastEvent", {}).get("type") == "queue_updated"
+        assert after_state_1["lastActivity"]["type"] == "track_added"
+        assert after_state_1["lastActivity"]["userId"] == guest_id
+        assert after_state_1["lastActivity"]["queueEntryId"] is not None
 
 
 @pytest.mark.asyncio
@@ -263,25 +279,11 @@ async def test_websocket_generic_endpoint(db_session, websocket_client):
 @pytest.mark.asyncio
 async def test_websocket_room_not_found(db_session, websocket_client):
     # Connecting to a non-existent room should still work but might have empty state or error in sending state
-    # According to websockets.py:78, it calls send_room_state(room_id)
-    # According to room_service.py:210, it raises 404 if room not found.
-    # But websockets.py:15 catches exceptions from refresh_room_state.
-
     with websocket_client.websocket_connect("/ws/non-existent-room") as websocket:
-        # send_room_state(room_id) is called after accept.
-        # If room_id not in cache, it calls refresh_room_state.
-        # refresh_room_state raises 404.
-        # send_room_state catches it and prints error, then returns.
-        # So the websocket stays open but no initial state is sent.
-
-        # Since no state is sent, we can try to send something and see if it doesn't crash
+        # Initial call to send_room_state will fail gracefully
         websocket.send_json(
             {"type": "rename", "user_id": "none", "display_name": "fail"}
         )
-        # handle_room_events also catches exceptions.
-
-        # We can't easily check for "no message received" without a timeout,
-        # but we can check that it didn't close immediately.
         pass
 
 
@@ -333,7 +335,7 @@ async def test_websocket_invalid_event(db_session, init_room, websocket_client):
         state = websocket.receive_json()
         assert "room" in state
 
-        # Send invalid event - should still get a response without crashing
+        # Send invalid event; should still get a response without crashing
         websocket.send_json({"type": "invalid_event_type"})
 
         # Connection should remain open and we should get a state update or error
@@ -347,14 +349,14 @@ async def test_send_room_state_refresh_failure():
     """Test send_room_state when refresh_room_state raises an exception."""
     room_id = "test_room"
 
-    # Mock the room service to raise an exception
+    # Mock the room state service to raise an exception
     with patch.object(
-        room_service, "refresh_room_state", side_effect=Exception("DB error")
+        room_state_service, "refresh_room_state", side_effect=Exception("DB error")
     ):
         await send_room_state(room_id)
 
     # Should not raise, just print error
-    assert room_id not in room_service.room_state_cache
+    assert room_id not in room_state_service.room_state_cache
 
 
 @pytest.mark.asyncio
@@ -363,14 +365,14 @@ async def test_send_room_state_none_cache():
     room_id = "test_room"
 
     # Mock cache to return None by temporarily replacing the cache
-    original_cache = room_service.room_state_cache
+    original_cache = room_state_service.room_state_cache
     try:
-        room_service.room_state_cache = {room_id: None}
+        room_state_service.room_state_cache = {room_id: None}
         await send_room_state(room_id)
         # Should handle gracefully
         assert room_id not in active_room_connections
     finally:
-        room_service.room_state_cache = original_cache
+        room_state_service.room_state_cache = original_cache
 
 
 @pytest.mark.asyncio
@@ -387,14 +389,14 @@ async def test_send_room_state_websocket_failure():
     active_room_connections[room_id][mock_websocket] = None
 
     # Mock cache to return state by temporarily replacing the cache
-    original_cache = room_service.room_state_cache
+    original_cache = room_state_service.room_state_cache
     try:
-        room_service.room_state_cache = {room_id: state}
+        room_state_service.room_state_cache = {room_id: state}
         await send_room_state(room_id)
         # Should remove failed websocket
         assert mock_websocket not in active_room_connections[room_id]
     finally:
-        room_service.room_state_cache = original_cache
+        room_state_service.room_state_cache = original_cache
 
 
 @pytest.mark.asyncio
@@ -426,17 +428,15 @@ async def test_handle_room_events_missing_fields():
     event = json.dumps({"type": "addqueue"})
     await handle_room_events(room_id, event)
 
-    # Should not raise, room_service will handle validation
-
 
 @pytest.mark.asyncio
 async def test_handle_room_events_service_errors():
-    """Test handle_room_events when room_service functions raise exceptions."""
+    """Test handle_room_events when service functions raise exceptions."""
     room_id = "test_room"
 
-    # Mock room_service functions to raise exceptions
+    # Mock queue_service functions to raise exceptions
     with patch.object(
-        room_service, "add_to_queue", side_effect=Exception("Service error")
+        queue_service, "add_to_queue", side_effect=Exception("Service error")
     ):
         event = json.dumps({"type": "addqueue", "track": {}, "user_id": "user1"})
         # Should not raise, just print error
@@ -448,9 +448,9 @@ async def test_handle_room_events_leave():
     """Test handle_room_events with leave event type."""
     room_id = "test_room"
 
-    # Mock leave_room_service to avoid database operations
-    with patch.object(room_service, "leave_room_service", new_callable=AsyncMock):
+    # Mock leave_room to avoid database operations
+    with patch.object(room_service, "leave_room", new_callable=AsyncMock):
         event = json.dumps({"type": "leave", "user_id": "user1"})
         await handle_room_events(room_id, event)
-        # Should call leave_room_service
-        room_service.leave_room_service.assert_awaited_once_with(room_id, "user1")
+        # Should call leave_room
+        room_service.leave_room.assert_awaited_once_with(room_id, "user1")

@@ -10,9 +10,11 @@ import repositories.music_provider_repo as music_provider_repo
 import repositories.queue_entry_repo as queue_entry_repo
 import repositories.room_repo as room_repo
 import repositories.track_repo as track_repo
-import services.room_service as room_service
+import services.playback_service as playback_service
+import services.room_state_service as room_state_service
 from core.exceptions import ResourceNotFoundError
 from models.domain import MembershipStatus, QueueEntryStatus, Room
+from services.providers.account_status import is_account_linked
 from services.providers.base import MusicProviderClient, ProviderTrack
 from services.providers.registry import get_provider_client
 
@@ -24,7 +26,7 @@ def _time_now() -> str:
 
 
 def _get_transfer(room_id: str) -> dict[str, object] | None:
-    cached = room_service.room_state_cache.get(room_id)
+    cached = room_state_service.room_state_cache.get(room_id)
     if not cached:
         return None
     transfer = cached.get("transfer")
@@ -32,7 +34,7 @@ def _get_transfer(room_id: str) -> dict[str, object] | None:
 
 
 def _set_transfer(room_id: str, transfer: dict[str, object] | None) -> None:
-    cached = room_service.room_state_cache.get(room_id)
+    cached = room_state_service.room_state_cache.get(room_id)
     if cached is None:
         return
     if transfer is None:
@@ -42,7 +44,7 @@ def _set_transfer(room_id: str, transfer: dict[str, object] | None) -> None:
 
 
 def _push_system_message(room_id: str, text: str) -> None:
-    cached = room_service.room_state_cache.get(room_id)
+    cached = room_state_service.room_state_cache.get(room_id)
     if cached is None:
         return
     messages = cached.get("systemMessages")
@@ -82,9 +84,16 @@ async def initiate_transfer(
         "toUserId": to_user_id,
         "createdAt": _time_now(),
     }
-    await room_service.refresh_room_state(room_id, "host_transfer_initiated")
+    activity = await room_state_service.build_last_activity(
+        "host_transfer_initiated", from_user_id
+    )
+    await room_state_service.refresh_room_state(
+        room_id,
+        "host_transfer_initiated",
+        last_activity=activity,
+    )
     _set_transfer(room_id, transfer)
-    return room_service.room_state_cache[room_id]
+    return room_state_service.room_state_cache[room_id]
 
 
 async def reject_transfer(
@@ -97,8 +106,15 @@ async def reject_transfer(
         raise HTTPException(403, "Only the invited user can reject this transfer")
 
     _set_transfer(room_id, None)
-    await room_service.refresh_room_state(room_id, "host_transfer_rejected")
-    return room_service.room_state_cache[room_id]
+    activity = await room_state_service.build_last_activity(
+        "host_transfer_rejected", user_id
+    )
+    await room_state_service.refresh_room_state(
+        room_id,
+        "host_transfer_rejected",
+        last_activity=activity,
+    )
+    return room_state_service.room_state_cache[room_id]
 
 
 async def _remove_entry(entry_id: str) -> None:
@@ -143,7 +159,10 @@ async def _remap_queue_for_user(
     removed_titles: list[str] = []
     playing_was_removed = False
 
+    active_statuses = (QueueEntryStatus.QUEUED, QueueEntryStatus.PLAYING)
     for entry in entries:
+        if entry.status not in active_statuses:
+            continue
         track = await track_repo.get_track(entry.trackId)
         was_playing = entry.status == QueueEntryStatus.PLAYING
 
@@ -181,7 +200,7 @@ async def _validate_accept(room_id: str, transfer_id: str, user_id: str) -> Room
     pa = await music_provider_repo.get_provider_account_by_user(
         user_id, room.supportedProviderId
     )
-    if not pa or not pa.refreshToken:
+    if not is_account_linked(room.supportedProviderId, pa):
         raise HTTPException(
             400, "Link your music provider account before accepting host transfer"
         )
@@ -198,10 +217,25 @@ async def accept_transfer(
     )
 
     if playing_was_removed:
-        await room_service._advance_to_next(room_id)
+        await playback_service.advance_to_next(room_id)
+    else:
+        cached = room_state_service.room_state_cache.get(room_id)
+        if cached:
+            playback = cached.get("playback")
+            if isinstance(playback, dict) and playback.get("state") == "playing":
+                await playback_service.set_playback_state(
+                    room_id, room.hostedBy, "pause"
+                )
 
     await room_repo.update_host(room_id, user_id)
-    await room_service.refresh_room_state(room_id, "host_transfer_completed")
+    activity = await room_state_service.build_last_activity(
+        "host_transfer_completed", user_id
+    )
+    await room_state_service.refresh_room_state(
+        room_id,
+        "host_transfer_completed",
+        last_activity=activity,
+    )
     _set_transfer(room_id, None)
 
     if removed_titles:
@@ -212,4 +246,4 @@ async def accept_transfer(
             f"{count} {noun} removed during host transfer (not available on new host's account).",
         )
 
-    return room_service.room_state_cache[room_id]
+    return room_state_service.room_state_cache[room_id]

@@ -1,12 +1,16 @@
 from __future__ import annotations
 
+from typing import cast
+
 from fastapi import HTTPException
 
+from services.providers.apple_music_client import AppleMusicProviderClient
 from services.providers.base import MusicProviderClient
 from services.providers.spotify_client import SpotifyProviderClient
 
 _provider_clients: dict[str, MusicProviderClient] = {
-    "spotify": SpotifyProviderClient(),
+    "spotify": cast(MusicProviderClient, SpotifyProviderClient()),
+    "apple-music": cast(MusicProviderClient, AppleMusicProviderClient()),
 }
 
 

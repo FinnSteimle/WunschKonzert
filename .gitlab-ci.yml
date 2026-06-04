@@ -190,15 +190,14 @@ backend:unit:
   script:
     # Use --allow-hosts to whitelist docker and localhost while blocking the internet
     - uv run --with pytest pytest --allow-hosts=docker,localhost,127.0.0.1 --allow-unix-socket -m "not integration and not system" -q --junit-xml=junit-all.xml
-  coverage: '/TOTAL.*\s+(\d+\%)/'
+  # Coverage (incl. the cobertura report for MR annotations) is reported on
+  # backend:integration, which runs unit + integration together for the combined
+  # figure tracked in GitLab's coverage statistics.
   artifacts:
     when: always
     expire_in: 7 days
     reports:
       junit: backend/python/junit-all.xml
-      coverage_report:
-        coverage_format: cobertura
-        path: backend/python/cobertura.xml
 
 backend:integration:
   stage: integration_test
@@ -211,10 +210,26 @@ backend:integration:
     - apk add --no-cache docker-compose
   script:
     - cd backend
-    - docker compose -f compose.test.yaml run --rm api-test uv run pytest -m "not system" -q --cov-fail-under=80
+    # Named container (no --rm) so the cobertura file can be copied out of it below.
+    - docker compose -f compose.test.yaml run --name api-test-run api-test uv run pytest -m "not system" -q --cov-fail-under=80
+  # Runs unit + integration together, so this is the combined coverage figure
+  # plotted in GitLab (Analytics > Repository > Code coverage).
+  coverage: '/TOTAL.*\s+(\d+\%)/'
   after_script:
     - cd backend
+    # Extract the combined cobertura report even when pytest failed, then clean up.
+    - docker cp api-test-run:/app/cobertura.xml python/cobertura.xml || true
+    - docker rm -f api-test-run || true
     - docker compose -f compose.test.yaml down -v
+  artifacts:
+    when: always
+    expire_in: 7 days
+    paths:
+      - backend/python/cobertura.xml
+    reports:
+      coverage_report:
+        coverage_format: cobertura
+        path: backend/python/cobertura.xml
 
 system:e2e:
   stage: system_test
@@ -548,6 +563,16 @@ deploy:production:
       # Final up with force-recreate
       echo "Restarting services with new images..."
       docker compose --env-file .env -f compose.prod.yaml up -d --force-recreate --remove-orphans
+
+      # Remove dangling images and keep only the 3 newest SHA-tagged images per repo
+      docker image prune -f
+      for REPO in "$CI_REGISTRY_IMAGE/backend" "$CI_REGISTRY_IMAGE/frontend"; do
+        docker images --format "{{.Repository}}:{{.Tag}} {{.ID}}" \
+          | grep "^${REPO}:" \
+          | grep -vE ":(main|dev)$" \
+          | awk 'NR>3 {print $2}' | sort -u \
+          | xargs -r docker rmi || true
+      done
       echo "PRODUCTION DEPLOYMENT COMPLETE"
       REMOTE
 
@@ -586,5 +611,15 @@ deploy:staging:
       # Final up with force-recreate
       echo "Restarting services with new images..."
       docker compose --env-file .env.staging -f compose.staging.yaml up -d --force-recreate --remove-orphans
+
+      # Remove dangling images and keep only the 3 newest SHA-tagged images per repo
+      docker image prune -f
+      for REPO in "$CI_REGISTRY_IMAGE/backend" "$CI_REGISTRY_IMAGE/frontend"; do
+        docker images --format "{{.Repository}}:{{.Tag}} {{.ID}}" \
+          | grep "^${REPO}:" \
+          | grep -vE ":(main|dev)$" \
+          | awk 'NR>3 {print $2}' | sort -u \
+          | xargs -r docker rmi || true
+      done
       echo "STAGING DEPLOYMENT COMPLETE"
       REMOTE

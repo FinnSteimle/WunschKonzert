@@ -135,5 +135,12 @@
   "lastEvent": {
     "type": "vote_updated",
     "at": "2026-03-20T11:35:00Z"
+  },
+  "lastActivity": {
+    "type": "up_vote",
+    "userId": "USER_01",
+    "username": "alice",
+    "queueEntryId": "QUEUE_01",
+    "at": "2026-03-20T11:35:00Z"
   }
 }

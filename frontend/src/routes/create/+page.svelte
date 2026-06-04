@@ -19,7 +19,7 @@
 </script>
 
 <svelte:head>
-	<title>Create room — WunschKonzert</title>
+	<title>Create room | WunschKonzert</title>
 </svelte:head>
 
 <div class="bg-background min-h-[100dvh]">
@@ -31,7 +31,7 @@
 			</div>
 			<h1 class="text-2xl font-semibold tracking-tight sm:text-3xl">Create a room</h1>
 			<p class="text-muted-foreground text-sm">
-				Name your session and pick Spotify. You can invite guests from the room.
+				Name your session and pick Spotify or Apple Music. You can invite guests from the room.
 			</p>
 		</header>
 

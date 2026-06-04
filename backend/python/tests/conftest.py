@@ -22,7 +22,7 @@ from repositories import (
     track_repo,
     user_repo,
 )
-from services import room_service
+from services import room_state_service
 
 """
 This file contains helper fuctions and makes sure we dont use the acutal database for our unit tests.
@@ -60,7 +60,7 @@ async def db_engine(postgres_connection_url):
 
     os.environ["DATABASE_URL"] = url
 
-    # NullPool: no connection pooling — prevents deadlocks when db_session
+    # NullPool: no connection pooling, to avoid deadlocks when db_session
     # holds a connection while CRUD functions check out additional ones.
     engine = create_async_engine(
         url,
@@ -83,7 +83,7 @@ def session_factory(db_engine):
 
 
 @pytest.fixture
-async def db_session(session_factory):
+async def db_session(session_factory, db_engine):
     """Get a fresh database session for each test."""
     original_get_session_factory = core.database.get_session_factory
     original_health_get_session_factory = health_repo.get_session_factory
@@ -122,7 +122,7 @@ async def db_session(session_factory):
                 await session.execute(table.delete())
             await session.commit()
     finally:
-        room_service.room_state_cache.clear()
+        room_state_service.room_state_cache.clear()
         core.database._engine = original_engine_singleton
         core.database._session_factory = original_session_factory_singleton
         health_repo.get_session_factory = original_health_get_session_factory

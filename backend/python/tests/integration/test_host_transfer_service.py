@@ -24,7 +24,10 @@ from repositories import (
     track_repo,
     user_repo,
 )
-from services import host_transfer_service, room_service
+from services import (
+    host_transfer_service,
+    room_state_service,
+)
 from services.providers.base import ProviderTrack
 
 pytestmark = pytest.mark.integration
@@ -114,6 +117,8 @@ async def test_initiate_transfer_happy_path(db_session, init_room):
     assert transfer["fromUserId"] == host_id
     assert transfer["toUserId"] == invitee_id
     assert transfer["transferId"]
+    assert state["lastActivity"]["type"] == "host_transfer_initiated"  # type: ignore[index]
+    assert state["lastActivity"]["userId"] == host_id  # type: ignore[index]
 
 
 @pytest.mark.asyncio
@@ -189,6 +194,8 @@ async def test_reject_transfer_clears_invite(db_session, init_room):
         room.roomId, transfer_id, invitee_id
     )
     assert "transfer" not in state2
+    assert state2["lastActivity"]["type"] == "host_transfer_rejected"  # type: ignore[index]
+    assert state2["lastActivity"]["userId"] == invitee_id  # type: ignore[index]
 
 
 @pytest.mark.asyncio
@@ -261,6 +268,8 @@ async def test_accept_transfer_swaps_host_and_keeps_matched_tracks(
 
     # transfer cleared, host swapped, queue entry still present
     assert "transfer" not in state2
+    assert state2["lastActivity"]["type"] == "host_transfer_completed"  # type: ignore[index]
+    assert state2["lastActivity"]["userId"] == invitee_id  # type: ignore[index]
     refreshed = await room_repo.get_room(room.roomId)
     assert refreshed.hostedBy == invitee_id
 
@@ -304,6 +313,68 @@ async def test_accept_transfer_removes_unmatched_and_pushes_system_message(
     messages = state2.get("systemMessages")
     assert isinstance(messages, list) and len(messages) == 1
     assert "removed" in messages[0]["text"].lower()
+
+
+@pytest.mark.asyncio
+async def test_accept_transfer_ignores_history_entries(db_session, init_room):
+    """Played/skipped history entries must not be remapped, removed, or counted."""
+    host_id = str(uuid.uuid4())
+    invitee_id = str(uuid.uuid4())
+    room = await init_room(user_id=host_id)
+    await _add_member(invitee_id, room.roomId, db_session)
+    await _link_provider(invitee_id, room.supportedProviderId, db_session)
+
+    played_id = await _add_track_and_queue_entry(
+        room.roomId, host_id, db_session, title="Played"
+    )
+    skipped_id = await _add_track_and_queue_entry(
+        room.roomId, host_id, db_session, title="Skipped"
+    )
+    queued_id = await _add_track_and_queue_entry(
+        room.roomId, host_id, db_session, title="Queued"
+    )
+    await queue_entry_repo.update_queue_entry(
+        played_id, {"status": QueueEntryStatus.PLAYED}, session=db_session
+    )
+    await queue_entry_repo.update_queue_entry(
+        skipped_id, {"status": QueueEntryStatus.SKIPPED}, session=db_session
+    )
+    await db_session.commit()
+
+    state = await host_transfer_service.initiate_transfer(
+        room.roomId, host_id, invitee_id
+    )
+    transfer_id = cast(dict, state["transfer"])["transferId"]
+
+    # Provider matches nothing; only the active queued entry should be affected.
+    fake_provider = AsyncMock()
+    fake_provider.find_track_for_user.return_value = None
+
+    with patch(
+        "services.host_transfer_service.get_provider_client",
+        return_value=fake_provider,
+    ):
+        state2 = await host_transfer_service.accept_transfer(
+            room.roomId, transfer_id, invitee_id
+        )
+
+    # History entries are untouched.
+    played = await queue_entry_repo.get_queue_entry(played_id)
+    skipped = await queue_entry_repo.get_queue_entry(skipped_id)
+    assert played is not None and played.status == QueueEntryStatus.PLAYED
+    assert skipped is not None and skipped.status == QueueEntryStatus.SKIPPED
+
+    # Only the active queued entry is removed.
+    queued = await queue_entry_repo.get_queue_entry(queued_id)
+    assert queued is not None and queued.status == QueueEntryStatus.REMOVED
+
+    # The "find_track_for_user" provider call should only have run for the active entry.
+    assert fake_provider.find_track_for_user.await_count == 1
+
+    # Message reports exactly one removed song, not three.
+    messages = state2.get("systemMessages")
+    assert isinstance(messages, list) and len(messages) == 1
+    assert messages[0]["text"].lower().startswith("1 song removed")
 
 
 @pytest.mark.asyncio
@@ -385,7 +456,7 @@ async def test_accept_transfer_without_linked_provider_400(db_session, init_room
         )
     assert exc.value.status_code == 400
     # transfer is still pending after a failed accept
-    assert room_service.room_state_cache[room.roomId].get("transfer") is not None
+    assert room_state_service.room_state_cache[room.roomId].get("transfer") is not None
 
 
 @pytest.mark.asyncio

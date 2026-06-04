@@ -7,7 +7,7 @@ import { roomStore } from '$lib/stores/room';
 import { apiClient } from '$lib/api/client';
 import { getOrCreateSessionUser, saveSessionDisplayName } from '$lib/session/userSession';
 import { isJoinFailureForRemovedRoom, removeRecentRoom } from '$lib/session/recentRooms';
-import { isSpotifyLinkedForUser } from '$lib/session/spotifyLink';
+import { isProviderLinkedForUser } from '$lib/providers/linkStatus';
 import { writeSpotifyLinkToast } from '$lib/room/spotifyOAuthReturn';
 import { page } from '$app/state';
 import { toast } from 'svelte-sonner';
@@ -21,6 +21,7 @@ let lastSocket: {
 } | null = null;
 
 const locationReplace = vi.fn();
+const locationReload = vi.fn();
 
 vi.mock('$app/environment', () => ({ browser: true }));
 
@@ -45,8 +46,9 @@ vi.mock('$lib/api/client', () => ({
 	}
 }));
 
-vi.mock('$lib/session/spotifyLink', () => ({
-	isSpotifyLinkedForUser: vi.fn()
+vi.mock('$lib/providers/linkStatus', () => ({
+	isProviderLinkedForUser: vi.fn(),
+	getAppleMusicLinkStatus: vi.fn()
 }));
 
 vi.mock('$lib/session/userSession', () => ({
@@ -67,6 +69,42 @@ vi.mock('svelte-sonner', () => ({
 		success: vi.fn(),
 		message: vi.fn()
 	}
+}));
+
+const mockMusicPlayer = {
+	connect: vi.fn().mockImplementation(async () => {
+		const callback = mockMusicPlayer.onStateChange.mock.calls.at(-1)?.[0] as
+			| ((state: {
+					isReady: boolean;
+					isPlaying: boolean;
+					trackId: string | null;
+					positionMs: number;
+					durationMs: number;
+					trackEnded: boolean;
+			  }) => void)
+			| undefined;
+		callback?.({
+			isReady: true,
+			isPlaying: false,
+			trackId: null,
+			positionMs: 0,
+			durationMs: 0,
+			trackEnded: false
+		});
+	}),
+	disconnect: vi.fn(),
+	play: vi.fn().mockResolvedValue(undefined),
+	prepare: vi.fn().mockResolvedValue(undefined),
+	pause: vi.fn().mockResolvedValue(undefined),
+	resume: vi.fn().mockResolvedValue(undefined),
+	seekTo: vi.fn().mockResolvedValue(undefined),
+	getPositionMs: vi.fn().mockResolvedValue(0),
+	onStateChange: vi.fn(),
+	getLastTrackId: vi.fn(() => null)
+};
+
+vi.mock('$lib/playback/createMusicPlayer', () => ({
+	createMusicPlayer: vi.fn(() => mockMusicPlayer)
 }));
 
 vi.mock('$lib/realtime/roomSocket', () => ({
@@ -113,7 +151,10 @@ const MEMBER_HOST = {
 	}
 };
 
-function spotifyRoomState(extra?: Partial<RoomStateDto>): RoomStateDto {
+function hostRoomState(
+	providerId: 'spotify' | 'apple-music',
+	extra?: Partial<RoomStateDto>
+): RoomStateDto {
 	return {
 		room: {
 			roomId: 'room-1',
@@ -121,7 +162,7 @@ function spotifyRoomState(extra?: Partial<RoomStateDto>): RoomStateDto {
 			name: 'Friday vibes',
 			status: 'active',
 			createdAt: '2025-01-01T00:00:00Z',
-			supportedProviderId: 'spotify'
+			supportedProviderId: providerId
 		},
 		host: {
 			userId: 'U_HOST',
@@ -140,6 +181,10 @@ function spotifyRoomState(extra?: Partial<RoomStateDto>): RoomStateDto {
 	};
 }
 
+function spotifyRoomState(extra?: Partial<RoomStateDto>): RoomStateDto {
+	return hostRoomState('spotify', extra);
+}
+
 vi.mock('$lib/components/room/invite/QRCodeCard.svelte', () => ({
 	default: function QRCodeCardStub() {}
 }));
@@ -147,6 +192,9 @@ vi.mock('$lib/components/room/invite/QRCodeCard.svelte', () => ({
 describe('room/[roomId]/+page.svelte', () => {
 	beforeEach(() => {
 		vi.clearAllMocks();
+		mockMusicPlayer.connect.mockClear();
+		mockMusicPlayer.prepare.mockClear();
+		mockMusicPlayer.play.mockClear();
 		lastSocket = null;
 		roomStore.reset();
 		sessionStorage.clear();
@@ -155,14 +203,15 @@ describe('room/[roomId]/+page.svelte', () => {
 			href: 'http://localhost:5173/room/AB2CD3',
 			origin: 'http://localhost:5173',
 			pathname: '/room/AB2CD3',
-			replace: locationReplace
+			replace: locationReplace,
+			reload: locationReload
 		});
 		vi.mocked(getOrCreateSessionUser).mockReturnValue({
 			userId: 'U_USER1',
 			displayName: 'Alice'
 		});
 		vi.mocked(isJoinFailureForRemovedRoom).mockReturnValue(false);
-		vi.mocked(isSpotifyLinkedForUser).mockResolvedValue(false);
+		vi.mocked(isProviderLinkedForUser).mockResolvedValue(false);
 	});
 
 	describe('invalid slug', () => {
@@ -520,6 +569,66 @@ describe('room/[roomId]/+page.svelte', () => {
 			await waitFor(() => expect(screen.getByRole('button', { name: 'Delete room' })).toBeTruthy());
 			expect(screen.queryByRole('button', { name: 'Leave room' })).toBeNull();
 		});
+
+		function appleMusicPlayingState() {
+			return hostRoomState('apple-music', {
+				users: [MEMBER_HOST],
+				queue: [
+					{
+						queueEntryId: 'Q_1',
+						position: 0,
+						status: 'playing',
+						voteScore: 0,
+						orderRank: 0,
+						track: {
+							trackId: 'T_1',
+							providerTrackId: 'apple:338349243',
+							title: 'Test Song',
+							artist: 'Artist',
+							album: 'Album',
+							duration: 200,
+							coverUrl: 'https://example.com/cover.jpg',
+							deepLink: 'https://example.com/track/T_1'
+						},
+						addedBy: { userId: 'U_HOST', displayName: 'Host User' },
+						queuedAt: '2025-01-01T00:00:00Z',
+						feedback: []
+					}
+				],
+				playback: {
+					state: 'playing',
+					currentQueueEntryId: 'Q_1',
+					updatedAt: '2025-01-01T00:00:00Z',
+					positionMs: 1200
+				}
+			});
+		}
+
+		async function renderAppleMusicHostPlaying() {
+			render(RoomPage);
+			await waitFor(() => expect(apiClient.joinRoom).toHaveBeenCalled());
+			roomStore.setConnected(true);
+			roomStore.setRoomState(appleMusicPlayingState());
+			await waitFor(() => expect(mockMusicPlayer.connect).toHaveBeenCalled());
+		}
+
+		it('initializes Apple Music host player and shows load-track prompt', async () => {
+			await renderAppleMusicHostPlaying();
+
+			expect(await screen.findByRole('button', { name: 'Load track' })).toBeTruthy();
+			expect(mockMusicPlayer.prepare).not.toHaveBeenCalled();
+			expect(mockMusicPlayer.play).not.toHaveBeenCalled();
+		});
+
+		it('prepares Apple Music track after host unlock gesture', async () => {
+			await renderAppleMusicHostPlaying();
+
+			await fireEvent.click(await screen.findByRole('button', { name: 'Load track' }));
+			await waitFor(() =>
+				expect(mockMusicPlayer.prepare).toHaveBeenCalledWith('apple:338349243', 1200)
+			);
+			expect(mockMusicPlayer.play).not.toHaveBeenCalled();
+		});
 	});
 
 	describe('host transfer', () => {
@@ -577,7 +686,7 @@ describe('room/[roomId]/+page.svelte', () => {
 		});
 
 		it('invitee cannot accept without a linked Spotify account', async () => {
-			vi.mocked(isSpotifyLinkedForUser).mockResolvedValue(false);
+			vi.mocked(isProviderLinkedForUser).mockResolvedValue(false);
 			await renderJoinedRoom();
 			roomStore.setRoomState(
 				spotifyRoomState({
@@ -596,7 +705,7 @@ describe('room/[roomId]/+page.svelte', () => {
 		});
 
 		it('invitee accepts when Spotify is linked', async () => {
-			vi.mocked(isSpotifyLinkedForUser).mockResolvedValue(true);
+			vi.mocked(isProviderLinkedForUser).mockResolvedValue(true);
 			await renderJoinedRoom();
 			roomStore.setRoomState(
 				spotifyRoomState({
@@ -635,7 +744,101 @@ describe('room/[roomId]/+page.svelte', () => {
 			);
 		});
 
-		it('shows success toast when host transfer completes for the new host', async () => {
+		it('shows unread last activity updates in the popup', async () => {
+			await renderJoinedRoom();
+			const queue = [
+				{
+					queueEntryId: 'q1',
+					track: {
+						trackId: 't1',
+						providerTrackId: 'spotify:t1',
+						title: 'Song One',
+						artist: 'Artist',
+						album: 'Album',
+						duration: 180,
+						coverUrl: '',
+						deepLink: ''
+					},
+					addedBy: { userId: 'U_USER1', displayName: 'Alice' },
+					queuedAt: '2025-01-01T00:00:00Z',
+					position: 1,
+					status: 'queued',
+					voteScore: 0,
+					orderRank: 1,
+					feedback: []
+				}
+			];
+
+			roomStore.setRoomState(
+				spotifyRoomState({
+					queue,
+					lastActivity: {
+						type: 'track_added',
+						userId: 'U_USER1',
+						username: 'Alice',
+						at: '2025-01-01T00:00:00Z',
+						queueEntryId: 'q1'
+					}
+				})
+			);
+			roomStore.setRoomState(
+				spotifyRoomState({
+					queue,
+					lastActivity: {
+						type: 'host_transfer_completed',
+						userId: 'U_HOST',
+						username: 'Host User',
+						at: '2025-01-01T00:01:00Z'
+					}
+				})
+			);
+
+			await waitFor(() =>
+				expect(screen.getByRole('button', { name: 'Unread room activity: 2' })).toBeTruthy()
+			);
+			await fireEvent.click(screen.getByRole('button', { name: 'Unread room activity: 2' }));
+
+			await waitFor(() => {
+				expect(screen.getByRole('list', { name: 'Unread room activity' })).toBeTruthy();
+				expect(screen.getByText('Alice added "Song One"')).toBeTruthy();
+				expect(screen.getByText('Host User became the host')).toBeTruthy();
+			});
+		});
+
+		it('does not show pause or resume playback activity as unread', async () => {
+			await renderJoinedRoom();
+			roomStore.setRoomState(
+				spotifyRoomState({
+					lastActivity: {
+						type: 'playback_paused',
+						userId: 'U_HOST',
+						username: 'Host User',
+						at: '2025-01-01T00:00:00Z'
+					}
+				})
+			);
+			roomStore.setRoomState(
+				spotifyRoomState({
+					lastActivity: {
+						type: 'playback_resumed',
+						userId: 'U_HOST',
+						username: 'Host User',
+						at: '2025-01-01T00:01:00Z'
+					}
+				})
+			);
+
+			await waitFor(() =>
+				expect(screen.getByRole('button', { name: 'Unread room activity: 0' })).toBeTruthy()
+			);
+			await fireEvent.click(screen.getByRole('button', { name: 'Unread room activity: 0' }));
+
+			expect(screen.getByText('No unread activity.')).toBeTruthy();
+			expect(screen.queryByText(/paused/)).toBeNull();
+			expect(screen.queryByText(/resumed/)).toBeNull();
+		});
+
+		it('reloads and stores a toast when host transfer completes for the new host', async () => {
 			await renderJoinedRoom();
 			roomStore.setRoomState(
 				spotifyRoomState({
@@ -653,9 +856,19 @@ describe('room/[roomId]/+page.svelte', () => {
 				})
 			);
 
+			await waitFor(() => expect(locationReload).toHaveBeenCalled());
+			expect(sessionStorage.getItem('wk_host_promotion_toast')).toBe('You are now the room host.');
+		});
+
+		it('shows the pending host-promotion toast after reload', async () => {
+			sessionStorage.setItem('wk_host_promotion_toast', 'You are now the room host.');
+
+			await renderJoinedRoom();
+
 			await waitFor(() =>
 				expect(toast.success).toHaveBeenCalledWith('You are now the room host.')
 			);
+			expect(sessionStorage.getItem('wk_host_promotion_toast')).toBeNull();
 		});
 	});
 
@@ -683,7 +896,7 @@ describe('room/[roomId]/+page.svelte', () => {
 		});
 
 		it('reloads after successful spotify link and stores success toast', async () => {
-			vi.mocked(isSpotifyLinkedForUser).mockResolvedValue(true);
+			vi.mocked(isProviderLinkedForUser).mockResolvedValue(true);
 			(page as { url: { searchParams: URLSearchParams } }).url.searchParams = new URLSearchParams(
 				'spotify_linked=true'
 			);

@@ -30,6 +30,11 @@ vi.mock('$lib/api/client', () => ({
 	}
 }));
 
+vi.mock('$lib/providers/linkStatus', () => ({
+	isProviderLinkedForUser: vi.fn(async (providerId: string) => providerId === 'spotify'),
+	getAppleMusicLinkStatus: vi.fn(async () => ({ linked: false, needsRelink: false }))
+}));
+
 vi.mock('$lib/session/userSession', () => ({
 	getOrCreateSessionUser: vi.fn(),
 	saveSessionDisplayName: vi.fn(),

@@ -17,7 +17,7 @@ router = APIRouter()
 
 @router.post("/create_room", response_model=RoomResponse)
 async def create_room_endpoint(room_data: CreateRoomRequest) -> dict[str, object]:
-    return await room_service.create_room_service(
+    return await room_service.create_room(
         room_data.name,
         room_data.user_id,
         room_data.display_name,
@@ -27,7 +27,7 @@ async def create_room_endpoint(room_data: CreateRoomRequest) -> dict[str, object
 
 @router.post("/join_room", response_model=RoomResponse)
 async def join_room(room_data: RoomRequest) -> dict[str, object]:
-    result = await room_service.join_room_service(
+    result = await room_service.join_room(
         room_data.join_code, room_data.user_id, room_data.display_name
     )
     # Notify other participants via websocket (refresh state since someone joined)
@@ -37,7 +37,7 @@ async def join_room(room_data: RoomRequest) -> dict[str, object]:
 
 @router.post("/leave_room", response_model=RoomResponse)
 async def leave_room(room_data: LeaveRoomRequest) -> dict[str, object]:
-    await room_service.leave_room_service(room_data.room_id, room_data.user_id)
+    await room_service.leave_room(room_data.room_id, room_data.user_id)
     await websockets.send_room_state(room_data.room_id, force_refresh=True)
     return {
         "success": True,
@@ -48,7 +48,7 @@ async def leave_room(room_data: LeaveRoomRequest) -> dict[str, object]:
 
 @router.post("/delete_room", response_model=RoomResponse)
 async def delete_room(room_data: DeleteRoomRequest) -> dict[str, object]:
-    await room_service.delete_room_service(room_data.room_id, room_data.user_id)
+    await room_service.delete_room(room_data.room_id, room_data.user_id)
     await websockets.send_room_state(room_data.room_id, force_refresh=True)
     return {
         "success": True,

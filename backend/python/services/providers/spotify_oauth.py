@@ -10,6 +10,7 @@ import httpx
 from fastapi import HTTPException
 
 import repositories.music_provider_repo as music_provider_repo
+from models.domain import AccountStatus
 from services.providers import oauth_state
 
 SPOTIFY_SCOPES = " ".join(
@@ -117,19 +118,22 @@ async def exchange_authorization_code(code: str) -> SpotifyOAuthTokens:
     redirect_uri = spotify_redirect_uri()
     auth_value = base64.b64encode(f"{client_id}:{client_secret}".encode()).decode()
 
-    async with httpx.AsyncClient(timeout=15) as http:
-        resp = await http.post(
-            "https://accounts.spotify.com/api/token",
-            headers={"Authorization": f"Basic {auth_value}"},
-            data={
-                "grant_type": "authorization_code",
-                "code": code,
-                "redirect_uri": redirect_uri,
-            },
-        )
-        if resp.status_code != 200:
-            raise SpotifyOAuthError("token_exchange_failed")
-        token_data = resp.json()
+    try:
+        async with httpx.AsyncClient(timeout=15) as http:
+            resp = await http.post(
+                "https://accounts.spotify.com/api/token",
+                headers={"Authorization": f"Basic {auth_value}"},
+                data={
+                    "grant_type": "authorization_code",
+                    "code": code,
+                    "redirect_uri": redirect_uri,
+                },
+            )
+    except httpx.HTTPError:
+        raise SpotifyOAuthError("token_exchange_failed")
+    if resp.status_code != 200:
+        raise SpotifyOAuthError("token_exchange_failed")
+    token_data = resp.json()
 
     access_token = token_data.get("access_token")
     if not isinstance(access_token, str) or not access_token:
@@ -163,6 +167,8 @@ async def get_user_access_token(user_id: str) -> str:
             status_code=404,
             detail="No linked Spotify account found for this user",
         )
+    if pa.status == AccountStatus.SUSPENDED:
+        raise HTTPException(status_code=409, detail={"code": "needs_relink"})
 
     if pa.accessToken and pa.tokenExpiresAt and datetime.now(UTC) < pa.tokenExpiresAt:
         return pa.accessToken
@@ -170,24 +176,27 @@ async def get_user_access_token(user_id: str) -> str:
     client_id, client_secret = spotify_credentials()
     auth_value = base64.b64encode(f"{client_id}:{client_secret}".encode()).decode()
 
-    async with httpx.AsyncClient(timeout=15) as http:
-        resp = await http.post(
-            "https://accounts.spotify.com/api/token",
-            headers={"Authorization": f"Basic {auth_value}"},
-            data={
-                "grant_type": "refresh_token",
-                "refresh_token": pa.refreshToken,
-            },
-        )
-        if resp.status_code != 200:
-            raise HTTPException(
-                status_code=502, detail="Failed to refresh Spotify token"
+    try:
+        async with httpx.AsyncClient(timeout=15) as http:
+            resp = await http.post(
+                "https://accounts.spotify.com/api/token",
+                headers={"Authorization": f"Basic {auth_value}"},
+                data={
+                    "grant_type": "refresh_token",
+                    "refresh_token": pa.refreshToken,
+                },
             )
-        token_data = resp.json()
+    except httpx.HTTPError:
+        raise HTTPException(status_code=502, detail="Failed to refresh Spotify token")
+    if resp.status_code != 200:
+        await music_provider_repo.suspend_provider_account(pa.providerAccountId)
+        raise HTTPException(status_code=409, detail={"code": "needs_relink"})
+    token_data = resp.json()
 
     new_access = token_data["access_token"]
     if not isinstance(new_access, str) or not new_access:
-        raise HTTPException(status_code=502, detail="Failed to refresh Spotify token")
+        await music_provider_repo.suspend_provider_account(pa.providerAccountId)
+        raise HTTPException(status_code=409, detail={"code": "needs_relink"})
     new_refresh = token_data.get("refresh_token", pa.refreshToken)
     expires_in = int(token_data.get("expires_in", 3600))
     new_expires = datetime.now(UTC) + timedelta(seconds=max(60, expires_in - 60))
@@ -202,17 +211,31 @@ async def get_user_access_token(user_id: str) -> str:
     return new_access
 
 
-async def fetch_profile_user_id(access_token: str, token_type: str) -> str:
-    async with httpx.AsyncClient(timeout=10) as http:
-        profile_resp = await http.get(
-            "https://api.spotify.com/v1/me",
-            headers={"Authorization": f"{token_type} {access_token}"},
-        )
-        if profile_resp.status_code != 200:
-            raise SpotifyOAuthError("profile_fetch_failed")
-        profile = profile_resp.json()
+@dataclass(frozen=True)
+class SpotifyProfile:
+    user_id: str
+    country: str | None
+
+
+async def fetch_spotify_profile(access_token: str, token_type: str) -> SpotifyProfile:
+    try:
+        async with httpx.AsyncClient(timeout=10) as http:
+            profile_resp = await http.get(
+                "https://api.spotify.com/v1/me",
+                headers={"Authorization": f"{token_type} {access_token}"},
+            )
+    except httpx.HTTPError:
+        raise SpotifyOAuthError("profile_fetch_failed")
+    if profile_resp.status_code != 200:
+        raise SpotifyOAuthError("profile_fetch_failed")
+    profile = profile_resp.json()
 
     external_user_id = profile.get("id")
-    if not isinstance(external_user_id, str) or not external_user_id:
-        return "unknown"
-    return external_user_id
+    user_id = (
+        external_user_id
+        if isinstance(external_user_id, str) and external_user_id
+        else "unknown"
+    )
+    country_raw = profile.get("country")
+    country = country_raw if isinstance(country_raw, str) and country_raw else None
+    return SpotifyProfile(user_id=user_id, country=country)

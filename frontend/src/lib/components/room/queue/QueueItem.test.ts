@@ -28,6 +28,72 @@ function makeEntry(overrides: Partial<QueueEntryDto> = {}): QueueEntryDto {
 }
 
 describe('QueueItem', () => {
+	it('shows skip vote for adder when song has at least one upvote', async () => {
+		const onRemove = vi.fn();
+		const onVote = vi.fn();
+		render(QueueItem, {
+			entry: makeEntry({
+				feedback: [{ userId: 'other-user', type: 'upvote', votedAt: '2025-01-01T00:00:00Z' }]
+			}),
+			personalVote: 'neutral',
+			voteBusyId: null,
+			currentUserId: 'user-1',
+			hostId: 'host-1',
+			totalMembers: 3,
+			onRemove,
+			onVote
+		});
+
+		expect(screen.queryByRole('button', { name: 'Remove track' })).toBeNull();
+		expect(screen.getByRole('button', { name: 'Vote to remove track' })).toBeTruthy();
+
+		await fireEvent.click(screen.getByRole('button', { name: 'Vote to remove track' }));
+
+		expect(onRemove).toHaveBeenCalledWith('q1');
+		expect(onVote).not.toHaveBeenCalled();
+	});
+
+	it('shows skip vote UI for adder who already voted when song has upvotes', async () => {
+		const onRemove = vi.fn();
+		const onVote = vi.fn();
+		render(QueueItem, {
+			entry: makeEntry({
+				feedback: [
+					{ userId: 'other-user', type: 'upvote', votedAt: '2025-01-01T00:00:00Z' },
+					{ userId: 'user-1', type: 'skip', votedAt: '2025-01-01T00:00:01Z' }
+				]
+			}),
+			personalVote: 'neutral',
+			voteBusyId: null,
+			currentUserId: 'user-1',
+			hostId: 'host-1',
+			totalMembers: 3,
+			onRemove,
+			onVote
+		});
+
+		await fireEvent.click(screen.getByRole('button', { name: 'Vote to remove track (1 of 2)' }));
+
+		expect(onVote).toHaveBeenCalledWith('q1', 'skip');
+		expect(onRemove).not.toHaveBeenCalled();
+	});
+
+	it('host still gets direct remove when song has upvotes', () => {
+		render(QueueItem, {
+			entry: makeEntry({
+				addedBy: { userId: 'other-user', displayName: 'Bob' },
+				feedback: [{ userId: 'voter', type: 'upvote', votedAt: '2025-01-01T00:00:00Z' }]
+			}),
+			personalVote: 'neutral',
+			voteBusyId: null,
+			currentUserId: 'host-1',
+			hostId: 'host-1',
+			totalMembers: 3
+		});
+
+		expect(screen.getByRole('button', { name: 'Remove track' })).toBeTruthy();
+	});
+
 	it('calls onRemove for direct-remove user (adder/host)', async () => {
 		const onRemove = vi.fn();
 		const onVote = vi.fn();

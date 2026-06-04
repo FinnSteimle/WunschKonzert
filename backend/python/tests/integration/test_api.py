@@ -160,7 +160,9 @@ async def test_search_tracks_dispatches_provider(
     class _FakeProvider:
         provider_id = "spotify"
 
-        async def search_tracks(self, query: str) -> list[ProviderTrack]:
+        async def search_tracks(
+            self, query: str, user_id: str | None = None
+        ) -> list[ProviderTrack]:
             assert query == "fire"
             return [
                 ProviderTrack(

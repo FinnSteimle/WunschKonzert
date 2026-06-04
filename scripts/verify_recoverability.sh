@@ -26,8 +26,8 @@ success "Room created: $JOIN_CODE ($ROOM_ID)"
 log "Adding song and upvote via service layer..."
 docker exec $(docker compose ps -q api) uv run python -c "
 import asyncio
-import services.room_service as rs
-from models.domain import FeedbackType
+import services.queue_service as qs
+import services.vote_service as vs
 
 async def setup():
     # Add a song
@@ -41,11 +41,11 @@ async def setup():
         'coverUrl': '',
         'deepLink': ''
     }
-    state = await rs.add_to_queue('$ROOM_ID', track, 'nfr-user')
+    state = await qs.add_to_queue('$ROOM_ID', track, 'nfr-user')
     entry_id = state['queue'][0]['queueEntryId']
     
     # Add an upvote
-    await rs.vote_queue_entry('$ROOM_ID', entry_id, 'nfr-user', 'upvote')
+    await vs.vote_queue_entry('$ROOM_ID', entry_id, 'nfr-user', 'upvote')
     print(entry_id)
 
 asyncio.run(setup())
@@ -72,10 +72,10 @@ success "System recovered."
 log "Verifying deep state persistence..."
 docker exec $(docker compose ps -q api) uv run python -c "
 import asyncio
-import services.room_service as rs
+import services.room_state_service as rss
 
 async def verify():
-    state = await rs.refresh_room_state('$ROOM_ID')
+    state = await rss.refresh_room_state('$ROOM_ID')
     queue = state.get('queue', [])
     if not queue:
         print('FAIL: Queue empty')

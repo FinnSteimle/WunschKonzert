@@ -12,7 +12,13 @@ from fastapi.responses import JSONResponse
 import repositories.health_repo as health_repo
 import repositories.music_provider_repo as music_provider_repo
 from api import websockets
-from api.routers import auth, debug, playback, provider_search, rooms, spotify_auth
+from api.routers import (
+    apple_music_auth,
+    debug,
+    provider_search,
+    rooms,
+    spotify_auth,
+)
 from core.exceptions import ResourceNotFoundError
 
 
@@ -20,6 +26,7 @@ async def initialize_music_providers() -> None:
     """Seed default music providers on startup"""
     default_providers = [
         ("spotify", "Spotify"),
+        ("apple-music", "Apple Music"),
     ]
 
     for provider_id, name in default_providers:
@@ -70,10 +77,9 @@ app.add_middleware(
 )
 
 app.include_router(rooms.router)
-app.include_router(auth.router)
 app.include_router(provider_search.router)
-app.include_router(playback.router)
 app.include_router(spotify_auth.router)
+app.include_router(apple_music_auth.router)
 app.include_router(websockets.router)
 
 # Include debug router in development, staging or if load testing is explicitly enabled

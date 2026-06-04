@@ -16,6 +16,7 @@ dependencies = [
     "psycopg2-binary>=2.9.11",
     "ruff>=0.15.7",
     "passlib[bcrypt]>=1.7.4",
+    "pyjwt[crypto]~=2.9",
 ]
 [tool.pytest.ini_options]
 pythonpath = ["."]
