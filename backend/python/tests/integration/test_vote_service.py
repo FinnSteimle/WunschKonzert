@@ -219,6 +219,12 @@ async def test_vote_replay_refreshes_room_state(db_session, init_room):
     assert second_state["lastActivity"]["type"] == "replay_threshold_met"
     queue = cast(list[dict], second_state["queue"])
     assert len(queue) == 2
+    original_entry = next(
+        item for item in queue if item["queueEntryId"] == entry.queueEntryId
+    )
+    assert not any(
+        feedback["type"] == "replay" for feedback in original_entry["feedback"]
+    )
     replay_entry = next(
         item for item in queue if item["status"] == "queued" and item["position"] == 0
     )

@@ -168,6 +168,7 @@ async def get_room_with_full_state(
     stmt = (
         select(Room)
         .where(Room.roomId == room_id)
+        .execution_options(populate_existing=True)
         .options(
             joinedload(Room.host),
             selectinload(Room.memberships).joinedload(RoomMembership.user),
