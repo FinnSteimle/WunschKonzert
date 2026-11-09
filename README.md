@@ -4,6 +4,15 @@ A real-time group music room. Guests join with a short code, suggest songs and v
 
 ![Two users voting a song to the top of the shared queue](docs/demo.gif)
 
+## My Role
+
+Linus Gattiker and I designed and built the entire backend (FastAPI, PostgreSQL, WebSockets), which runs the rooms, queue, voting and playback. Among other things I:
+
+- Cut the database queries needed to load a room by replacing one query per song with JOIN queries, so it holds up under the 2,500-user load test.
+- Added WebSocket heartbeats so users who close their tab no longer stay listed in the room.
+- Made host transfer work while music is playing. The song pauses at its position and the new host resumes it from there.
+- Wrote large parts of the backend test suite and the scripts that check our recoverability and security requirements.
+
 ## Features
 
 - **Shared rooms:** The host creates a room and guests join with a 6-character code, without creating an account.
@@ -30,15 +39,6 @@ Key design decisions:
 - **Heartbeats against ghost users:** The server sends regular pings and detects closed tabs, so members who left don't stay listed in the room.
 - **No passwords of our own:** Login goes through Spotify (OAuth 2.0) and Apple Music (MusicKit). OAuth means users log in on the provider's own page and the app only receives an access token.
 - **Layered backend:** API routers call services, and only services talk to the repositories that access the database. This keeps the business logic testable without a database.
-
-## My Role
-
-Linus Gattiker and I designed and built the entire backend (FastAPI, PostgreSQL, WebSockets), which runs the rooms, queue, voting and playback. Among other things I:
-
-- Cut the database queries needed to load a room by replacing one query per song with JOIN queries, so it holds up under the 2,500-user load test.
-- Added WebSocket heartbeats so users who close their tab no longer stay listed in the room.
-- Made host transfer work while music is playing. The song pauses at its position and the new host resumes it from there.
-- Wrote large parts of the backend test suite and the scripts that check our recoverability and security requirements.
 
 ## Running Locally
 
